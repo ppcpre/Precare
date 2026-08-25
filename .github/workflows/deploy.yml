@@ -54,7 +54,7 @@ jobs:
       # migration ต้อง backward-compatible: เพิ่ม column ได้ / อย่าลบหรือ rename พร้อมกับที่โค้ดเปลี่ยน
       - name: Apply D1 migrations
         if: steps.probe.outputs.app == 'true'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
