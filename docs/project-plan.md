@@ -138,15 +138,19 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M1 · Database + Data layer — 3–4 วัน
 
+> **สถานะ 25 ส.ค. 69 — เสร็จ 6/7** · T1.7 (R2) เลื่อนไปทำพร้อม M2 เพราะยังไม่มีอะไรเรียกใช้
+> migration ยิงขึ้น `precare-dev-db` แล้ว 12 ตาราง · seed ข้อมูลตัวอย่างครบ
+> **bundle ยังเท่าเดิม 1,034 KiB** — drizzle/better-auth ถูก tree-shake ออกเพราะยังไม่มีหน้าไหน import
+
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T1.1** | แก้ DDL ให้ครบ | เพิ่ม `appointments.location`, `users.avatar_url` · ตัด `password_hash` (Better Auth เก็บใน `account` เอง) · คง `users.email UNIQUE NOT NULL` เป็น identifier · ตัด `baby_*` ไป Phase 3 · **เตรียมตาราง `photos` (id, family_id, week, type, r2_key, thumb_key, caption, uploaded_by, created_at) ไว้ใน migration แต่ยังไม่ใช้จน Phase 2** | T0.6 |
-| **T1.2** | เขียน migration files | `migrations/0001_init.sql` · apply ผ่านทั้ง `--local` และ `--remote` | T1.1 |
-| **T1.3** | ตั้ง Drizzle schema | `src/db/schema.ts` ตรงกับ DDL · `drizzle-kit` generate ได้ | T1.2 |
-| **T1.4** | เขียน types ใหม่ทั้งไฟล์ | `src/types/index.ts` เป็นโครง family-based ตรง D1 — **ของเดิมใน zip เป็น per-user + Firebase ใช้ไม่ได้เลย** | T1.3 |
-| **T1.5** | **authz helper** | `requireRole(familyId, userId, minRole)` — คืน 403 เมื่อสิทธิ์ไม่พอ ตาม matrix ใน architecture.md | T1.3 |
-| **T1.7** | **ต่อ Cloudflare R2** *(ดึงมาจาก Phase 2)* | binding + presigned upload ผ่าน API layer — ห้าม expose credential ให้ client | T1.5 |
-| **T1.6** | seed script สำหรับ dev | 1 family, 3 users (owner/editor/viewer), 5 weekly_logs, 3 appointments | T1.3 |
+| ✅ **T1.1** | แก้ DDL ให้ครบ | เพิ่ม `appointments.location`, `users.avatar_url` · ตัด `password_hash` (Better Auth เก็บใน `account` เอง) · คง `users.email UNIQUE NOT NULL` เป็น identifier · ตัด `baby_*` ไป Phase 3 · **เตรียมตาราง `photos` (id, family_id, week, type, r2_key, thumb_key, caption, uploaded_by, created_at) ไว้ใน migration แต่ยังไม่ใช้จน Phase 2** | T0.6 |
+| ✅ **T1.2** | เขียน migration files | `migrations/0001_init.sql` · apply ผ่านทั้ง `--local` และ `--remote` | T1.1 |
+| ✅ **T1.3** | ตั้ง Drizzle schema | `src/db/schema.ts` ตรงกับ DDL · `drizzle-kit` generate ได้ | T1.2 |
+| ✅ **T1.4** | เขียน types ใหม่ทั้งไฟล์ | `src/types/index.ts` เป็นโครง family-based ตรง D1 — **ของเดิมใน zip เป็น per-user + Firebase ใช้ไม่ได้เลย** | T1.3 |
+| ✅ **T1.5** | **authz helper** | `requireRole(familyId, userId, minRole)` — คืน 403 เมื่อสิทธิ์ไม่พอ ตาม matrix ใน architecture.md | T1.3 |
+| ⏭ **T1.7** | **ต่อ Cloudflare R2** *(ดึงมาจาก Phase 2)* | binding + presigned upload ผ่าน API layer — ห้าม expose credential ให้ client | T1.5 |
+| ✅ **T1.6** | seed script สำหรับ dev | 1 family, 3 users (owner/editor/viewer), 5 weekly_logs, 3 appointments | T1.3 |
 
 ### M2 · Auth — 2–3 วัน
 

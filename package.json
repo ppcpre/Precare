@@ -14,13 +14,19 @@
     "db:migrate:local": "wrangler d1 migrations apply precare-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply precare-db --remote",
     "deploy:dev": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --env dev",
-    "db:migrate:dev": "wrangler d1 migrations apply precare-dev-db --remote --env dev"
+    "db:migrate:dev": "wrangler d1 migrations apply precare-dev-db --remote --env dev",
+    "db:seed:local": "wrangler d1 execute precare-db --local --file=scripts/seed-dev.sql",
+    "db:seed:dev": "wrangler d1 execute precare-dev-db --remote --env dev --file=scripts/seed-dev.sql"
   },
   "dependencies": {
+    "better-auth": "^1.7.1",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
     "lucide-react": "^1.34.0",
     "next": "16.3.2",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.20.2",
@@ -28,6 +34,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",
