@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: probe
         run: |
@@ -30,7 +30,7 @@ jobs:
             echo "::notice::ยังไม่มี package.json — ยังไม่มีอะไรให้ deploy"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.probe.outputs.app == 'true'
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -54,7 +54,7 @@ jobs:
       # migration ต้อง backward-compatible: เพิ่ม column ได้ / อย่าลบหรือ rename พร้อมกับที่โค้ดเปลี่ยน
       - name: Apply D1 migrations
         if: steps.probe.outputs.app == 'true'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -62,7 +62,7 @@ jobs:
 
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
