@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* Design tokens — ที่มา: docs/design-system.md
+   แก้ที่นี่ที่เดียว ทั้งแอปขยับตาม */
+@theme {
+  /* Primary — น้ำตาล: CTA หลัก, ไอคอน active, หัวข้อสำคัญ */
+  --color-brown-100: #EDE0D1;
+  --color-brown-300: #C9AD8F;
+  --color-brown-500: #9C7A5B;
+  --color-brown-700: #6B4F3F;
+  --color-brown-900: #3E2C23;
+
+  /* Neutral — ครีม/ขาว: พื้นหลัง 90% ของแอปใช้ชุดนี้ */
+  --color-cream-50:  #FDFBF7;
+  --color-cream-100: #F7F1E8;
+  --color-cream-200: #EFE6D8;
+  --color-cream-300: #E5D9C6;
+
+  /* ข้อความ */
+  --color-ink-400: #A8A099;
+  --color-ink-600: #6B6259;
+  --color-ink-900: #2B2420;
+
+  /* Peach — สีประจำฟีเจอร์ Pre Care และสีโลโก้ */
+  --color-peach-100: #FDEADF;
+  --color-peach-300: #F5BE9B;
+  --color-peach-500: #E89A6C;
+  --color-peach-700: #D97A4E;
+
+  /* Feature accent สำหรับฟีเจอร์อื่นในอนาคต — ห้ามใช้เป็นสีปุ่มหลัก */
+  --color-sage-100: #E5EBE2;
+  --color-sage-500: #8AA383;
+  --color-sky-100:  #E3EAF0;
+  --color-sky-500:  #8AA3B8;
+  --color-plum-100: #EEE6EC;
+  --color-plum-500: #A38C9C;
+
+  /* Semantic — ใช้แบบหม่น ไม่ใช่สีสดจัด */
+  --color-success: #7A9B76;
+  --color-warning: #D4A24C;
+  --color-danger:  #B85C4F;
+  --color-info:    #7B93A8;
+
+  /* Radius — 12px คือค่ามาตรฐานของแอป */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Shadow — เบามาก เน้นความ clean */
+  --shadow-card:  0 1px 3px rgba(43,36,32,0.06), 0 1px 2px rgba(43,36,32,0.04);
+  --shadow-modal: 0 8px 24px rgba(43,36,32,0.12);
+
+  --font-sans: var(--font-noto-sans-thai), ui-sans-serif, system-ui, sans-serif;
+}
+
+html, body {
+  background: var(--color-cream-50);
+  color: var(--color-ink-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* touch target ขั้นต่ำ 44px ตาม design principle ข้อ 4 */
+button, a[role="button"], input, select {
+  min-height: 44px;
+}
+
+::selection { background: var(--color-brown-100); color: var(--color-brown-900); }

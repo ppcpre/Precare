@@ -1,23 +1,23 @@
-name: Deploy
+name: Deploy (dev)
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
   workflow_dispatch:
 
 # deploy ทีละครั้ง ห้ามซ้อน — กัน migration ชนกัน
 concurrency:
-  group: deploy-production
+  group: deploy-dev
   cancel-in-progress: false
 
 env:
   NODE_VERSION: '22'
-  D1_DATABASE_NAME: precare-db
+  D1_DATABASE_NAME: precare-dev-db
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: dev
     steps:
       - uses: actions/checkout@v7
 
@@ -61,15 +61,15 @@ jobs:
         if: steps.probe.outputs.app == 'true'
         run: npx opennextjs-cloudflare build
 
-      # ต้องรัน migration ก่อน deploy โค้ดใหม่เสมอ — D1 ไม่มี rollback อัตโนมัติ
-      # migration ต้อง backward-compatible: เพิ่ม column ได้ / อย่าลบหรือ rename พร้อมกับที่โค้ดเปลี่ยน
-      - name: Apply D1 migrations
+      # migration ต้องรันก่อน deploy โค้ดใหม่เสมอ — D1 ไม่มี rollback อัตโนมัติ
+      # ยิงลง precare-dev-db เท่านั้น ไม่แตะ D1 ของ production
+      - name: Apply D1 migrations (dev)
         if: steps.probe.outputs.app == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote
+          command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote --env dev
 
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
@@ -77,16 +77,16 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          command: deploy --env dev
 
       - name: Smoke check
         if: steps.probe.outputs.app == 'true'
         run: |
-          [ -n "${{ vars.PRODUCTION_URL }}" ] || { echo "::warning::ยังไม่ได้ตั้ง variable PRODUCTION_URL — ข้าม smoke check"; exit 0; }
+          [ -n "${{ vars.DEV_URL }}" ] || { echo "::warning::ยังไม่ได้ตั้ง variable DEV_URL — ข้าม smoke check"; exit 0; }
           for i in 1 2 3; do
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${{ vars.PRODUCTION_URL }}" || echo 000)
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${{ vars.DEV_URL }}" || echo 000)
             echo "attempt $i: HTTP $CODE"
             [ "$CODE" = "200" ] && exit 0
             sleep 10
           done
-          echo "::error::production ไม่ตอบ 200 หลัง deploy"; exit 1
+          echo "::error::dev ไม่ตอบ 200 หลัง deploy"; exit 1
