@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+# ยกเลิก run เก่าเมื่อ push ทับ — ประหยัด CI minutes
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # repo ยังไม่มีโค้ดแอป (อยู่ในเฟสออกแบบ) — ข้าม step ที่ต้องใช้ package.json
+      - id: probe
+        run: |
+          if [ -f package.json ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ยังไม่มี package.json — ข้ามขั้น build/test (repo อยู่ในเฟสออกแบบ)"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.probe.outputs.app == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      - name: Lint
+        if: steps.probe.outputs.app == 'true'
+        run: npm run lint
+
+      - name: Typecheck
+        if: steps.probe.outputs.app == 'true'
+        run: npx tsc --noEmit
+
+      # รันใน workerd จริง ต่อ binding D1 จริง (@cloudflare/vitest-pool-workers)
+      - name: Test
+        if: steps.probe.outputs.app == 'true'
+        run: npm test -- --run
+
+      - name: Build
+        if: steps.probe.outputs.app == 'true'
+        run: npx opennextjs-cloudflare build
+
+      # Workers free plan จำกัด worker script ที่ 3 MiB (gzip) — ให้ PR แดงก่อนชน
+      - name: Bundle size gate
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          WORKER=.open-next/worker.js
+          [ -f "$WORKER" ] || { echo "::error::ไม่พบ $WORKER"; exit 1; }
+          SIZE=$(gzip -c "$WORKER" | wc -c | tr -d ' ')
+          LIMIT=3145728      # 3 MiB — เพดานจริงของ free plan
+          WARN=2621440       # 2.5 MiB — เตือนล่วงหน้า
+          printf 'worker gzip: %s bytes (%.2f MiB)\n' "$SIZE" "$(echo "scale=2; $SIZE/1048576" | bc)"
+          echo "### Bundle size" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$SIZE\` bytes gzip — เพดาน free plan \`$LIMIT\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SIZE" -ge "$LIMIT" ]; then
+            echo "::error::เกิน 3 MiB — deploy ขึ้น free plan ไม่ได้"; exit 1
+          elif [ "$SIZE" -ge "$WARN" ]; then
+            echo "::warning::เกิน 2.5 MiB แล้ว ใกล้ชนเพดาน 3 MiB"
+          fi
+
+  preview:
+    needs: check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: probe
+        run: |
+          if [ -f package.json ]; then echo "app=true" >> "$GITHUB_OUTPUT"; else echo "app=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.probe.outputs.app == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - if: steps.probe.outputs.app == 'true'
+        run: npm ci && npx opennextjs-cloudflare build
+
+      # อัปโหลดเป็น version ใหม่ ได้ preview URL โดยไม่แตะ production
+      - id: upload
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload
+
+      - name: Comment preview URL
+        if: steps.probe.outputs.app == 'true'
+        uses: actions/github-script@v7
+        env:
+          WRANGLER_OUTPUT: ${{ steps.upload.outputs.command-output }}
+        with:
+          script: |
+            const out = process.env.WRANGLER_OUTPUT || '';
+            const url = (out.match(/https:\/\/[^\s]*\.workers\.dev/) || [])[0];
+            const body = url
+              ? `🚀 **Preview พร้อมแล้ว**\n\n${url}\n\n_version นี้ยังไม่ได้ขึ้น production — merge เข้า \`main\` ถึงจะ deploy จริง_`
+              : `⚠️ อัปโหลด version แล้วแต่หา preview URL ในผลลัพธ์ไม่เจอ — ดูใน log ของ job`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const mine = comments.find(c => c.user.type === 'Bot' && c.body.includes('Preview พร้อมแล้ว'));
+            if (mine) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

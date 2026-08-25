@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# deploy ทีละครั้ง ห้ามซ้อน — กัน migration ชนกัน
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  D1_DATABASE_NAME: precare-db
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: probe
+        run: |
+          if [ -f package.json ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ยังไม่มี package.json — ยังไม่มีอะไรให้ deploy"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.probe.outputs.app == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      - name: Lint + typecheck + test
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm test -- --run
+
+      - name: Build
+        if: steps.probe.outputs.app == 'true'
+        run: npx opennextjs-cloudflare build
+
+      # ต้องรัน migration ก่อน deploy โค้ดใหม่เสมอ — D1 ไม่มี rollback อัตโนมัติ
+      # migration ต้อง backward-compatible: เพิ่ม column ได้ / อย่าลบหรือ rename พร้อมกับที่โค้ดเปลี่ยน
+      - name: Apply D1 migrations
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote
+
+      - name: Deploy
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Smoke check
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          [ -n "${{ vars.PRODUCTION_URL }}" ] || { echo "::warning::ยังไม่ได้ตั้ง variable PRODUCTION_URL — ข้าม smoke check"; exit 0; }
+          for i in 1 2 3; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${{ vars.PRODUCTION_URL }}" || echo 000)
+            echo "attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::production ไม่ตอบ 200 หลัง deploy"; exit 1

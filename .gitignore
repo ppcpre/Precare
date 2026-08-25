@@ -1,0 +1,38 @@
+# deps
+node_modules/
+.pnp.*
+.yarn/
+
+# build output
+.next/
+.open-next/
+out/
+dist/
+build/
+
+# cloudflare
+.wrangler/
+.dev.vars
+.dev.vars.*
+wrangler.toml.bak
+
+# secrets / env — ห้ามหลุดเด็ดขาด
+.env
+.env.*
+!.env.example
+
+# design: ไฟล์ canvas ที่ seed แล้ว ~2.4MB สร้างใหม่ได้จาก gen.py
+design/health-tracking-screens.html
+design/*.tmp
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# test / coverage
+coverage/
+*.log

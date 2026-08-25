@@ -1,0 +1,279 @@
+{
+  "artboards": [
+    {
+      "file": "Login.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "เข้าสู่ระบบ",
+      "page": "screens"
+    },
+    {
+      "file": "Signup.dc.html",
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "สมัครสมาชิก",
+      "page": "screens"
+    },
+    {
+      "file": "Invite.dc.html",
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "รับคำเชิญ",
+      "page": "screens"
+    },
+    {
+      "file": "Onboarding.dc.html",
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Onboarding · ขั้น 3",
+      "page": "screens"
+    },
+    {
+      "file": "OnboardingDone.dc.html",
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Onboarding · ขั้น 4",
+      "page": "screens"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "Dashboard · owner",
+      "page": "screens"
+    },
+    {
+      "file": "DashboardSetup.dc.html",
+      "x": 470,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "Dashboard · ยังไม่ตั้ง LMP",
+      "page": "screens"
+    },
+    {
+      "file": "DashboardViewer.dc.html",
+      "x": 940,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "Dashboard · viewer",
+      "page": "screens"
+    },
+    {
+      "file": "DashboardV2.dc.html",
+      "x": 1410,
+      "y": 1264,
+      "w": 390,
+      "h": 1080,
+      "title": "Dashboard · Phase 2",
+      "page": "screens"
+    },
+    {
+      "file": "Health.dc.html",
+      "x": 0,
+      "y": 2764,
+      "w": 390,
+      "h": 980,
+      "title": "บันทึกสุขภาพ",
+      "page": "screens"
+    },
+    {
+      "file": "HealthEmpty.dc.html",
+      "x": 470,
+      "y": 2764,
+      "w": 390,
+      "h": 844,
+      "title": "บันทึกสุขภาพ · ว่าง",
+      "page": "screens"
+    },
+    {
+      "file": "HealthForm.dc.html",
+      "x": 940,
+      "y": 2764,
+      "w": 390,
+      "h": 1300,
+      "title": "ฟอร์มสุขภาพ",
+      "page": "screens"
+    },
+    {
+      "file": "Appointments.dc.html",
+      "x": 1410,
+      "y": 2764,
+      "w": 390,
+      "h": 940,
+      "title": "นัดหมาย",
+      "page": "screens"
+    },
+    {
+      "file": "AppointmentForm.dc.html",
+      "x": 1880,
+      "y": 2764,
+      "w": 390,
+      "h": 1020,
+      "title": "ฟอร์มนัดหมาย",
+      "page": "screens"
+    },
+    {
+      "file": "Profile.dc.html",
+      "x": 0,
+      "y": 4484,
+      "w": 390,
+      "h": 1320,
+      "title": "โปรไฟล์",
+      "page": "screens"
+    },
+    {
+      "file": "ProfileEdit.dc.html",
+      "x": 470,
+      "y": 4484,
+      "w": 390,
+      "h": 680,
+      "title": "แก้ไขโปรไฟล์ + อัปโหลดรูป",
+      "page": "screens"
+    },
+    {
+      "file": "Family.dc.html",
+      "x": 940,
+      "y": 4484,
+      "w": 390,
+      "h": 940,
+      "title": "ครอบครัว · owner",
+      "page": "screens"
+    },
+    {
+      "file": "FamilyViewer.dc.html",
+      "x": 1410,
+      "y": 4484,
+      "w": 390,
+      "h": 844,
+      "title": "ครอบครัว · viewer",
+      "page": "screens"
+    },
+    {
+      "file": "FamilyInvite.dc.html",
+      "x": 1880,
+      "y": 4484,
+      "w": 390,
+      "h": 700,
+      "title": "เชิญสมาชิก",
+      "page": "screens"
+    },
+    {
+      "file": "Album.dc.html",
+      "x": 0,
+      "y": 6224,
+      "w": 390,
+      "h": 940,
+      "title": "อัลบั้ม · Phase 2",
+      "page": "screens"
+    },
+    {
+      "file": "PhotoDetail.dc.html",
+      "x": 470,
+      "y": 6224,
+      "w": 390,
+      "h": 844,
+      "title": "ดูรูป + แชร์ · Phase 2–3",
+      "page": "screens"
+    },
+    {
+      "file": "Logo.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 900,
+      "h": 1680,
+      "title": "Pre Care Logo — spec",
+      "page": "logo"
+    },
+    {
+      "file": "Components.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 900,
+      "h": 1720,
+      "title": "Component Library",
+      "page": "components"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-auth",
+      "x": 0,
+      "y": -190,
+      "w": 470,
+      "page": "screens",
+      "text": "Auth + Onboarding\nแบรนด์ที่ผู้ใช้เห็นตอนเข้าคือ Health Care (ตัว web app)\nGoogle OAuth + อีเมล/รหัสผ่าน — อีเมลคือชื่อผู้ใช้\nยังไม่มีปุ่มลืมรหัสผ่าน ใช้ข้อความชี้ทางไป Google แทน"
+    },
+    {
+      "id": "note-dash",
+      "x": 0,
+      "y": 1074,
+      "w": 470,
+      "page": "screens",
+      "text": "Dashboard 4 แบบ\nแถบบนแสดงชื่อฟีเจอร์ Pre Care — Health Care จะมีฟีเจอร์อื่นตามมาทีหลัง\nเลขสัปดาห์คือจุดสายตาแรก · viewer ไม่เห็น quick actions เลย ไม่ใช่ disabled\nใบขวาสุดคือ Phase 2 ที่เพิ่มการ์ดขนาดลูกน้อย + พัฒนาการเข้ามา"
+    },
+    {
+      "id": "note-health",
+      "x": 0,
+      "y": 2574,
+      "w": 470,
+      "page": "screens",
+      "text": "สุขภาพ + นัดหมาย\nฟอร์มสุขภาพแนบรูปได้ รูปไหลเข้าอัลบั้มอัตโนมัติ (Phase 2)\nFAB หายไปทั้งปุ่มเมื่อเป็น viewer · ความดันเกินเกณฑ์ใช้ danger แบบหม่น ไม่ทำแถบแดงทั้งการ์ด"
+    },
+    {
+      "id": "note-profile",
+      "x": 0,
+      "y": 4294,
+      "w": 470,
+      "page": "screens",
+      "text": "โปรไฟล์ = ทางเข้าครอบครัว\nbottom nav สลับ ครอบครัว ออก เอา อัลบั้ม เข้ามาแทน\nอัปโหลดรูปโปรไฟล์ย้ายมาอยู่ Phase 1 แล้ว · อีเมลแก้ไม่ได้เพราะเป็นชื่อผู้ใช้\nเมนู ⋮ และปุ่มเชิญยังเห็นเฉพาะ owner"
+    },
+    {
+      "id": "note-album",
+      "x": 0,
+      "y": 6034,
+      "w": 470,
+      "page": "screens",
+      "text": "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"
+    },
+    {
+      "id": "note-logo",
+      "x": 0,
+      "y": -200,
+      "w": 900,
+      "page": "logo",
+      "text": "โลโก้ Pre Care — สรุปแล้ว: ตัวเลือก C (หน่ออ่อน) ใบเขียว sage\nใส่ลงหน้า Login / Signup และ component library เรียบร้อย ไม่มีอะไรค้าง\nสีที่ใช้: หัวใจ peach-500 #E89A6C · จุด peach-300 #F5BE9B · ใบ sage #8AA383\nสิ่งที่ต้อง export ตอน dev: SVG มาร์ก, favicon 32/48, app icon 192/512 (พื้น peach-100 มุมมน 24%)"
+    }
+  ],
+  "pages": [
+    {
+      "id": "logo",
+      "name": "โลโก้ Pre Care"
+    },
+    {
+      "id": "screens",
+      "name": "หน้าจอ"
+    },
+    {
+      "id": "components",
+      "name": "Component Library"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "logo"
+  }
+}
