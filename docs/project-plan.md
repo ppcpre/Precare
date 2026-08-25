@@ -118,18 +118,23 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 ### M0 · Foundation + Deploy — 3–4 วัน
 
 > เป้าหมาย: **มี URL จริงที่เปิดได้ตั้งแต่วันแรก** พร้อม CI ที่ deploy อัตโนมัติ ไม่ปล่อยให้ deploy เป็นงานตอนท้าย
+>
+> **สถานะ 25 ส.ค. 69 — เสร็จ 8/9** เหลือ **T0.5** ที่ deploy ผ่านแล้วทั้ง dev และ production
+> แต่ URL ยังเข้าไม่ได้เพราะต้องเปิด workers.dev subdomain ในหน้า Cloudflare dashboard (CLI ทำไม่ได้)
+>
+> **ตัวเลขที่วัดได้จริง:** bundle gzip **1,034 KiB = 33% ของเพดาน 3 MiB** · worker startup **43 ms**
 
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T0.1** | `git init` + push ขึ้น GitHub | repo มี commit แรก, branch `main` | — |
-| **T0.2** | อัปเดต `architecture.md` ตามหัวข้อ 1 | เอกสารเขียน Workers + OpenNext + Better Auth ตรงกับที่จะทำจริง | — |
-| **T0.3** | ล้าง scaffold ใน zip | ลบ `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, `firestore.indexes.json`, `src/lib/firebase.ts` · ถอด `firebase` ออกจาก `package.json` · เก็บ `src/lib/pregnancy.ts` ไว้ทั้งไฟล์ | T0.1 |
-| **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
-| **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
-| **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
-| **T0.7** | GitHub Actions CI/CD + **แยก env dev** | สร้าง `precare-dev-db` + `env.dev` ใน `wrangler.jsonc` · PR → preview URL (ผูก D1 ของ dev) · push `dev` → deploy `precare-dev` · merge `main` → production deploy อัตโนมัติ | T0.5 |
-| **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
-| **T0.9** | โครง layout + routing เปล่า | 15 routes มีไฟล์ครบ ยังเป็นหน้าเปล่า · BottomNav + Sidebar สลับตาม breakpoint ได้ | T0.8 |
+| ✅ **T0.1** | `git init` + push ขึ้น GitHub | repo มี commit แรก, branch `main` | — |
+| ✅ **T0.2** | อัปเดต `architecture.md` ตามหัวข้อ 1 | เอกสารเขียน Workers + OpenNext + Better Auth ตรงกับที่จะทำจริง | — |
+| ✅ **T0.3** | ล้าง scaffold ใน zip | ลบ `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, `firestore.indexes.json`, `src/lib/firebase.ts` · ถอด `firebase` ออกจาก `package.json` · เก็บ `src/lib/pregnancy.ts` ไว้ทั้งไฟล์ | T0.1 |
+| ✅ **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
+| 🟡 **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
+| ✅ **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
+| ✅ **T0.7** | GitHub Actions CI/CD + **แยก env dev** | สร้าง `precare-dev-db` + `env.dev` ใน `wrangler.jsonc` · PR → preview URL (ผูก D1 ของ dev) · push `dev` → deploy `precare-dev` · merge `main` → production deploy อัตโนมัติ | T0.5 |
+| ✅ **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
+| ✅ **T0.9** | โครง layout + routing เปล่า | 15 routes มีไฟล์ครบ ยังเป็นหน้าเปล่า · BottomNav + Sidebar สลับตาม breakpoint ได้ | T0.8 |
 
 ### M1 · Database + Data layer — 3–4 วัน
 
