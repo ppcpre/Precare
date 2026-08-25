@@ -108,7 +108,7 @@ jobs:
 
       - name: Comment preview URL
         if: steps.probe.outputs.app == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           WRANGLER_OUTPUT: ${{ steps.upload.outputs.command-output }}
         with:
