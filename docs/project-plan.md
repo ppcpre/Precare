@@ -130,7 +130,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | ✅ **T0.2** | อัปเดต `architecture.md` ตามหัวข้อ 1 | เอกสารเขียน Workers + OpenNext + Better Auth ตรงกับที่จะทำจริง | — |
 | ✅ **T0.3** | ล้าง scaffold ใน zip | ลบ `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, `firestore.indexes.json`, `src/lib/firebase.ts` · ถอด `firebase` ออกจาก `package.json` · เก็บ `src/lib/pregnancy.ts` ไว้ทั้งไฟล์ | T0.1 |
 | ✅ **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
-| 🟡 **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
+| ✅ **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
 | ✅ **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
 | ✅ **T0.7** | GitHub Actions CI/CD + **แยก env dev** | สร้าง `precare-dev-db` + `env.dev` ใน `wrangler.jsonc` · PR → preview URL (ผูก D1 ของ dev) · push `dev` → deploy `precare-dev` · merge `main` → production deploy อัตโนมัติ | T0.5 |
 | ✅ **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
@@ -154,15 +154,22 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M2 · Auth — 2–3 วัน
 
+> **สถานะ 25 ส.ค. 69 — เสร็จ 7/7** ทดสอบบน dev worker จริงแล้ว
+>
+> **ความเสี่ยงข้อใหญ่ปิดแล้ว** — scrypt ของ Better Auth ทำงานได้บน free plan ที่จำกัด CPU 10 ms
+> ทั้ง sign-up และ sign-in ผ่าน · รหัสผิดตอบ 401 ถูกต้อง · **ไม่ต้องขึ้น Workers Paid**
+>
+> **bundle 1,650 KiB = 54% ของเพดาน 3 MiB** (จาก 1,034 KiB ตอนจบ M1) — Better Auth + Drizzle + middleware กินไปราว 600 KiB
+
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T2.1** | ติดตั้ง Better Auth + Drizzle/D1 adapter | ตาราง auth ถูกสร้างใน D1 · `/api/auth/*` ตอบสนอง | T1.3 |
-| **T2.2** | เปิด email + password | `emailAndPassword.enabled = true` · `requireEmailVerification = false` *(ชั่วคราว)* · **ล็อกอินด้วยอีเมลเป็น identifier ไม่มี username แยก** · สมัคร + ล็อกอินได้จริง | T2.1 |
-| **T2.3** | Google OAuth | สร้าง OAuth client ใน Google Cloud Console · ใส่ redirect URI **ทั้ง localhost, preview และ production** · ล็อกอินด้วย Google ได้จริง | T2.1 |
-| **T2.4** | **session ยาว 60 วัน** (decision #3) | `expiresIn: 60 วัน`, `updateAge: 1 วัน` · ปิดเบราว์เซอร์แล้วเปิดใหม่ยังล็อกอินอยู่ | T2.1 |
-| **T2.5** | Account linking | อีเมลเดียวกันสมัครด้วยรหัสผ่านแล้วมาล็อกอิน Google → เข้าบัญชีเดิม ไม่สร้างใหม่ | T2.2, T2.3 |
-| **T2.6** | middleware ป้องกัน route | ไม่มี session → `/login` · มี session แต่ไม่มี `active_family_id` → `/onboarding` | T2.4 |
-| **T2.7** | rate limit การล็อกอิน | ใส่ผิดเกิน N ครั้ง → หน่วงเวลา | T2.2 |
+| ✅ **T2.1** | ติดตั้ง Better Auth + Drizzle/D1 adapter | ตาราง auth ถูกสร้างใน D1 · `/api/auth/*` ตอบสนอง | T1.3 |
+| ✅ **T2.2** | เปิด email + password | `emailAndPassword.enabled = true` · `requireEmailVerification = false` *(ชั่วคราว)* · **ล็อกอินด้วยอีเมลเป็น identifier ไม่มี username แยก** · สมัคร + ล็อกอินได้จริง | T2.1 |
+| ✅ **T2.3** | Google OAuth | สร้าง OAuth client ใน Google Cloud Console · ใส่ redirect URI **ทั้ง localhost, preview และ production** · ล็อกอินด้วย Google ได้จริง | T2.1 |
+| ✅ **T2.4** | **session ยาว 60 วัน** (decision #3) | `expiresIn: 60 วัน`, `updateAge: 1 วัน` · ปิดเบราว์เซอร์แล้วเปิดใหม่ยังล็อกอินอยู่ | T2.1 |
+| ✅ **T2.5** | Account linking | อีเมลเดียวกันสมัครด้วยรหัสผ่านแล้วมาล็อกอิน Google → เข้าบัญชีเดิม ไม่สร้างใหม่ | T2.2, T2.3 |
+| ✅ **T2.6** | middleware ป้องกัน route | ไม่มี session → `/login` · มี session แต่ไม่มี `active_family_id` → `/onboarding` | T2.4 |
+| ✅ **T2.7** | rate limit การล็อกอิน | ใส่ผิดเกิน N ครั้ง → หน่วงเวลา | T2.2 |
 
 ### M3 · API layer — 5–6 วัน
 
