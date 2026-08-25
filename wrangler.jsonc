@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "precare-db",
-      "database_id": "REPLACE_AFTER_T0.6",
+      "database_id": "906981f7-827b-4456-b586-a9d9717eae56",
       "migrations_dir": "migrations"
     }
   ],
@@ -51,7 +51,7 @@
         {
           "binding": "DB",
           "database_name": "precare-dev-db",
-          "database_id": "REPLACE_AFTER_T0.7",
+          "database_id": "ed7a37a6-37ae-4a48-baa0-b78a311402fd",
           "migrations_dir": "migrations"
         }
       ]
