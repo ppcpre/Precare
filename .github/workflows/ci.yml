@@ -17,7 +17,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # repo ยังไม่มีโค้ดแอป (อยู่ในเฟสออกแบบ) — ข้าม step ที่ต้องใช้ package.json
       - id: probe
@@ -82,7 +82,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: probe
         run: |
