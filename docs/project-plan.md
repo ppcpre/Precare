@@ -127,7 +127,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
 | **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
 | **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
-| **T0.7** | GitHub Actions CI/CD | PR → preview URL · merge `main` → production deploy อัตโนมัติ | T0.5 |
+| **T0.7** | GitHub Actions CI/CD + **แยก env dev** | สร้าง `precare-dev-db` + `env.dev` ใน `wrangler.jsonc` · PR → preview URL (ผูก D1 ของ dev) · push `dev` → deploy `precare-dev` · merge `main` → production deploy อัตโนมัติ | T0.5 |
 | **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
 | **T0.9** | โครง layout + routing เปล่า | 15 routes มีไฟล์ครบ ยังเป็นหน้าเปล่า · BottomNav + Sidebar สลับตาม breakpoint ได้ | T0.8 |
 
@@ -218,15 +218,18 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ## 5. Deploy Plan
 
-### 5.1 สามสภาพแวดล้อม
+### 5.1 สี่สภาพแวดล้อม
 
-| Env | ที่อยู่ | Database | Deploy เมื่อ |
-|---|---|---|---|
-| **Local** | `localhost:3000` | D1 local (`--local`) ในเครื่อง | `npm run dev` |
-| **Preview** | `<hash>-health-tracking.workers.dev` | D1 **ตัวเดียวกับ production** ⚠️ | เปิด PR |
-| **Production** | `health-tracking.<subdomain>.workers.dev` | D1 production | merge เข้า `main` |
+| Env | Worker | ที่อยู่ | Database | Deploy เมื่อ |
+|---|---|---|---|---|
+| **Local** | — | `localhost:3000` | D1 local (`--local`) ในเครื่อง | `npm run dev` |
+| **Preview** | `precare-dev` (version) | `<hash>-precare-dev.workers.dev` | `precare-dev-db` | เปิด PR |
+| **Dev** | `precare-dev` | `precare-dev.<subdomain>.workers.dev` | `precare-dev-db` | push เข้า `dev` |
+| **Production** | `precare` | `precare.<subdomain>.workers.dev` | `precare-db` | merge `dev` → `main` |
 
-> ⚠️ **D1 ไม่มี branching แบบ Neon/PlanetScale** — preview จะชี้ไปที่ DB เดียวกับ production ถ้าไม่อยากให้ปนกัน ให้สร้าง D1 ตัวที่สอง (`health-tracking-preview`) แล้วผูกใน environment `preview` ของ `wrangler.jsonc` **แนะนำให้ทำตั้งแต่ T0.7** จะได้ไม่ต้องแก้ทีหลัง
+> **D1 ไม่มี branching แบบ Neon/PlanetScale** — จึงแยกเป็น DB คนละตัวไปเลย: `env.dev` ใน `wrangler.jsonc` ผูก `precare-dev-db` ส่วน top-level (production) ผูก `precare-db` ทั้ง PR preview และ dev deploy ยิงลง `precare-dev-db` เท่านั้น ไม่มีทางแตะข้อมูล production
+>
+> ⚠️ `d1_databases` / `vars` / `r2_buckets` เป็น **non-inheritable key** ของ wrangler — เพิ่ม binding ใหม่ต้องเพิ่มทั้งใน top-level และใน `env.dev` เสมอ ไม่งั้น dev จะขาด binding นั้นเงียบๆ · secret ก็แยกเช่นกัน (`wrangler secret put <NAME> --env dev`)
 
 ### 5.2 คำสั่งที่ใช้จริง
 
@@ -236,14 +239,28 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 npx wrangler d1 create precare-db
 ```
 
-รัน migration (local ตอน dev / remote ตอน deploy):
+สร้าง D1 ของ dev (ทำครั้งเดียว — เอา id ที่ได้ไปใส่ `env.dev` ใน `wrangler.jsonc`):
 
 ```bash
-npx wrangler d1 migrations apply precare-db --local
+npx wrangler d1 create precare-dev-db
 ```
 
+รัน migration — local:
+
 ```bash
-npx wrangler d1 migrations apply precare-db --remote
+npm run db:migrate:local
+```
+
+dev (remote):
+
+```bash
+npm run db:migrate:dev
+```
+
+production (remote):
+
+```bash
+npm run db:migrate:remote
 ```
 
 ดูตัวอย่างจริงก่อน deploy (รันด้วย Workers runtime ในเครื่อง):
@@ -252,10 +269,16 @@ npx wrangler d1 migrations apply precare-db --remote
 npx opennextjs-cloudflare build && npx opennextjs-cloudflare preview
 ```
 
+deploy ขึ้น dev ด้วยมือ (ปกติปล่อยให้ CI ทำจาก branch `dev`):
+
+```bash
+npm run deploy:dev
+```
+
 deploy ขึ้น production:
 
 ```bash
-npx opennextjs-cloudflare deploy
+npm run deploy
 ```
 
 ### 5.3 Secrets & Environment Variables
@@ -274,23 +297,33 @@ npx opennextjs-cloudflare deploy
 
 ### 5.4 CI/CD (T0.7)
 
-```
-PR เปิด/อัปเดต
-  └→ install → lint → test → opennextjs-cloudflare build
-      └→ wrangler versions upload  →  คอมเมนต์ preview URL ใน PR
+**สายงาน branch:** `feature/*` → PR เข้า `dev` → `dev` → PR เข้า `main` → production
+`main` เป็น production ล้วน ห้าม push ตรง
 
-merge เข้า main
-  └→ install → lint → test → build
-      └→ wrangler d1 migrations apply --remote
+```
+PR เปิด/อัปเดต  (ci.yml)
+  └→ install → lint → typecheck → test → build → bundle size gate
+      └→ wrangler versions upload --env dev  →  คอมเมนต์ preview URL ใน PR
+
+push เข้า dev  (deploy-dev.yml)
+  └→ install → lint → typecheck → test → build
+      └→ wrangler d1 migrations apply precare-dev-db --remote --env dev
+          └→ opennextjs-cloudflare deploy -- --env dev  →  precare-dev
+
+merge เข้า main  (deploy.yml)
+  └→ install → lint → typecheck → test → build
+      └→ wrangler d1 migrations apply precare-db --remote
           └→ opennextjs-cloudflare deploy  →  production
 ```
+
+ทั้งสามใช้ `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` ชุดเดียวกัน ต่างกันที่ GitHub Environment (`dev` / `production`) และ variable ของ smoke check (`DEV_URL` / `PRODUCTION_URL`)
 
 **กติกา:** migration ต้องรัน **ก่อน** deploy โค้ดใหม่เสมอ และต้องเขียนแบบ backward-compatible (เพิ่ม column ได้ / อย่าลบหรือ rename ใน migration เดียวกับที่โค้ดเปลี่ยน) เพราะ D1 ไม่มี rollback อัตโนมัติ
 
 ### 5.5 Go-live Checklist (T6.6)
 
-- [ ] `wrangler d1 migrations apply --remote` รันครบทุกไฟล์
-- [ ] Secrets ครบทั้ง 5 ตัวใน production
+- [ ] `npm run db:migrate:remote` (production) รันครบทุกไฟล์ · ผ่านบน dev มาก่อนแล้ว
+- [ ] Secrets ครบทั้ง 5 ตัวใน production (และใน `--env dev` ครบเช่นกัน)
 - [ ] Google OAuth redirect URI มี production URL แล้ว
 - [ ] bundle < 3 MiB (gzip) — ถ้าเกินตัดสินใจเรื่อง Workers Paid
 - [ ] Authorization test ผ่านทั้งชุด (T3.8) — **ข้อนี้ห้ามข้าม**
@@ -308,7 +341,7 @@ merge เข้า main
 |---|---|:---:|:---:|---|
 | 1 | **bundle เกิน 3 MiB** บน Workers free | กลาง | สูง — deploy ไม่ได้ | เจอตั้งแต่ **T0.5** ไม่ใช่ตอนท้าย · ถ้าเกิน → Workers Paid $5/เดือน (10 MiB) |
 | 2 | **ไม่มีปุ่มลืมรหัสผ่าน** | สูง | กลาง | ออกแบบข้อความชี้ทางไป Google login ในหน้า login (ดูหัวข้อ 0) + เร่ง Phase 1.5 |
-| 3 | **preview ใช้ D1 ร่วมกับ production** | สูง | กลาง | สร้าง D1 แยกสำหรับ preview ตั้งแต่ T0.7 |
+| 3 | ~~**preview ใช้ D1 ร่วมกับ production**~~ | — | — | ✅ ปิดแล้ว — แยก `env.dev` + `precare-dev-db` ทั้ง preview และ dev deploy · ที่เหลือคือ **อย่าลืมเพิ่ม binding/secret ใหม่ใน `env.dev` ด้วย** เพราะ wrangler ไม่ inherit ให้ |
 | 4 | **D1 ไม่มี row-level security** | — | สูง | authz check ทุก endpoint (T1.5) + **T3.8 เป็นงานบังคับ ห้ามตัดทิ้ง** |
 | 5 | Browser Notification ไม่ทำงานตอนปิดแท็บ | สูง | ต่ำ | สื่อสารในหน้าตั้งค่าให้ชัด · แก้จริงด้วย Web Push + Service Worker ใน Phase 2 |
 | 6 | Better Auth ต่างจากที่ architecture.md เขียนไว้ | — | ต่ำ | T0.2 อัปเดตเอกสารก่อนเริ่ม |

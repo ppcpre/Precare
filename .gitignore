@@ -36,3 +36,6 @@ Thumbs.db
 # test / coverage
 coverage/
 *.log
+
+# build cache ของ tsc
+*.tsbuildinfo
