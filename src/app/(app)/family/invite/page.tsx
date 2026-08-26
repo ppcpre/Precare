@@ -1,8 +1,25 @@
-export default function Page() {
-  return (
-    <div className="rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-      <h1 className="text-xl font-semibold text-ink-900">เชิญสมาชิก</h1>
-      <p className="mt-1 text-sm text-ink-600">โครงหน้าเปล่า — งานจริงอยู่ที่ T5.7</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { InviteForm } from "@/components/family/invite-form";
+import { requireFamilyContext } from "@/lib/queries";
+
+export const metadata = { title: "เชิญสมาชิก · Pre Care" };
+
+export default async function InvitePage() {
+  try {
+    // owner เท่านั้นที่เชิญได้ — ไม่ได้พึ่งแค่การซ่อนปุ่ม
+    await requireFamilyContext("owner");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    redirect("/family");
+  }
+
+  // สร้างลิงก์จาก host จริง จะได้ถูกต้องทั้ง localhost / dev / production
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const origin = `${proto}://${h.get("host")}`;
+
+  return <InviteForm origin={origin} />;
 }
