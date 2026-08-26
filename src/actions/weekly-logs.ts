@@ -15,16 +15,18 @@ export const createWeeklyLog = editorAction
   .inputSchema(weeklyLogInput)
   .action(async ({ parsedInput, ctx }) => {
     const { symptoms, ...rest } = parsedInput;
+    const id = newId();
     await ctx.db.insert(weeklyLogs).values({
       ...rest,
-      id: newId(),
+      id,
       familyId: ctx.familyId,       // จาก session ไม่ใช่จาก client
       recordedBy: ctx.user.id,
       symptoms: stringifySymptoms(symptoms),
     });
     revalidatePath("/health");
     revalidatePath("/dashboard");
-    return { ok: true };
+    // คืน id เพื่อให้ฟอร์มพาไปหน้าเพิ่มรูปต่อได้ทันที
+    return { id };
   });
 
 export const updateWeeklyLog = editorAction

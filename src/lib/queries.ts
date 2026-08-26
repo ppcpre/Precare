@@ -11,7 +11,7 @@ import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import {
   appointments, families, familyInvites, familyMembers,
-  pregnancyProfiles, user, weeklyLogs,
+  photos, pregnancyProfiles, user, weeklyLogs,
 } from "@/db/schema";
 import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
 import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
@@ -223,6 +223,60 @@ export async function getLayoutData(db: Db, familyId: string) {
     upcoming: apptRows,
     now,
   };
+}
+
+/** รูปในอัลบั้ม เรียงจากใหม่ไปเก่าตาม "วันที่ถ่าย" ไม่ใช่วันที่อัปโหลด */
+export async function listPhotos(
+  db: Db,
+  familyId: string,
+  type?: "ultrasound" | "family" | "other",
+) {
+  const rows = await db
+    .select({
+      id: photos.id,
+      week: photos.week,
+      takenAt: photos.takenAt,
+      type: photos.type,
+      pinned: photos.pinned,
+      caption: photos.caption,
+      r2Key: photos.r2Key,
+      createdAt: photos.createdAt,
+      uploaderName: user.name,
+    })
+    .from(photos)
+    .innerJoin(user, eq(user.id, photos.uploadedBy))
+    .where(type ? and(eq(photos.familyId, familyId), eq(photos.type, type)) : eq(photos.familyId, familyId))
+    .orderBy(desc(photos.takenAt), desc(photos.createdAt));
+  return rows;
+}
+
+export async function getPhotoById(db: Db, familyId: string, id: string) {
+  return db
+    .select({
+      id: photos.id,
+      week: photos.week,
+      takenAt: photos.takenAt,
+      type: photos.type,
+      pinned: photos.pinned,
+      caption: photos.caption,
+      r2Key: photos.r2Key,
+      createdAt: photos.createdAt,
+      uploaderName: user.name,
+    })
+    .from(photos)
+    .innerJoin(user, eq(user.id, photos.uploadedBy))
+    .where(and(eq(photos.id, id), eq(photos.familyId, familyId)))
+    .get();
+}
+
+/** จำนวนรูปที่แนบกับบันทึกสุขภาพแต่ละรายการ — ใช้โชว์ thumbnail ในการ์ด */
+export async function countPhotosByLog(db: Db, familyId: string) {
+  const rows = await db
+    .select({ logId: photos.logId, n: sql<number>`count(*)` })
+    .from(photos)
+    .where(eq(photos.familyId, familyId))
+    .groupBy(photos.logId);
+  return new Map(rows.filter((r) => r.logId).map((r) => [r.logId as string, Number(r.n)]));
 }
 
 export async function getFamily(db: Db, familyId: string) {

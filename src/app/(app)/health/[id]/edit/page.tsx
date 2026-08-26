@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { HealthForm } from "@/components/health/form";
-import { getLogFormDefaults, getWeeklyLogById, requireFamilyContext } from "@/lib/queries";
+import { countPhotosByLog, getLogFormDefaults, getWeeklyLogById, requireFamilyContext } from "@/lib/queries";
 
 export const metadata = { title: "แก้ไขบันทึกสุขภาพ · Pre Care" };
 
@@ -18,11 +18,19 @@ export default async function EditLogPage({ params }: { params: Promise<{ id: st
   }
 
   // getWeeklyLogById กรอง familyId ให้แล้ว — เดา id ของบ้านอื่นไม่ได้
-  const [log, d] = await Promise.all([
+  const [log, d, counts] = await Promise.all([
     getWeeklyLogById(ctx.db, ctx.familyId, id),
     getLogFormDefaults(ctx.db, ctx.familyId),
+    countPhotosByLog(ctx.db, ctx.familyId),
   ]);
   if (!log) notFound();
 
-  return <HealthForm log={log} suggestedWeek={d.suggestedWeek} lastWeight={d.lastWeight} />;
+  return (
+    <HealthForm
+      log={log}
+      suggestedWeek={d.suggestedWeek}
+      lastWeight={d.lastWeight}
+      photoCount={counts.get(log.id) ?? 0}
+    />
+  );
 }

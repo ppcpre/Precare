@@ -118,6 +118,11 @@ export const photos = sqliteTable(
     /** ถ้าแนบมากับบันทึกสุขภาพ · ลบบันทึกแล้วรูปยังอยู่ในอัลบั้ม */
     logId: text("log_id").references(() => weeklyLogs.id, { onDelete: "set null" }),
     week: integer("week"),
+    /** วันที่ "ถ่าย" ไม่ใช่วันที่อัปโหลด — คนอัปโหลดทีหลังเสมอ
+     *  ถ้าใช้ createdAt จัดกลุ่ม รูปจะไปโผล่ผิดสัปดาห์ */
+    takenAt: text("taken_at").notNull(),
+    /** รูปหน้าปกของสัปดาห์นั้น — พอมีหลายสิบรูปกริดจะดูไม่ออกว่าอันไหนสำคัญ */
+    pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     type: text("type", { enum: PHOTO_TYPES }).notNull().default("other"),
     r2Key: text("r2_key").notNull(),
     /** เก็บ thumb แยก ไม่ให้กริดอัลบั้มโหลดรูปเต็มทุกใบ */
@@ -126,7 +131,7 @@ export const photos = sqliteTable(
     uploadedBy: text("uploaded_by").notNull().references(() => user.id),
     createdAt: text("created_at").notNull().default(nowIso),
   },
-  (t) => [index("idx_photos_family").on(t.familyId, t.week)],
+  (t) => [index("idx_photos_family").on(t.familyId, t.takenAt)],
 );
 
 export const STORAGE_KINDS = ["avatar", "photo", "asset"] as const;

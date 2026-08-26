@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Camera, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { ChipMultiSelect } from "@/components/ui/chip";
 import { MoodPicker } from "@/components/ui/mood-picker";
 import { BpInput } from "@/components/ui/bp-input";
 import { createWeeklyLog, updateWeeklyLog, deleteWeeklyLog } from "@/actions/weekly-logs";
+import Link from "next/link";
 import type { Mood, WeeklyLogView } from "@/types";
 
 /** ชุดอาการสำเร็จตาม screen-blueprint §6.3 */
@@ -24,10 +25,12 @@ export function HealthForm({
   log,
   suggestedWeek,
   lastWeight,
+  photoCount = 0,
 }: {
   log?: WeeklyLogView;
   suggestedWeek: number | null;
   lastWeight: number | null;
+  photoCount?: number;
 }) {
   const router = useRouter();
   const editing = Boolean(log);
@@ -41,11 +44,23 @@ export function HealthForm({
   const [mood, setMood] = useState<Mood | null>(log?.mood ?? null);
   const [note, setNote] = useState(log?.note ?? "");
 
+  const [addPhotosAfter, setAddPhotosAfter] = useState(false);
+
   const done = () => {
     router.push("/health");
     router.refresh();
   };
-  const create = useAction(createWeeklyLog, { onSuccess: done });
+  const create = useAction(createWeeklyLog, {
+    onSuccess: ({ data }) => {
+      // เพิ่งสร้างบันทึกใหม่ ยังไม่มี id ตอนอยู่ในฟอร์ม จึงพาไปเพิ่มรูปหลังบันทึกเสร็จ
+      if (addPhotosAfter && data?.id) {
+        router.push(`/album/upload?logId=${data.id}`);
+        router.refresh();
+        return;
+      }
+      done();
+    },
+  });
   const update = useAction(updateWeeklyLog, { onSuccess: done });
   const remove = useAction(deleteWeeklyLog, { onSuccess: done });
 
@@ -139,6 +154,43 @@ export function HealthForm({
         <div className="flex flex-col gap-2">
           <span className="text-sm text-ink-600">อารมณ์วันนี้</span>
           <MoodPicker value={mood} onChange={setMood} />
+        </div>
+
+        {/* รูปผูกกับบันทึกนี้ และไปโผล่ในอัลบั้มด้วย */}
+        <div className="flex flex-col gap-2">
+          <span className="text-sm text-ink-600">รูปภาพ</span>
+          {log ? (
+            <Link
+              href={`/album/upload?logId=${log.id}`}
+              className="flex items-center gap-3 rounded-md border border-cream-200 bg-white p-4"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-brown-100">
+                <Camera size={20} strokeWidth={1.8} className="text-brown-700" />
+              </span>
+              <span className="flex flex-1 flex-col gap-0.5">
+                <span className="font-medium text-ink-900">เพิ่มรูปเข้าบันทึกนี้</span>
+                <span className="text-[13px] text-ink-600">
+                  {photoCount > 0 ? `มีอยู่แล้ว ${photoCount} รูป` : "อัลตราซาวด์ หรือความทรงจำของสัปดาห์นี้"}
+                </span>
+              </span>
+              <ChevronRight size={16} strokeWidth={2} className="shrink-0 text-ink-400" />
+            </Link>
+          ) : (
+            <label className="flex items-center gap-3 rounded-md border border-cream-200 bg-white p-4">
+              <input
+                type="checkbox"
+                checked={addPhotosAfter}
+                onChange={(e) => setAddPhotosAfter(e.target.checked)}
+                className="size-5 min-h-0 shrink-0 accent-brown-700"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-ink-900">บันทึกแล้วเพิ่มรูปต่อ</span>
+                <span className="text-[13px] text-ink-600">
+                  รูปจะผูกกับบันทึกนี้และไปแสดงในอัลบั้มด้วย
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <Textarea

@@ -26,6 +26,7 @@ const PAGE_RULES = {
   "health/[id]/edit": "editor",
   "appointments/new": "editor",
   "appointments/[id]/edit": "editor",
+  "album/upload": "editor",
 };
 /** หน้าที่แก้ข้อมูลของตัวเอง ไม่ผูกกับ family จึงใช้แค่ session */
 const SESSION_ONLY_PAGES = new Set(["profile/edit"]);
@@ -39,6 +40,7 @@ const ACTION_RULES = {
   "appointments.ts": ["editorAction"],
   "onboarding.ts": ["authAction"],
   "profile.ts": ["authAction"],
+  "photos.ts": ["editorAction"],
 };
 
 function walk(dir) {
