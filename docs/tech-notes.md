@@ -213,6 +213,38 @@ node -e "const l=require('./package-lock.json');const p=l.packages;const c=k=>Ob
 
 ---
 
+## 3.6 บทเรียนจากอัปโหลดรูปที่พัง (26 ส.ค. 69)
+
+ฟีเจอร์อัลบั้มผ่าน tsc, eslint, authz check และ 72 เทสต์ แล้วก็ deploy เขียว
+แต่กดใช้จริงแล้วเลือกไฟล์ไม่ขึ้นรูปเลย เพราะบั๊กอยู่ในชั้นที่ของพวกนั้นแตะไม่ถึง
+
+**1. เทสต์รันใน workerd จึงไม่มี DOM**
+`@cloudflare/vitest-pool-workers` ให้ D1 จริงและ Worker runtime จริง
+ซึ่งดีมากสำหรับ query กับ authz แต่ไม่มี `window` ไม่มี `<input type=file>`
+บั๊กจริงคือ `e.target.value = ""` ล้าง FileList ที่ถือ reference ไว้อยู่
+(เป็น live object ตัวเดียวกับ `input.files`) — เป็น DOM semantics ล้วน
+เทสต์ชุดนี้ไม่มีทางจับได้ และการเขียนเทสต์เพิ่มในชุดนี้ก็ไม่ช่วย
+
+**2. ค่า default ที่ไม่ได้ตั้งเอง คือค่าที่ยังไม่ได้ตรวจ**
+`serverActions.bodySizeLimit` default 1 MB ไม่มีอะไรเตือน build ผ่านปกติ
+พังตอน runtime เท่านั้น ตอนนี้เลยตั้งค่าไว้ชัดเจนพร้อมเหตุผลใน `next.config.ts`
+และ client กันไว้ที่ 16 MB เพื่อให้ error อ่านรู้เรื่อง
+
+**3. เจอบั๊กแบบนี้ได้ทางเดียวคือกดใช้จริง**
+วิธีที่ใช้ได้ผลโดยไม่ต้องรอคน: seed session ลง D1 local ตรงๆ
+(`INSERT INTO session (token, ...)`) แล้วตั้ง cookie `better-auth.session_token=<token>.sig`
+— `src/lib/session.ts` อ่าน token จาก D1 เอง ไม่ได้ verify signature
+จึงเปิดหน้าที่ต้องล็อกอินได้เลย จากนั้นสร้าง File จาก canvas
+ยัดเข้า input ผ่าน `DataTransfer` แล้ว dispatch `change`
+
+**ข้อควรรู้ตอนทดสอบ:** หลัง restart dev server เบราว์เซอร์จะ 304 chunk เก่า
+ของ Turbopack ทำให้หน้า hydrate ไม่สำเร็จ (`__reactProps` ไม่ขึ้นบน element)
+เช็คก่อนทุกครั้งว่า hydrate แล้วจริง ไม่งั้นจะอ่านผลผิดว่าโค้ดพัง
+ทางแก้คือเปิดแท็บใหม่
+
+**สรุป:** เกณฑ์ "เสร็จ" ของฟีเจอร์ที่มี input จากผู้ใช้ ไม่ใช่ build ผ่าน + เทสต์เขียว
+แต่คือกดใช้ครบ path ด้วยข้อมูลจริงขนาดจริงอย่างน้อยหนึ่งรอบ
+
 ## 4. CI gate ที่ควรมีตั้งแต่ PR แรก
 
 ```yaml
