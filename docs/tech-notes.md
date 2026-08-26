@@ -173,6 +173,46 @@ export const insertWeeklyLogSchema = createInsertSchema(weeklyLogs);
 
 ---
 
+## 3.5 บทเรียนจาก CI ที่พังจริง (26 ส.ค. 69)
+
+Deploy (dev) พังติดกัน 11 run ตั้งแต่ commit แรกที่มี `package.json` — บันทึกไว้กันพลาดซ้ำ
+
+### `npm ci` พังบน Linux ทั้งที่ผ่านบน macOS
+
+```
+npm error code EUSAGE
+npm error Missing: esbuild@0.28.2 from lock file   (+ @esbuild/* อีก 26 ตัว)
+```
+
+**สาเหตุ:** ติดตั้ง dependency ทีละตัวด้วย `npm install <pkg>` บน macOS ทำให้ dependency tree
+ใน lock เอียงไปทาง darwin — `esbuild@0.28.2` (มาจาก `tsx` ของ drizzle-kit) ไปฝังใต้
+`node_modules/tsx/` แทนที่จะ hoist ขึ้นมา พอ npm บน Linux คำนวณ tree ใหม่ได้คนละรูป จึงมองว่าไม่ sync
+
+**แก้:** `rm -rf node_modules package-lock.json && npm install` แล้ว commit lock ใหม่
+หลังแก้ package ที่ผูกแพลตฟอร์ม linux 114 / darwin 34 (เดิมเอียงไป darwin)
+
+**กันไว้:** หลังเพิ่ม dependency ใหม่ ให้เช็คว่า lock มี linux ครบก่อน push
+
+```bash
+node -e "const l=require('./package-lock.json');const p=l.packages;const c=k=>Object.keys(p).filter(x=>x.includes(k)).length;console.log('linux',c('linux'),'darwin',c('darwin'))"
+```
+
+### wrangler พังโดยไม่บอกสาเหตุ
+
+`The process '/opt/hostedtoolcache/node/22.23.2/x64/bin/npx' failed with exit code 1` — อ่านแล้วไม่รู้อะไรเลย
+ที่จริงคือยังไม่ได้ตั้ง `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`
+
+**แก้:** เพิ่ม preflight step ตรวจ secret ก่อนถึงขั้นที่ใช้ wrangler ทั้งใน `deploy.yml` และ `deploy-dev.yml`
+ตอนนี้ถ้าไม่มี secret จะฟ้องชื่อที่ขาดพร้อมสิทธิ์ที่ต้องมี
+
+### CI ไม่เคยรันบน dev
+
+`ci.yml` ตั้ง `branches-ignore: [main, dev]` เพราะ `deploy-dev.yml` ตรวจชุดเดียวกันอยู่แล้ว
+ผลข้างเคียงคือปัญหา lock file ไม่ถูกจับจนกว่าจะไปดู log ของ Deploy (dev) เอง
+— ถ้าอยากได้ feedback เร็วขึ้น พิจารณาให้ CI รันบน dev ด้วย แล้วให้ deploy รอ CI ผ่านก่อน (`workflow_run`)
+
+---
+
 ## 4. CI gate ที่ควรมีตั้งแต่ PR แรก
 
 ```yaml
