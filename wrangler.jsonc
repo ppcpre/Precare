@@ -17,7 +17,11 @@
 
   // ค่าที่ไม่เป็นความลับใส่ตรงนี้ได้ — ส่วน SECRET ใช้ `wrangler secret put` เท่านั้น
   "vars": {
-    "BETTER_AUTH_URL": "https://precare.precare.workers.dev"
+    "BETTER_AUTH_URL": "https://precare.precare.workers.dev",
+    // client_id ของ Google เป็นค่าสาธารณะโดยการออกแบบ — โผล่ใน URL ที่เบราว์เซอร์
+    // ของผู้ใช้ทุกคนเห็นตอนกดล็อกอิน จึงใส่ใน config ได้
+    // ส่วน GOOGLE_CLIENT_SECRET ต้องใช้ `wrangler secret put` เท่านั้น ห้ามใส่ที่นี่
+    "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com"
   },
 
   // ---------------------------------------------------------------
@@ -53,7 +57,8 @@
       },
       "observability": { "enabled": true },
       "vars": {
-        "BETTER_AUTH_URL": "https://precare-dev.precare.workers.dev"
+        "BETTER_AUTH_URL": "https://precare-dev.precare.workers.dev",
+        "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com"
       },
       "d1_databases": [
         {

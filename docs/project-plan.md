@@ -159,8 +159,9 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > **ความเสี่ยงข้อใหญ่ปิดแล้ว** — scrypt ของ Better Auth ทำงานได้บน free plan ที่จำกัด CPU 10 ms
 > ทั้ง sign-up และ sign-in ผ่าน · รหัสผิดตอบ 401 ถูกต้อง · **ไม่ต้องขึ้น Workers Paid**
 >
-> **⏸ ค้างไว้ตามที่ตกลง (26 ส.ค. 69):** ปุ่ม Google ยังใช้ไม่ได้จนกว่าจะเติม `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-> โค้ดพร้อมแล้ว provider เป็น conditional จึงไม่กระทบอะไร — แค่เสียบค่าแล้วใช้ได้ทันที ไม่ต้องแก้โค้ด
+> **✅ Google OAuth เสียบแล้ว (26 ส.ค. 69)** — ทดสอบบน dev worker จริง endpoint คืน Google auth URL
+> ที่มี redirect_uri ตรงกับ dev, scope `email profile openid`, PKCE S256 ครบ
+> `GOOGLE_CLIENT_ID` อยู่ใน `wrangler.jsonc` (ค่าสาธารณะโดยการออกแบบ) · `GOOGLE_CLIENT_SECRET` เป็น secret บน worker
 >
 > **bundle 1,650 KiB = 54% ของเพดาน 3 MiB** (จาก 1,034 KiB ตอนจบ M1) — Better Auth + Drizzle + middleware กินไปราว 600 KiB
 
