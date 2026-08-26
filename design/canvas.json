@@ -176,16 +176,25 @@
       "x": 0,
       "y": 6224,
       "w": 390,
-      "h": 940,
+      "h": 1020,
       "title": "อัลบั้ม · Phase 2",
       "page": "screens"
     },
     {
-      "file": "PhotoDetail.dc.html",
+      "file": "AlbumUpload.dc.html",
       "x": 470,
       "y": 6224,
       "w": 390,
-      "h": 844,
+      "h": 940,
+      "title": "เพิ่มรูป · Phase 2",
+      "page": "screens"
+    },
+    {
+      "file": "PhotoDetail.dc.html",
+      "x": 940,
+      "y": 6224,
+      "w": 390,
+      "h": 980,
       "title": "ดูรูป + แชร์ · Phase 2–3",
       "page": "screens"
     },

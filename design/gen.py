@@ -851,64 +851,136 @@ write('ProfileEdit.dc.html', screen(
 def album_row(*tiles):
     return row(*tiles, gap=8)
 
+def quota_bar(pct=62, used='3.1 GB', limit='5 GB', warn=False):
+    fill = WARN if warn else BR5
+    return col(
+      row(txt('พื้นที่เก็บรูป', 12, IN6),
+          txt('%s / %s' % (used, limit), 12, IN9 if not warn else WARN, 500), justify='space-between'),
+      ('<div style="height: 6px; width: 100%%; background: %s; border-radius: 9999px; overflow: hidden;">'
+       '<div style="height: 100%%; width: %d%%; background: %s; border-radius: 9999px;"></div></div>'
+       ) % (CR200, pct, fill),
+      gap=5)
+
+def sort_pill(text):
+    return ('<span style="display: inline-flex; align-items: center; gap: 4px; background: %s; '
+            'border: 1px solid %s; border-radius: 9999px; padding: 5px 10px; font-size: 12px; color: %s;">'
+            '%s%s</span>') % (WHITE, CR200, IN6, ic('clock', 13, IN4, 1.9), text)
+
+# ---------- Album: กริดรูป ----------
 write('Album.dc.html', screen(
   topbar('อัลบั้ม', right=ic('camera', 22, IN6)),
   ('<div style="flex: none; padding: 12px 16px; display: flex; gap: 8px; background: %s; '
    'border-bottom: 1px solid %s; overflow: hidden;">%s</div>') % (CR50, CR200,
    chip('ทั้งหมด', True) + chip('อัลตราซาวด์') + chip('ครอบครัว') + chip('อื่นๆ')),
   body(
-    row(('<div style="flex: 1;">%s</div>' % (
-          card(txt('รูปทั้งหมด', 12, IN4),
-               row('<span style="font-size: 24px; font-weight: 600; color: %s; line-height: 1;">28</span>' % BR7,
-                   txt('รูป', 13, IN6), gap=5, align='baseline'), gap=4, pad=14))),
-        ('<div style="flex: 1;">%s</div>' % (
-          card(txt('อัลตราซาวด์', 12, IN4),
-               row('<span style="font-size: 24px; font-weight: 600; color: %s; line-height: 1;">9</span>' % CLAY5,
-                   txt('ครั้ง', 13, IN6), gap=5, align='baseline'), gap=4, pad=14))),
-        gap=12),
-    section_head('สัปดาห์ที่ 24 · สิงหาคม 2569'),
+    card(quota_bar(62, '3.1 GB', '5 GB'), pad=14),
+    row(sort_pill('เรียงจากใหม่ไปเก่า'),
+        txt('28 รูป', 12, IN4), justify='space-between'),
+
+    section_head('สัปดาห์ที่ 24 · 12 ส.ค. 2569'),
     album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
               phototile('photo', '100%', 108, 10, 'ครอบครัว'),
               phototile('photo', '100%', 108, 10)),
-    section_head('สัปดาห์ที่ 23'),
+
+    section_head('สัปดาห์ที่ 23 · 5 ส.ค. 2569'),
     album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
               phototile('photo', '100%', 108, 10),
               phototile('photo', '100%', 108, 10)),
-    section_head('สัปดาห์ที่ 20'),
+
+    section_head('สัปดาห์ที่ 20 · 15 ก.ค. 2569'),
     album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
               phototile('scan', '100%', 108, 10),
               phototile('photo', '100%', 108, 10)),
     pad=16, gap=12),
   fab(),
   bottomnav(3),
+), h=1020)
+
+# ---------- Album: เพิ่มรูป (bottom sheet) ----------
+def thumb_pick(kind, badge=None, removable=True):
+    x = ('<div style="position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; '
+         'border-radius: 9999px; background: rgba(43,36,32,0.7); display: flex; align-items: center; '
+         'justify-content: center;">%s</div>') % ic('x', 12, '#FFFFFF', 2.4) if removable else ''
+    return ('<div style="position: relative; width: 96px; flex: none;">%s%s</div>'
+            ) % (phototile(kind, 96, 96, 10, badge), x)
+
+write('AlbumUpload.dc.html', screen(
+  '<div style="flex: 1; background: rgba(43,36,32,0.32);"></div>',
+  ('<div style="flex: none; background: %s; border-radius: 16px 16px 0 0; padding: 8px 20px 24px; '
+   'display: flex; flex-direction: column; gap: 18px; box-shadow: 0 -8px 24px rgba(43,36,32,0.12); '
+   'max-height: 88%%; overflow: hidden;">'
+   '<div style="width: 40px; height: 4px; border-radius: 9999px; background: %s; align-self: center;"></div>'
+   ) % (WHITE, CR200),
+
+  row(txt('เพิ่มรูปเข้าอัลบั้ม', 20, IN9, 600), txt('เลือกได้หลายรูป', 12, IN4), justify='space-between'),
+
+  col(row(label('รูปที่เลือก'), txt('3 รูป · รวม 180 KB', 12, IN4), justify='space-between'),
+      row(thumb_pick('scan', 'อัลตราซาวด์'), thumb_pick('photo'), thumb_pick('photo'),
+          addphoto(96, 96, 'เพิ่ม'), gap=8),
+      txt('ระบบย่อรูปให้อัตโนมัติก่อนอัปโหลด เพื่อประหยัดพื้นที่', 11, IN4),
+      gap=8),
+
+  col(label('ประเภท'),
+      row(chip('อัลตราซาวด์', True), chip('ครอบครัว'), chip('อื่นๆ'), gap=6),
+      gap=8),
+
+  row(('<div style="flex: 1;">%s</div>' % field('วันที่ถ่าย', value='12 ส.ค. 2569',
+        icon_right=ic('calendar', 18, IN4), hint='ไม่ใช่วันที่อัปโหลด')),
+      ('<div style="width: 118px;">%s</div>' % field('สัปดาห์ที่', value='24', hint='คำนวณให้')),
+      gap=12, align='flex-start'),
+
+  textarea('คำบรรยาย', 'เช่น คุณหมอบอกว่าลูกโตตามเกณฑ์ หนัก 700 กรัมแล้ว', 2),
+
+  row(('<div style="width: 44px; height: 26px; border-radius: 9999px; background: %s; padding: 3px; '
+       'display: flex; justify-content: flex-start; align-items: center; flex: none;">'
+       '<div style="width: 20px; height: 20px; border-radius: 9999px; background: %s;"></div></div>'
+       ) % (CR200, WHITE),
+      col(txt('ปักหมุดเป็นรูปเด่นของสัปดาห์', 15, IN9),
+          txt('ใช้เป็นรูปหน้าปกของสัปดาห์นี้ในอัลบั้ม', 12, IN6), gap=2, extra='flex: 1;'),
+      gap=12),
+
+  row(ic('user', 14, IN4, 1.9), txt('เพิ่มโดย ญาญ่า ใจดี · บันทึกอัตโนมัติ', 12, IN4), gap=6),
+
+  btn('เพิ่ม 3 รูปเข้าอัลบั้ม', 'primary'),
+  '</div>',
 ), h=940)
 
-# ---------- Photo detail + share ----------
+# ---------- Photo detail ----------
+def share_btn(icon_html, label_txt):
+    return ('<div style="flex: 1; height: 64px; border-radius: 10px; background: %s; border: 1px solid %s; '
+            'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; '
+            'opacity: 0.55;">%s<span style="font-size: 11px; color: %s;">%s</span></div>'
+            ) % (WHITE, CR200, icon_html, IN6, label_txt)
+
 write('PhotoDetail.dc.html', ('<div style="width: 390px; min-height: 844px; background: #2B2420; '
   'display: flex; flex-direction: column; position: relative; color: #FFFFFF;">'
   + ('<div style="height: 56px; flex: none; padding: 0 16px; display: flex; align-items: center; '
-     'justify-content: space-between;">%s%s</div>') % (ic('x', 22, '#FFFFFF', 2), ic('dots', 22, '#FFFFFF', 2))
+     'justify-content: space-between;">%s<span style="font-size: 13px; opacity: .7;">3 จาก 28</span>%s</div>'
+     ) % (ic('x', 22, '#FFFFFF', 2), ic('dots', 22, '#FFFFFF', 2))
   + ('<div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px 16px;">'
      '<div style="width: 100%; aspect-ratio: 3 / 4; border-radius: 12px; background: #41372F; '
      'display: flex; align-items: center; justify-content: center;">' + ic('image', 56, '#8A7663', 1.4) + '</div></div>')
   + ('<div style="flex: none; background: %s; border-radius: 16px 16px 0 0; padding: 20px; color: %s; '
-     'display: flex; flex-direction: column; gap: 16px;">' % (CR50, IN9))
+     'display: flex; flex-direction: column; gap: 14px;">' % (CR50, IN9))
   + row(col(row(txt('สัปดาห์ที่ 24', 18, IN9, 600), badge('อัลตราซาวด์', 'owner'), gap=8),
-            txt('12 สิงหาคม 2569 · เพิ่มโดย ญาญ่า', 12, IN4), gap=5, extra='flex: 1; min-width: 0;'),
+            row(ic('calendar', 13, IN4, 1.9), txt('ถ่ายเมื่อ 12 สิงหาคม 2569', 12, IN4), gap=5),
+            gap=6, extra='flex: 1; min-width: 0;'),
         justify='space-between')
   + ('<div style="font-size: 14px; color: %s; line-height: 1.6;">คุณหมอบอกว่าลูกโตตามเกณฑ์ '
      'หนักประมาณ 700 กรัมแล้ว เห็นหน้าชัดมาก</div>') % IN6
   + '<div style="height: 1px; background: %s;"></div>' % CR200
+  + col(row(ic('user', 14, IN4, 1.9), txt('เพิ่มโดย ญาญ่า ใจดี', 12, IN6), gap=6),
+        row(ic('image', 14, IN4, 1.9), txt('เพิ่มเมื่อ 12 ส.ค. 2569 · 84 KB', 12, IN6), gap=6),
+        gap=6)
+  + '<div style="height: 1px; background: %s;"></div>' % CR200
   + col(row(txt('แชร์', 15, IN9, 500), badge('เร็วๆ นี้ · Phase 3', 'viewer'), gap=8),
-        row(*[('<div style="flex: 1; height: 64px; border-radius: 10px; background: %s; border: 1px solid %s; '
-               'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; '
-               'opacity: 0.55;">%s<span style="font-size: 11px; color: %s;">%s</span></div>'
-               ) % (WHITE, CR200, i, IN6, lb)
-              for i, lb in ((ic('share', 20, IN6, 1.8), 'แชร์ลิงก์'),
-                            (ic('users', 20, IN6, 1.8), 'ส่งให้ครอบครัว'),
-                            (ic('download', 20, IN6, 1.8), 'บันทึกรูป'))], gap=8),
+        row(share_btn(ic('share', 20, IN6, 1.8), 'แชร์ลิงก์'),
+            share_btn(ic('users', 20, IN6, 1.8), 'ส่งให้ครอบครัว'),
+            share_btn(ic('download', 20, IN6, 1.8), 'บันทึกรูป'), gap=8),
         gap=10)
-  + '</div></div>'), h=844)
+  + row(ic('trash', 18, BAD, 1.9), txt('ลบรูปนี้', 15, BAD, 500), gap=8, justify='center',
+        extra='padding-top: 4px;')
+  + '</div></div>'), h=980)
 
 # ---------- Logo: spec sheet ของตัวเลือก C ----------
 def wordmark(m, size=15, sub=True, color=None, subcolor=None):
@@ -1189,12 +1261,12 @@ GROUPS = [
   ['Profile.dc.html','ProfileEdit.dc.html','Family.dc.html','FamilyViewer.dc.html','FamilyInvite.dc.html'],
   "โปรไฟล์ = ทางเข้าครอบครัว\nbottom nav สลับ ครอบครัว ออก เอา อัลบั้ม เข้ามาแทน\nอัปโหลดรูปโปรไฟล์ย้ายมาอยู่ Phase 1 แล้ว · อีเมลแก้ไม่ได้เพราะเป็นชื่อผู้ใช้\nเมนู ⋮ และปุ่มเชิญยังเห็นเฉพาะ owner"),
  ('album', 'อัลบั้ม — Phase 2',
-  ['Album.dc.html','PhotoDetail.dc.html'],
+  ['Album.dc.html','AlbumUpload.dc.html','PhotoDetail.dc.html'],
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
 ]
 heights = {'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
            'AppointmentForm.dc.html':1020,'Family.dc.html':940,'FamilyInvite.dc.html':700,
-           'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':940,
+           'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
            'DashboardV2.dc.html':1080}
 titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'สมัครสมาชิก','Invite.dc.html':'รับคำเชิญ',
           'Onboarding.dc.html':'Onboarding · ขั้น 3','OnboardingDone.dc.html':'Onboarding · ขั้น 4',
@@ -1205,7 +1277,8 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'AppointmentForm.dc.html':'ฟอร์มนัดหมาย','Profile.dc.html':'โปรไฟล์',
           'ProfileEdit.dc.html':'แก้ไขโปรไฟล์ + อัปโหลดรูป','Family.dc.html':'ครอบครัว · owner',
           'FamilyViewer.dc.html':'ครอบครัว · viewer','FamilyInvite.dc.html':'เชิญสมาชิก',
-          'Album.dc.html':'อัลบั้ม · Phase 2','PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
+          'Album.dc.html':'อัลบั้ม · Phase 2','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
+          'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
 
 arts, notes, y = [], [], 0
 for gid, gname, files, note in GROUPS:
