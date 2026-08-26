@@ -1,8 +1,21 @@
-export default function Page() {
-  return (
-    <div className="rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-      <h1 className="text-xl font-semibold text-ink-900">เพิ่มบันทึกสุขภาพ</h1>
-      <p className="mt-1 text-sm text-ink-600">โครงหน้าเปล่า — งานจริงอยู่ที่ T5.5</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { HealthForm } from "@/components/health/form";
+import { getLogFormDefaults, requireFamilyContext } from "@/lib/queries";
+
+export const metadata = { title: "เพิ่มบันทึกสุขภาพ · Pre Care" };
+
+export default async function NewLogPage() {
+  let ctx;
+  try {
+    // ต้องเป็น editor ขึ้นไปถึงจะเข้าหน้านี้ได้ — viewer เข้าตรงๆ ก็ไม่ได้
+    ctx = await requireFamilyContext("editor");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    redirect("/health");
+  }
+
+  const d = await getLogFormDefaults(ctx.db, ctx.familyId);
+  return <HealthForm suggestedWeek={d.suggestedWeek} lastWeight={d.lastWeight} />;
 }

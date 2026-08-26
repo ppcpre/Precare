@@ -44,14 +44,46 @@ export async function getPregnancy(db: Db, familyId: string) {
   };
 }
 
-export async function listWeeklyLogs(db: Db, familyId: string, limit = 50): Promise<WeeklyLogView[]> {
+export async function listWeeklyLogs(db: Db, familyId: string, limit = 50) {
   const rows = await db
-    .select()
+    .select({ log: weeklyLogs, recorderName: user.name })
     .from(weeklyLogs)
+    .innerJoin(user, eq(user.id, weeklyLogs.recordedBy))
     .where(eq(weeklyLogs.familyId, familyId))
     .orderBy(desc(weeklyLogs.logDate))
     .limit(limit);
-  return rows.map((r) => ({ ...r, symptoms: parseSymptoms(r.symptoms) }));
+  return rows.map((r) => ({
+    ...r.log,
+    symptoms: parseSymptoms(r.log.symptoms),
+    recorderName: r.recorderName,
+  }));
+}
+
+export async function getWeeklyLogById(db: Db, familyId: string, id: string): Promise<WeeklyLogView | null> {
+  const r = await db
+    .select()
+    .from(weeklyLogs)
+    .where(and(eq(weeklyLogs.id, id), eq(weeklyLogs.familyId, familyId)))
+    .get();
+  return r ? { ...r, symptoms: parseSymptoms(r.symptoms) } : null;
+}
+
+/** ค่าเริ่มต้นของฟอร์ม — สัปดาห์ที่คำนวณจาก LMP และน้ำหนักครั้งล่าสุดไว้โชว์ delta */
+export async function getLogFormDefaults(db: Db, familyId: string) {
+  const [profileRows, lastRows] = await db.batch([
+    db.select().from(pregnancyProfiles).where(eq(pregnancyProfiles.familyId, familyId)),
+    db
+      .select({ weight: weeklyLogs.weight })
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, familyId))
+      .orderBy(desc(weeklyLogs.logDate))
+      .limit(1),
+  ]);
+  const lmp = profileRows[0]?.lmpDate ?? null;
+  return {
+    suggestedWeek: lmp ? calculateGestationalAge(lmp).weeks : null,
+    lastWeight: lastRows[0]?.weight ?? null,
+  };
 }
 
 export async function listAppointments(db: Db, familyId: string, when: "upcoming" | "past" = "upcoming") {

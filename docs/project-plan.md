@@ -217,7 +217,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M5 · UI implementation — 9–11 วัน
 
-> **สถานะ 26 ส.ค. 69 — 4/12**
+> **สถานะ 26 ส.ค. 69 — 5/12**
 >
 > **ไม่ใช้ shadcn/ui** ตามที่เคยแนะนำไว้ — เขียน component เองแทน
 > เหตุผล: component ที่ต้องใช้ส่วนใหญ่ง่ายมาก (Button/Card/Field/Badge/Chip) ไม่ต้องพึ่ง Radix
@@ -232,6 +232,8 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > | T5.1+T5.2 | 1,673 | 54% | +23 |
 > | T5.3 onboarding | 1,956 | 64% | **+283** |
 > | T5.4 dashboard | 2,218 | 72% | **+262** |
+> | *ลด bundle* | *1,630* | *53%* | *−588* |
+> | T5.5 สุขภาพ | 1,820 | 59% | +190 |
 >
 > ตรวจแล้วว่า **ไม่ใช่** lucide (Next optimize ให้อยู่แล้ว ปรับ `optimizePackageImports` ไม่ขยับเลยสักไบต์)
 > และ **ไม่ใช่** `next-safe-action/hooks` (ถอดออกแล้วประหยัดแค่ 1.76 KiB)
@@ -268,7 +270,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | ✅ **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
 | ✅ **T5.3** | Onboarding 4 ขั้น + คำนวณ LMP↔EDD | T4.6, T3.3 |
 | ✅ **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
-| **T5.5** | Health list + form | T4.3, T3.5 |
+| ✅ **T5.5** | Health list + form | T4.3, T3.5 |
 | **T5.6** | Appointments list + form | T4.4, T3.6 |
 | **T5.7** | Family + invite + copy link | T4.5, T3.2 |
 | **T5.8** | Profile + pregnancy settings | T4.7, T3.4 |
