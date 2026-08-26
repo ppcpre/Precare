@@ -14,9 +14,12 @@ export default async function DashboardPage() {
   let ctx;
   try {
     ctx = await requireFamilyContext("viewer");
-  } catch {
-    // ยังไม่มี family -> ต้องผ่าน onboarding ก่อน
-    redirect("/onboarding");
+  } catch (e) {
+    // แยกให้ชัด อย่ากลืนทุก error เป็น onboarding ไม่งั้นดีบักไม่ออกว่าพังที่ไหน
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    throw e;
   }
 
   const { db, user, familyId, role } = ctx;

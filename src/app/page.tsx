@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { getAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session";
 
 export default async function Home() {
-  const auth = await getAuth();
-  const session = await auth.api.getSession({ headers: await headers() });
-
-  if (!session) redirect("/login");
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
   // MVP บังคับ 1 user = 1 active family — ยังไม่มี = ต้องผ่าน onboarding ก่อน
-  redirect(session.user.activeFamilyId ? "/dashboard" : "/onboarding");
+  redirect(user.activeFamilyId ? "/dashboard" : "/onboarding");
 }

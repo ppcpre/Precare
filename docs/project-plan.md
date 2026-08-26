@@ -236,6 +236,8 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > ตรวจแล้วว่า **ไม่ใช่** lucide (Next optimize ให้อยู่แล้ว ปรับ `optimizePackageImports` ไม่ขยับเลยสักไบต์)
 > และ **ไม่ใช่** `next-safe-action/hooks` (ถอดออกแล้วประหยัดแค่ 1.76 KiB)
 >
+> **✅ แก้แล้ว — bundle ลดจาก 2,218 เหลือ 1,630 KiB (-588 KiB / -27%)** ดูหัวข้อ "การลด bundle" ด้านล่าง
+>
 > **⚠️ สมมติฐาน "ต้นทุนครั้งเดียว" ผิด** — T5.4 เพิ่มอีก 262 KiB แปลว่าโตเชิงเส้นราว 260 KiB ต่อกลุ่มหน้า
 >
 > **สาเหตุที่หาเจอ:** `better-auth` ถูก bundle ซ้ำทุก route ที่ import `getAuth()`
@@ -245,8 +247,20 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > **ลองแก้แล้วไม่ได้:** `serverExternalPackages: ["better-auth"]` ทำให้ OpenNext build พัง
 > (`Could not resolve "@better-auth/core/instrumentation"`)
 >
-> **ประมาณการ:** T5.5→2,478 · T5.6→2,738 · T5.7→2,998 · **T5.8→3,258 KiB = เกินเพดาน**
-> ยังไม่นับ T5.9–T5.12 · **ต้องตัดสินใจก่อนถึง T5.7**
+> **การลด bundle (26 ส.ค. 69)** — เลือกอยู่ free tier แล้วลดของ ไม่ขึ้น Workers Paid
+>
+> | สิ่งที่ทำ | ผล |
+> |---|---:|
+> | stub `kysely` + `@better-auth/kysely-adapter` ทิ้ง (better-auth ลาก adapter ทุกตัวมาแม้ใช้แค่ drizzle) | −107 KiB |
+> | หน้าเว็บ + Server Action เลิก import `getAuth()` เปลี่ยนไปอ่าน session จาก D1 ตรง | −481 KiB |
+> | **รวม** | **−588 KiB (−27%)** |
+>
+> ผลลัพธ์: **1,630 KiB = 53%** ต่ำกว่าตอนจบ M3 (1,650) ทั้งที่มี onboarding + dashboard เพิ่มมา
+> `getAuthTables` เหลือ 9 ครั้ง (จาก 24) · `kysely` เหลือ 30 (จาก 184)
+>
+> **วิธีอ่าน session ใหม่:** cookie เก็บเป็น `<token>.<signature>` โดย token คือค่าสุ่ม 32 ตัวอักษร
+> ที่อยู่ในตาราง `session` — ค้นเจอแถวที่ token ตรงและยังไม่หมดอายุ = ยืนยัน session ได้ในตัว
+> **ข้อจำกัด:** ไม่ต่ออายุ session ให้ (better-auth ที่ `/api/auth/*` ยังทำหน้าที่นั้น) และไม่ตรวจ signature
 
 | ID | งาน | ขึ้นกับ |
 |---|---|---|

@@ -5,10 +5,9 @@
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
-import { headers } from "next/headers";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
-import { getAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import {
   appointments, families, familyInvites, familyMembers,
@@ -22,14 +21,13 @@ import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
  * ถ้าไม่ผ่านจะโยน AuthzError ไม่ใช่คืน null เพื่อกันเผลอ render ต่อ
  */
 export async function requireFamilyContext(min: Role = "viewer") {
-  const auth = await getAuth();
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new Error("UNAUTHENTICATED");
+  const user = await getSessionUser();
+  if (!user) throw new Error("UNAUTHENTICATED");
   const db = await getDb();
-  const familyId = session.user.activeFamilyId;
+  const familyId = user.activeFamilyId;
   if (!familyId) throw new Error("NO_ACTIVE_FAMILY");
-  const role = await requireRole(db, familyId, session.user.id, min);
-  return { db, user: session.user, familyId, role };
+  const role = await requireRole(db, familyId, user.id, min);
+  return { db, user, familyId, role };
 }
 
 export async function getPregnancy(db: Db, familyId: string) {

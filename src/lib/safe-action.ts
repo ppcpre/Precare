@@ -7,10 +7,9 @@
  * ห้ามสร้าง action ที่แตะข้อมูลของ family โดยไม่ผ่าน memberAction/editorAction/ownerAction
  */
 import { createSafeActionClient, DEFAULT_SERVER_ERROR_MESSAGE } from "next-safe-action";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb, type Db } from "@/db";
-import { getAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session";
 import { AuthzError, requireRole } from "@/lib/authz";
 import type { Role } from "@/types";
 
@@ -33,11 +32,12 @@ export const actionClient = createSafeActionClient({
 
 /** ชั้นที่ 1 — ต้องล็อกอิน */
 export const authAction = actionClient.use(async ({ next }) => {
-  const auth = await getAuth();
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new AuthzError("NOT_A_MEMBER", 403, "กรุณาเข้าสู่ระบบ");
+  // ใช้ getSessionUser() ที่ยิง API แทนการ import better-auth ตรงๆ
+  // ไม่งั้นทุก route ที่มี Server Action จะได้ better-auth ติดมาทั้งก้อน (~260 KiB/route)
+  const user = await getSessionUser();
+  if (!user) throw new AuthzError("NOT_A_MEMBER", 403, "กรุณาเข้าสู่ระบบ");
   const db = await getDb();
-  return next({ ctx: { db, user: session.user, session: session.session } });
+  return next({ ctx: { db, user } });
 });
 
 /**
