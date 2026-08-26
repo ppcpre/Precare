@@ -18,8 +18,43 @@ import { getSessionCookie } from "better-auth/cookies";
  */
 const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth"];
 
+/**
+ * T6.5 — CSP แบบมี nonce
+ *
+ * เดิมมีแค่ frame-ancestors ใน next.config.ts เพราะ CSP เต็มรูปแบบต้องใช้
+ * nonce ซึ่งต้องสร้างใหม่ทุก request จึงทำใน next.config ไม่ได้
+ * middleware เป็นที่เดียวที่ทำได้ และ Next จะหยิบ nonce ไปใส่ script ของตัวเอง
+ * ให้อัตโนมัติเมื่อเห็น header นี้บน request
+ *
+ * ที่ต้องผ่อนเป็นข้อๆ
+ * - style-src 'unsafe-inline': Next ฝัง <style> ของตัวเองและโค้ดเรามี
+ *   style={{...}} อยู่ใน global-error.tsx (ซึ่งต้องทำงานได้แม้ CSS พัง)
+ *   การใส่ nonce ให้ style ทุกจุดไม่คุ้มกับที่ได้ เพราะ style ก่อ XSS ได้ยาก
+ * - img-src blob:: หน้าอัลบั้มแสดง preview จาก URL.createObjectURL ก่อนอัปโหลด
+ * - connect-src 'self': Server Action ยิงกลับ origin เดิมเท่านั้น
+ *
+ * strict-dynamic ทำให้ script ที่ script ที่มี nonce โหลดต่อ เชื่อถือตามไปด้วย
+ * ซึ่งจำเป็นกับ chunk ของ Next ที่โหลดกันเป็นทอดๆ
+ */
+function buildCsp(nonce: string) {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "object-src 'none'",
+  ].join("; ");
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const nonce = crypto.randomUUID().replaceAll("-", "");
+  const csp = buildCsp(nonce);
   const isPublic = PUBLIC_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
@@ -41,7 +76,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // Next อ่าน x-nonce จาก request เพื่อใส่ให้ script ของตัวเอง
+  // จึงต้องส่งต่อ header นี้เข้าไปใน request ไม่ใช่แค่ตอบกลับใน response
+  const headers = new Headers(req.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("content-security-policy", csp);
+
+  const res = NextResponse.next({ request: { headers } });
+  res.headers.set("content-security-policy", csp);
+  return res;
 }
 
 export const config = {

@@ -19,9 +19,8 @@ const nextConfig: NextConfig = {
   /**
    * T6.5 — security headers
    *
-   * ไม่ใส่ CSP แบบเข้มใน Phase 1 เพราะ Next ฉีด inline script/style ของตัวเอง
-   * การทำให้ถูกต้องต้องใช้ nonce ผ่าน middleware ซึ่งบน edge runtime มีข้อจำกัด
-   * — ยกไป Phase 2 พร้อมกับ Web Push ที่ต้องแตะ middleware อยู่แล้ว
+   * CSP แบบเข้ม (มี nonce) อยู่ใน src/middleware.ts แล้วตั้งแต่ T6.5
+   * ต้องอยู่ที่นั่นเพราะ nonce ต้องสุ่มใหม่ทุก request ทำใน config ไม่ได้
    */
   async headers() {
     return [
@@ -29,6 +28,8 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           // กันเว็บอื่นเอาแอปเราไปฝัง iframe แล้วหลอกให้คลิก
+          // CSP เต็มรูปแบบอยู่ใน src/middleware.ts เพราะต้องใช้ nonce ต่อ request
+          // ตรงนี้เหลือไว้เป็นตาข่ายสำหรับ path ที่ middleware ไม่ได้ครอบ (static asset)
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           // กันเบราว์เซอร์เดาชนิดไฟล์เอง เช่น มองรูปที่ผู้ใช้อัปโหลดเป็น script

@@ -21,11 +21,35 @@ export class AppError extends Error {
 }
 
 export const actionClient = createSafeActionClient({
-  handleServerError(e) {
+  /**
+   * T6.5 — ให้ error บน production ตามรอยได้
+   *
+   * เดิม log แค่ตัว error เปล่าๆ พอมีคนแจ้งว่า "กดแล้วขึ้นระบบขัดข้อง"
+   * เราไม่รู้เลยว่า action ไหน ใคร หรือตอนไหน ต้องไล่เดาจาก wrangler tail
+   *
+   * ตอนนี้แนบรหัสสั้นๆ ไปกับข้อความที่ผู้ใช้เห็น แล้ว log รหัสเดียวกันไว้
+   * ผู้ใช้บอกรหัสมา เรา grep เจอทันทีว่าเกิดอะไรขึ้น
+   *
+   * ⚠️ ห้าม log clientInput — ในนั้นมีน้ำหนัก ความดัน บันทึกอาการ
+   *    ซึ่งเป็นข้อมูลสุขภาพ log ของ Cloudflare ไม่ใช่ที่เก็บของพวกนี้
+   */
+  handleServerError(e, { metadata, ctx }) {
     // ข้อความที่ตั้งใจให้ผู้ใช้เห็นเท่านั้นที่ส่งกลับไป
     if (e instanceof AuthzError || e instanceof AppError) return e.message;
-    console.error("[action] unhandled:", e);
-    return DEFAULT_SERVER_ERROR_MESSAGE;
+
+    const ref = crypto.randomUUID().slice(0, 6);
+    console.error(
+      JSON.stringify({
+        tag: "action-error",
+        ref,
+        action: metadata?.name ?? "unknown",
+        userId: (ctx as { user?: { id: string } } | undefined)?.user?.id ?? null,
+        error: e.name,
+        message: e.message,
+        stack: e.stack?.split("\n").slice(0, 5).join(" | "),
+      }),
+    );
+    return `${DEFAULT_SERVER_ERROR_MESSAGE} (รหัสอ้างอิง ${ref})`;
   },
   defineMetadataSchema: () => z.object({ name: z.string() }).optional(),
 });
