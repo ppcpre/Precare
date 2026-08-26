@@ -70,7 +70,7 @@ feature/*  ──PR──▶  dev  ──PR──▶  main
 
 | ชื่อ | ประเภท | ได้มาจากไหน |
 |---|---|---|
-| `CLOUDFLARE_API_TOKEN` | Secret | Cloudflare → My Profile → API Tokens · ต้องมีสิทธิ์ **Workers Scripts: Edit** + **D1: Edit** |
+| `CLOUDFLARE_API_TOKEN` | Secret | Cloudflare → My Profile → API Tokens · ต้องมีสิทธิ์ **Workers Scripts: Edit** + **D1: Edit** + **Workers R2 Storage: Edit** |
 | `CLOUDFLARE_ACCOUNT_ID` | Secret | Cloudflare dashboard → Workers & Pages (มุมขวา) |
 | `PRODUCTION_URL` | Variable | เช่น `https://precare.<subdomain>.workers.dev` — ถ้าไม่ตั้ง smoke check จะข้ามไปเฉยๆ |
 | `DEV_URL` | Variable | เช่น `https://precare-dev.<subdomain>.workers.dev` — smoke check ของ `deploy-dev.yml` |

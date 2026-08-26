@@ -546,7 +546,7 @@ merge เข้า main  (deploy.yml)
 | เมื่อไหร่ | ต้องทำอะไร | ใช้เวลา |
 |---|---|---|
 | ก่อน **T0.5** | ยืนยันว่าเข้า Cloudflare dashboard ได้ + รู้ Account ID | 5 นาที |
-| ก่อน **T0.7** | สร้าง Cloudflare API Token (Workers Scripts Edit + D1 Edit) | 10 นาที |
+| ก่อน **T0.7** | สร้าง Cloudflare API Token — **Workers Scripts: Edit + D1: Edit + Workers R2 Storage: Edit** | 10 นาที |
 | ก่อน **T2.3** | สร้าง OAuth client ใน Google Cloud Console → ได้ Client ID + Secret | 20 นาที |
 | ก่อน **T4.1** | ยืนยันว่าจะให้ผมทำ design ต่อ หรือมี designer อยู่แล้ว | — |
 | ก่อน **Phase 1.5** | เปิด 2FA บนบัญชี Gmail ที่จะใช้ส่ง แล้วสร้าง App Password | 10 นาที |
