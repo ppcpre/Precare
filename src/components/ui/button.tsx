@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -10,6 +11,18 @@ const VARIANTS: Record<Variant, string> = {
   ghost: "bg-transparent text-brown-700 hover:bg-cream-100 disabled:text-ink-400",
   danger: "bg-danger text-white hover:brightness-95 disabled:bg-cream-200 disabled:text-ink-400",
 };
+
+/** แยกออกมาเพื่อให้ ButtonLink ใช้สไตล์ชุดเดียวกันได้ ไม่ต้องทำ asChild/Slot */
+export function buttonClass(variant: Variant = "primary", full?: boolean, className?: string) {
+  return cn(
+    "inline-flex h-11 items-center justify-center gap-2 rounded-md px-5 text-base font-medium",
+    "transition-colors disabled:cursor-not-allowed",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown-500",
+    VARIANTS[variant],
+    full && "w-full",
+    className,
+  );
+}
 
 export function Button({
   variant = "primary",
@@ -28,14 +41,7 @@ export function Button({
     <button
       {...props}
       disabled={disabled ?? loading}
-      className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-md px-5 text-base font-medium",
-        "transition-colors disabled:cursor-not-allowed",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown-500",
-        VARIANTS[variant],
-        full && "w-full",
-        className,
-      )}
+      className={buttonClass(variant, full, className)}
     >
       {loading && (
         <span
@@ -46,4 +52,13 @@ export function Button({
       {children}
     </button>
   );
+}
+
+export function ButtonLink({
+  variant = "primary",
+  full,
+  className,
+  ...props
+}: React.ComponentProps<typeof Link> & { variant?: Variant; full?: boolean }) {
+  return <Link {...props} className={buttonClass(variant, full, className)} />;
 }

@@ -107,7 +107,10 @@ export async function listPendingInvites(db: Db, familyId: string) {
  * การรอ 4 รอบต่อกันเห็นผลชัดกว่าที่คิด
  */
 export async function getDashboard(db: Db, familyId: string) {
-  const nowIso = new Date().toISOString();
+  // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง
+  // (react-hooks/purity ห้ามเรียกฟังก์ชัน impure ใน render แม้จะเป็น server component)
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
 
   const [pregnancyRows, apptRows, logRows, memberCount] = await db.batch([
     db.select().from(pregnancyProfiles).where(eq(pregnancyProfiles.familyId, familyId)),
@@ -131,6 +134,7 @@ export async function getDashboard(db: Db, familyId: string) {
 
   const profile = pregnancyRows[0] ?? null;
   return {
+    now,
     profile,
     ga: profile?.lmpDate ? calculateGestationalAge(profile.lmpDate) : null,
     daysLeft: profile?.dueDate ? daysUntilDueDate(profile.dueDate) : null,

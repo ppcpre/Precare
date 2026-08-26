@@ -217,7 +217,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M5 · UI implementation — 9–11 วัน
 
-> **สถานะ 26 ส.ค. 69 — 3/12**
+> **สถานะ 26 ส.ค. 69 — 4/12**
 >
 > **ไม่ใช้ shadcn/ui** ตามที่เคยแนะนำไว้ — เขียน component เองแทน
 > เหตุผล: component ที่ต้องใช้ส่วนใหญ่ง่ายมาก (Button/Card/Field/Badge/Chip) ไม่ต้องพึ่ง Radix
@@ -231,19 +231,29 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > | จบ M3 | 1,650 | 54% | — |
 > | T5.1+T5.2 | 1,673 | 54% | +23 |
 > | T5.3 onboarding | 1,956 | 64% | **+283** |
+> | T5.4 dashboard | 2,218 | 72% | **+262** |
 >
 > ตรวจแล้วว่า **ไม่ใช่** lucide (Next optimize ให้อยู่แล้ว ปรับ `optimizePackageImports` ไม่ขยับเลยสักไบต์)
 > และ **ไม่ใช่** `next-safe-action/hooks` (ถอดออกแล้วประหยัดแค่ 1.76 KiB)
 >
-> สมมติฐาน: เป็นต้นทุนครั้งเดียวของ client page แรกที่มีเนื้อจริง (React client runtime + shared chunk)
-> **ยังไม่ยืนยัน** — ต้องวัดทุก task ที่เหลือ ถ้าหน้าถัดไปเพิ่มอีก ~280 KiB จะชนเพดานก่อนจบ M5
+> **⚠️ สมมติฐาน "ต้นทุนครั้งเดียว" ผิด** — T5.4 เพิ่มอีก 262 KiB แปลว่าโตเชิงเส้นราว 260 KiB ต่อกลุ่มหน้า
+>
+> **สาเหตุที่หาเจอ:** `better-auth` ถูก bundle ซ้ำทุก route ที่ import `getAuth()`
+> ในไฟล์ worker ที่ bundle ออกมา `INVALID_EMAIL_OR_PASSWORD` โผล่ **16 ครั้ง** และ `getAuthTables` **24 ครั้ง**
+> แถม `kysely` โผล่ **184 ครั้ง** ทั้งที่เราใช้ Drizzle ไม่ได้ใช้ Kysely เลย (Better Auth ลากมาเอง)
+>
+> **ลองแก้แล้วไม่ได้:** `serverExternalPackages: ["better-auth"]` ทำให้ OpenNext build พัง
+> (`Could not resolve "@better-auth/core/instrumentation"`)
+>
+> **ประมาณการ:** T5.5→2,478 · T5.6→2,738 · T5.7→2,998 · **T5.8→3,258 KiB = เกินเพดาน**
+> ยังไม่นับ T5.9–T5.12 · **ต้องตัดสินใจก่อนถึง T5.7**
 
 | ID | งาน | ขึ้นกับ |
 |---|---|---|
 | ✅ **T5.1** | Component library เป็นโค้ดจริง | T4.1, T0.8 |
 | ✅ **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
 | ✅ **T5.3** | Onboarding 4 ขั้น + คำนวณ LMP↔EDD | T4.6, T3.3 |
-| **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
+| ✅ **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
 | **T5.5** | Health list + form | T4.3, T3.5 |
 | **T5.6** | Appointments list + form | T4.4, T3.6 |
 | **T5.7** | Family + invite + copy link | T4.5, T3.2 |
