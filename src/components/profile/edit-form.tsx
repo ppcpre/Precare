@@ -3,20 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { ChevronLeft, Camera, Lock } from "lucide-react";
+import { ChevronLeft, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { Avatar } from "@/components/app-topbar";
+import { AvatarUpload } from "@/components/profile/avatar-upload";
 import { updateProfile } from "@/actions/profile";
 
 export function ProfileEditForm({
   name: initialName,
   email,
   image,
+  storageFull,
 }: {
   name: string;
   email: string;
   image: string | null;
+  storageFull: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -43,19 +45,7 @@ export function ProfileEditForm({
       </header>
 
       <div className="mx-auto flex w-full max-w-[480px] flex-1 flex-col gap-6 p-4">
-        <div className="flex flex-col items-center gap-3 pt-2">
-          <div className="relative">
-            <Avatar name={initialName} image={image} size={104} />
-            {/* T5.12 จะทำให้กดแล้วอัปโหลดจริง ตอนนี้ปุ่มยังไม่ทำงาน จึงบอกให้ชัด */}
-            <span
-              aria-hidden
-              className="absolute -bottom-0.5 -right-0.5 flex size-8 items-center justify-center rounded-full border-2 border-white bg-cream-200"
-            >
-              <Camera size={15} strokeWidth={1.9} className="text-ink-400" />
-            </span>
-          </div>
-          <p className="text-xs text-ink-400">อัปโหลดรูปโปรไฟล์ได้เร็วๆ นี้</p>
-        </div>
+        <AvatarUpload name={initialName} image={image} storageFull={storageFull} />
 
         <Field
           label="ชื่อ-นามสกุล"

@@ -39,6 +39,14 @@
     }
   ],
 
+  // R2 — แยก 2 bucket เพราะ access model ต่างกันคนละแบบ
+  //   assets = public, cache ยาว, ไม่มีข้อมูลส่วนตัว
+  //   photos = private, ต้องผ่าน authz ทุก request, ห้าม cache แบบ public
+  "r2_buckets": [
+    { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
+    { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
+  ],
+
   // ---------------------------------------------------------------
   // environment `dev` — worker + D1 คนละตัวกับ production
   //   deploy จาก branch `dev` และ PR preview (`versions upload --env dev`)
@@ -60,6 +68,10 @@
         "BETTER_AUTH_URL": "https://precare-dev.precare.workers.dev",
         "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com"
       },
+      "r2_buckets": [
+        { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
+        { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
+      ],
       "d1_databases": [
         {
           "binding": "DB",
@@ -70,13 +82,4 @@
       ]
     }
   }
-
-  // ---------------------------------------------------------------
-  // TODO(T1.7): เปิดตอนทำอัปโหลดรูปโปรไฟล์ — ต้องเพิ่มทั้ง production และ env.dev
-  //   npx wrangler r2 bucket create precare-assets   (public — ภาพเทียบขนาดรายสัปดาห์)
-  //   npx wrangler r2 bucket create precare-photos   (private — รูปผู้ใช้ ต้องผ่าน authz)
-  // "r2_buckets": [
-  //   { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
-  //   { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
-  // ]
 }

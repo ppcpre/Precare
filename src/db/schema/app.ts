@@ -128,3 +128,30 @@ export const photos = sqliteTable(
   },
   (t) => [index("idx_photos_family").on(t.familyId, t.week)],
 );
+
+export const STORAGE_KINDS = ["avatar", "photo", "asset"] as const;
+
+/**
+ * บัญชีไฟล์ทุกชิ้นที่เขียนลง R2
+ *
+ * ทำไมต้องมีตารางนี้: R2 ไม่มี API ให้ถามยอดใช้งานแบบเร็วๆ ต่อ request
+ * การรวม SUM(size_bytes) จาก D1 เร็วกว่ามากและใช้บังคับโควตาแบบ realtime ได้
+ *
+ * ⚠️ ทุกครั้งที่ put ลง R2 ต้อง insert แถวนี้ และทุกครั้งที่ delete ต้องลบแถวด้วย
+ *    ไม่งั้นยอดจะเพี้ยน — ใช้ผ่าน src/lib/storage.ts เท่านั้น อย่าเรียก R2 ตรง
+ */
+export const storageObjects = sqliteTable(
+  "storage_objects",
+  {
+    id: text("id").primaryKey(),
+    bucket: text("bucket", { enum: ["assets", "photos"] }).notNull(),
+    key: text("key").notNull().unique(),
+    sizeBytes: integer("size_bytes").notNull(),
+    kind: text("kind", { enum: STORAGE_KINDS }).notNull(),
+    /** null ได้สำหรับไฟล์ระบบที่ไม่ผูกกับครอบครัวไหน */
+    familyId: text("family_id").references(() => families.id, { onDelete: "cascade" }),
+    uploadedBy: text("uploaded_by").references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_storage_family").on(t.familyId)],
+);
