@@ -1,8 +1,11 @@
-export default function Page() {
-  return (
-    <div className="rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-      <h1 className="text-xl font-semibold text-ink-900">แก้ไขโปรไฟล์</h1>
-      <p className="mt-1 text-sm text-ink-600">โครงหน้าเปล่า — งานจริงอยู่ที่ T5.12</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { ProfileEditForm } from "@/components/profile/edit-form";
+import { getSessionUser } from "@/lib/session";
+
+export const metadata = { title: "แก้ไขโปรไฟล์ · Health Care" };
+
+export default async function ProfileEditPage() {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  return <ProfileEditForm name={user.name} email={user.email} image={user.image} />;
 }

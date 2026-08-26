@@ -1,8 +1,37 @@
-export default function Page() {
+import { redirect } from "next/navigation";
+import { count, eq } from "drizzle-orm";
+import { PregnancyForm } from "@/components/profile/pregnancy-form";
+import { getPregnancy, requireFamilyContext } from "@/lib/queries";
+import { weeklyLogs } from "@/db/schema";
+
+export const metadata = { title: "วันตั้งครรภ์ · Pre Care" };
+
+export default async function PregnancySettingsPage() {
+  let ctx;
+  try {
+    // owner เท่านั้นตาม permission matrix — editor แก้ไม่ได้
+    ctx = await requireFamilyContext("owner");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    redirect("/profile");
+  }
+
+  const [preg, logCount] = await Promise.all([
+    getPregnancy(ctx.db, ctx.familyId),
+    ctx.db
+      .select({ n: count() })
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, ctx.familyId))
+      .get(),
+  ]);
+
   return (
-    <div className="rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-      <h1 className="text-xl font-semibold text-ink-900">วันตั้งครรภ์</h1>
-      <p className="mt-1 text-sm text-ink-600">โครงหน้าเปล่า — งานจริงอยู่ที่ T5.8</p>
-    </div>
+    <PregnancyForm
+      currentLmp={preg.profile?.lmpDate ?? null}
+      currentDue={preg.profile?.dueDate ?? null}
+      hasLogs={(logCount?.n ?? 0) > 0}
+    />
   );
 }

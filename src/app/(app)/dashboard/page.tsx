@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 import { Plus, Eye } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
-import { DashboardTopBar } from "@/components/app-topbar";
 import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
-import { getDashboard, getFamily, requireFamilyContext } from "@/lib/queries";
+import { getDashboard, requireFamilyContext } from "@/lib/queries";
 import { can } from "@/lib/authz";
-import { daysFromNow } from "@/components/ui/badge";
 
 export const metadata = { title: "หน้าแรก · Pre Care" };
 
@@ -22,26 +20,17 @@ export default async function DashboardPage() {
     throw e;
   }
 
-  const { db, user, familyId, role } = ctx;
-  const [data, family] = await Promise.all([getDashboard(db, familyId), getFamily(db, familyId)]);
+  const { db, familyId, role } = ctx;
+  const data = await getDashboard(db, familyId);
 
   // now มาจาก getDashboard ไม่ใช่เรียก Date.now() ใน render
   // เพราะ react-hooks/purity ห้ามฟังก์ชัน impure ใน component แม้เป็น server component
   const { now } = data;
-  const soon =
-    data.nextAppointment != null && daysFromNow(data.nextAppointment.apptDatetime, now) <= 1;
 
   const canWrite = can.writeRecords(role);
 
   return (
     <div className="flex flex-col gap-4">
-      <DashboardTopBar
-        userName={user.name}
-        userImage={user.image}
-        familyName={family?.name ?? "ครอบครัว"}
-        hasSoonAppointment={soon}
-      />
-
       {/* viewer เห็นแถบบอกสิทธิ์ครั้งแรก จะได้ไม่สงสัยว่าทำไมไม่มีปุ่มเพิ่ม */}
       {role === "viewer" && (
         <p className="flex items-center gap-2 rounded-md bg-cream-100 px-4 py-2.5 text-[13px] text-ink-600">
