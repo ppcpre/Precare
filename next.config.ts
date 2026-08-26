@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // ค่า default ของ Server Action คือ 1 MB ซึ่งน้อยกว่ารูปชุดเดียวที่ย่อแล้ว
+    // (10 ใบ x ~300 KB) การอัปโหลดจะถูกปฏิเสธก่อนถึง action ด้วยซ้ำ
+    serverActions: { bodySizeLimit: "20mb" },
+  },
   // ไม่ใช้ output: "export" อีกแล้ว — เดิมเป็น static export สำหรับ Firebase Hosting
   // ตอนนี้รัน SSR บน Cloudflare Workers ผ่าน @opennextjs/cloudflare
   // better-auth ลาก adapter ทุกตัวมาเป็น dependency แต่เราใช้แค่ drizzle

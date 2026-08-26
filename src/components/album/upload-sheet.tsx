@@ -18,6 +18,8 @@ const TYPES = [
 ] as const;
 
 const MAX_BATCH = 10;
+/** ต้องต่ำกว่า serverActions.bodySizeLimit ใน next.config.ts เผื่อ overhead ของ multipart */
+const MAX_BATCH_BYTES = 16 * 1024 ** 2;
 type Picked = { blob: Blob; url: string };
 
 export function UploadSheet({
@@ -49,27 +51,35 @@ export function UploadSheet({
 
   const totalBytes = picked.reduce((n, p) => n + p.blob.size, 0);
 
-  async function onPick(files: FileList) {
+  async function onPick(files: File[]) {
     setError(null);
     setResizing(true);
-    try {
-      const room = MAX_BATCH - picked.length;
-      const list = [...files].slice(0, room);
-      if (files.length > room) setError(`เพิ่มได้ครั้งละไม่เกิน ${MAX_BATCH} รูป`);
-      const out: Picked[] = [];
-      for (const f of list) {
+    const room = MAX_BATCH - picked.length;
+    const list = files.slice(0, room);
+    const notes: string[] = [];
+    if (files.length > room) notes.push(`เพิ่มได้ครั้งละไม่เกิน ${MAX_BATCH} รูป`);
+
+    // ย่อทีละใบและกันพังแยกใบ ถ้า catch คลุมทั้ง loop ไฟล์ที่ย่อสำเร็จ
+    // ก่อนหน้าจะหายไปด้วย ซึ่งผู้ใช้ไม่เข้าใจว่าทำไมเลือก 5 ใบแล้วไม่ขึ้นสักใบ
+    const out: Picked[] = [];
+    for (const f of list) {
+      try {
         const blob = await resizeToWebp(f, PHOTO_EDGE);
         out.push({ blob, url: URL.createObjectURL(blob) });
+      } catch {
+        notes.push(`เปิดไฟล์ ${f.name} ไม่ได้ (รองรับ JPG, PNG, WebP)`);
       }
-      setPicked((cur) => [...cur, ...out]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "อ่านไฟล์ไม่สำเร็จ");
-    } finally {
-      setResizing(false);
     }
+    setPicked((cur) => [...cur, ...out]);
+    setError(notes.length ? notes.join(" · ") : null);
+    setResizing(false);
   }
 
   function submit() {
+    if (totalBytes > MAX_BATCH_BYTES) {
+      setError(`รูปรวมกัน ${formatBytesShort(totalBytes)} ใหญ่เกินไป ลองลดจำนวนรูปลง`);
+      return;
+    }
     const fd = new FormData();
     picked.forEach((p, i) => fd.append("files", new File([p.blob], `p${i}.webp`, { type: "image/webp" })));
     fd.set("takenAt", takenAt);
@@ -156,13 +166,16 @@ export function UploadSheet({
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           className="hidden"
           onChange={(e) => {
-            const fs = e.target.files;
+            // ต้อง copy ออกมาเป็น array ก่อน แล้วค่อยล้าง input
+            // FileList เป็น live object ตัวเดียวกับ input.files การ set value=""
+            // จะล้างมันทิ้งไปด้วย ถ้าถือ reference ไว้เฉยๆ จะได้ list ว่าง
+            const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (fs?.length) void onPick(fs);
+            if (files.length) void onPick(files);
           }}
         />
 
@@ -183,7 +196,7 @@ export function UploadSheet({
           value={takenAt}
           onChange={(e) => setTakenAt(e.target.value)}
           max={new Date().toISOString().slice(0, 10)}
-          hint="ไม่ใช่วันที่อัปโหลด — ระบบใช้วันนี้จัดกลุ่มตามสัปดาห์"
+          hint="ไม่ใช่วันที่อัปโหลด — ระบบใช้วันที่นี้จัดกลุ่มตามสัปดาห์"
         />
 
         <Textarea
