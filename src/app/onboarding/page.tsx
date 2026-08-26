@@ -1,8 +1,16 @@
-export default function Page() {
-  return (
-    <div className="rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-      <h1 className="text-xl font-semibold text-ink-900">Onboarding</h1>
-      <p className="mt-1 text-sm text-ink-600">โครงหน้าเปล่า — งานจริงอยู่ที่ T5.3</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { getAuth } from "@/lib/auth";
+import { OnboardingWizard } from "./wizard";
+
+export const metadata = { title: "เริ่มต้นใช้งาน · Pre Care" };
+
+export default async function OnboardingPage() {
+  const auth = await getAuth();
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+  // มี family อยู่แล้วไม่ต้องทำซ้ำ
+  if (session.user.activeFamilyId) redirect("/dashboard");
+
+  return <OnboardingWizard defaultFamilyName={`ครอบครัว${session.user.name.split(" ")[0] ?? ""}`} />;
 }
