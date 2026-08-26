@@ -185,6 +185,46 @@ export async function getDashboard(db: Db, familyId: string) {
   };
 }
 
+/**
+ * ข้อมูลที่ layout ต้องใช้ทุกหน้า — ยิงใน batch เดียวเพื่อไม่ให้ทุกการเปลี่ยนหน้า
+ * ต้องรอ query หลายรอบต่อกัน
+ */
+export async function getLayoutData(db: Db, familyId: string) {
+  const now = Date.now();
+  const horizonIso = new Date(now + 24 * 3600_000).toISOString();
+
+  const [familyRows, apptRows] = await db.batch([
+    db.select().from(families).where(eq(families.id, familyId)),
+    db
+      .select({
+        id: appointments.id,
+        apptDatetime: appointments.apptDatetime,
+        title: appointments.title,
+        doctorName: appointments.doctorName,
+        location: appointments.location,
+        reminderEnabled: appointments.reminderEnabled,
+        reminderMinutesBefore: appointments.reminderMinutesBefore,
+      })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.familyId, familyId),
+          gte(appointments.apptDatetime, new Date(now).toISOString()),
+          lt(appointments.apptDatetime, horizonIso),
+        ),
+      )
+      .orderBy(asc(appointments.apptDatetime)),
+  ]);
+
+  return {
+    family: familyRows[0] ?? null,
+    // มีนัดใน 24 ชม. -> จุดสีบนกระดิ่ง
+    hasSoonAppointment: apptRows.length > 0,
+    upcoming: apptRows,
+    now,
+  };
+}
+
 export async function getFamily(db: Db, familyId: string) {
   return db.select().from(families).where(eq(families.id, familyId)).get();
 }

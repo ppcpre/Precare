@@ -217,7 +217,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M5 · UI implementation — 9–11 วัน
 
-> **สถานะ 26 ส.ค. 69 — 8/12**
+> **สถานะ 26 ส.ค. 69 — 11/12** · เหลือ T5.12 ที่ติด R2
 >
 > **ไม่ใช้ shadcn/ui** ตามที่เคยแนะนำไว้ — เขียน component เองแทน
 > เหตุผล: component ที่ต้องใช้ส่วนใหญ่ง่ายมาก (Button/Card/Field/Badge/Chip) ไม่ต้องพึ่ง Radix
@@ -237,6 +237,12 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > | T5.6 นัดหมาย | 1,836 | 60% | **+17** |
 > | T5.7 ครอบครัว | 1,914 | 62% | +78 |
 > | T5.8 โปรไฟล์ + header | 1,939 | 63% | +25 |
+> | T5.9–T5.11 | 1,852 | 60% | **−87** |
+>
+> T5.9–T5.11 ทำให้ bundle *ลดลง* เพราะรวม query ของ layout เป็น batch เดียว
+>
+> **⏸ T1.7 + T5.12 ติดที่ R2 ยังไม่ได้เปิดใช้ในบัญชี** — `wrangler r2 bucket create` ตอบ
+> `code: 10042 Please enable R2 through the Cloudflare Dashboard` เป็นการเปิดใช้ระดับบัญชีที่ต้องทำเอง
 >
 > ตรวจแล้วว่า **ไม่ใช่** lucide (Next optimize ให้อยู่แล้ว ปรับ `optimizePackageImports` ไม่ขยับเลยสักไบต์)
 > และ **ไม่ใช่** `next-safe-action/hooks` (ถอดออกแล้วประหยัดแค่ 1.76 KiB)
@@ -277,10 +283,10 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | ✅ **T5.6** | Appointments list + form | T4.4, T3.6 |
 | ✅ **T5.7** | Family + invite + copy link | T4.5, T3.2 |
 | ✅ **T5.8** | Profile + pregnancy settings | T4.7, T3.4 |
-| **T5.9** | **Role-based rendering ทั้งแอป** — viewer ต้องไม่เห็นปุ่มเลย ไม่ใช่ disabled | T5.4–T5.8 |
-| **T5.10** | Browser Notification สำหรับนัดหมาย | T5.6 |
-| **T5.11** | Loading / empty / error states ครบทุกหน้า | T5.4–T5.8 |
-| **T5.12** | **อัปโหลดรูปโปรไฟล์** — resize ฝั่ง client (ด้านยาว ≤ 1600px) → R2 → `users.avatar_url` | T1.7, T5.8 |
+| ✅ **T5.9** | **Role-based rendering ทั้งแอป** — viewer ต้องไม่เห็นปุ่มเลย ไม่ใช่ disabled | T5.4–T5.8 |
+| ✅ **T5.10** | Browser Notification สำหรับนัดหมาย | T5.6 |
+| ✅ **T5.11** | Loading / empty / error states ครบทุกหน้า | T5.4–T5.8 |
+| ⏸ **T5.12** | **อัปโหลดรูปโปรไฟล์** — resize ฝั่ง client (ด้านยาว ≤ 1600px) → R2 → `users.avatar_url` | T1.7, T5.8 |
 
 ### M6 · Test + Go live — 3–4 วัน
 
