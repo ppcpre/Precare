@@ -159,6 +159,9 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 > **ความเสี่ยงข้อใหญ่ปิดแล้ว** — scrypt ของ Better Auth ทำงานได้บน free plan ที่จำกัด CPU 10 ms
 > ทั้ง sign-up และ sign-in ผ่าน · รหัสผิดตอบ 401 ถูกต้อง · **ไม่ต้องขึ้น Workers Paid**
 >
+> **⏸ ค้างไว้ตามที่ตกลง (26 ส.ค. 69):** ปุ่ม Google ยังใช้ไม่ได้จนกว่าจะเติม `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+> โค้ดพร้อมแล้ว provider เป็น conditional จึงไม่กระทบอะไร — แค่เสียบค่าแล้วใช้ได้ทันที ไม่ต้องแก้โค้ด
+>
 > **bundle 1,650 KiB = 54% ของเพดาน 3 MiB** (จาก 1,034 KiB ตอนจบ M1) — Better Auth + Drizzle + middleware กินไปราว 600 KiB
 
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
@@ -173,18 +176,27 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 
 ### M3 · API layer — 5–6 วัน
 
+> **สถานะ 26 ส.ค. 69 — เสร็จ 8/8**
+>
+> ทำเป็น **Server Actions + next-safe-action** ตาม tech-notes แทนการเขียน REST เอง
+> authz เป็น middleware chain 2 ชั้น: `authAction` → `memberAction`/`editorAction`/`ownerAction`
+> **familyId มาจาก session เท่านั้น ไม่รับจาก client** ป้องกันการยิงข้าม family
+>
+> **T3.8 — 14 เทสต์ผ่านทั้งหมด** รันใน workerd จริงกับ D1 จริง ไม่ใช่ mock
+> **bundle ยังคงที่ 1,650 KiB (54%)** — ไม่ขยับจากตอนจบ M2
+
 > ทุก endpoint ต้องผ่าน 2 ขั้นเสมอ: **verify session → เช็ค role** ก่อนแตะ D1 เพราะ D1 ไม่มี row-level security
 
 | ID | งาน | Endpoints | ขึ้นกับ |
 |---|---|---|---|
-| **T3.1** | Family + membership | `GET/PATCH /api/families/:id` · `GET /api/families/:id/members` · `PATCH`/`DELETE` member (owner) · `POST /api/families/:id/leave` | T1.5, T2.6 |
-| **T3.2** | Invites | `POST /api/families/:id/invites` (owner) · `GET/POST /api/invites/:token/accept` · `DELETE` ยกเลิก · logic หมดอายุ 7 วัน + ใช้ครั้งเดียว | T3.1 |
-| **T3.3** | Onboarding | `POST /api/onboarding` — สร้าง family + `family_members(owner)` + `pregnancy_profiles` + set `active_family_id` แบบ transaction เดียว | T3.1 |
-| **T3.4** | Pregnancy profile | `GET/PUT /api/families/:id/pregnancy` — **owner เท่านั้นที่แก้ได้** | T3.1 |
-| **T3.5** | Weekly logs CRUD | `GET/POST /api/families/:id/logs` · `GET/PATCH/DELETE /api/logs/:id` · `symptoms` parse/stringify JSON ที่ชั้นนี้ | T3.1 |
-| **T3.6** | Appointments CRUD | `GET/POST /api/families/:id/appointments` · `GET/PATCH/DELETE /api/appointments/:id` | T3.1 |
-| **T3.7** | Dashboard aggregate | `GET /api/families/:id/dashboard` — อายุครรภ์ + นัดถัดไป + logs ล่าสุด **ใน request เดียว** (ลด round-trip บนมือถือ) | T3.4–T3.6 |
-| **T3.8** | **Authorization test** | Vitest: viewer เขียนไม่ได้ · editor แก้ pregnancy ไม่ได้ · คนนอก family เข้าไม่ได้เลย — **ครบทุก endpoint** | T3.1–T3.7 |
+| ✅ **T3.1** | Family + membership | `GET/PATCH /api/families/:id` · `GET /api/families/:id/members` · `PATCH`/`DELETE` member (owner) · `POST /api/families/:id/leave` | T1.5, T2.6 |
+| ✅ **T3.2** | Invites | `POST /api/families/:id/invites` (owner) · `GET/POST /api/invites/:token/accept` · `DELETE` ยกเลิก · logic หมดอายุ 7 วัน + ใช้ครั้งเดียว | T3.1 |
+| ✅ **T3.3** | Onboarding | `POST /api/onboarding` — สร้าง family + `family_members(owner)` + `pregnancy_profiles` + set `active_family_id` แบบ transaction เดียว | T3.1 |
+| ✅ **T3.4** | Pregnancy profile | `GET/PUT /api/families/:id/pregnancy` — **owner เท่านั้นที่แก้ได้** | T3.1 |
+| ✅ **T3.5** | Weekly logs CRUD | `GET/POST /api/families/:id/logs` · `GET/PATCH/DELETE /api/logs/:id` · `symptoms` parse/stringify JSON ที่ชั้นนี้ | T3.1 |
+| ✅ **T3.6** | Appointments CRUD | `GET/POST /api/families/:id/appointments` · `GET/PATCH/DELETE /api/appointments/:id` | T3.1 |
+| ✅ **T3.7** | Dashboard aggregate | `GET /api/families/:id/dashboard` — อายุครรภ์ + นัดถัดไป + logs ล่าสุด **ใน request เดียว** (ลด round-trip บนมือถือ) | T3.4–T3.6 |
+| ✅ **T3.8** | **Authorization test** | Vitest: viewer เขียนไม่ได้ · editor แก้ pregnancy ไม่ได้ · คนนอก family เข้าไม่ได้เลย — **ครบทุก endpoint** | T3.1–T3.7 |
 
 ### M4 · Design หน้าจอ — 5–7 วัน *(ขนานกับ M1–M3)*
 
