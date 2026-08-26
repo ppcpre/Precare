@@ -61,6 +61,20 @@ jobs:
         if: steps.probe.outputs.app == 'true'
         run: npx opennextjs-cloudflare build
 
+      # ตรวจ secret ก่อน ไม่งั้น wrangler-action จะพังด้วย error ที่อ่านไม่รู้เรื่อง
+      - name: ตรวจ secret ของ Cloudflare
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          MISSING=""
+          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || MISSING="$MISSING CLOUDFLARE_API_TOKEN"
+          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || MISSING="$MISSING CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$MISSING" ]; then
+            echo "::error::ยังไม่ได้ตั้ง secret:$MISSING — ไปที่ Settings > Secrets and variables > Actions"
+            echo "  CLOUDFLARE_API_TOKEN ต้องมีสิทธิ์ Workers Scripts: Edit + D1: Edit"
+            echo "  CLOUDFLARE_ACCOUNT_ID = 6fd3e33f13978c4a3d21ff1cc2924510"
+            exit 1
+          fi
+          echo "secret ครบ"
       # migration ต้องรันก่อน deploy โค้ดใหม่เสมอ — D1 ไม่มี rollback อัตโนมัติ
       # ยิงลง precare-dev-db เท่านั้น ไม่แตะ D1 ของ production
       - name: Apply D1 migrations (dev)
