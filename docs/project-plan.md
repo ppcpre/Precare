@@ -215,12 +215,19 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | **T4.7** | เก็บตก | error/loading states + `/profile/pregnancy` + นัดหมาย empty state |
 | ✅ | **ทำไปแล้ว** | 20 หน้าจอ + component library — รวมโปรไฟล์อัปโหลดรูป, อัลบั้ม และหน้าดูรูป (Phase 2) ที่วาดล่วงหน้าไว้ |
 
-### M5 · UI implementation — 8–10 วัน
+### M5 · UI implementation — 9–11 วัน
+
+> **สถานะ 26 ส.ค. 69 — 2/12**
+>
+> **ไม่ใช้ shadcn/ui** ตามที่เคยแนะนำไว้ — เขียน component เองแทน
+> เหตุผล: component ที่ต้องใช้ส่วนใหญ่ง่ายมาก (Button/Card/Field/Badge/Chip) ไม่ต้องพึ่ง Radix
+> และเหลือ budget bundle แค่ ~1.35 MiB · ผลคือ T5.1+T5.2 ทั้งก้อนเพิ่ม bundle แค่ **23 KiB**
+> ถ้าถึงจุดที่ต้องใช้ Dialog/Select ที่ a11y ยาก ค่อยดึง Radix เฉพาะตัวนั้น
 
 | ID | งาน | ขึ้นกับ |
 |---|---|---|
-| **T5.1** | Component library เป็นโค้ดจริง | T4.1, T0.8 |
-| **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
+| ✅ **T5.1** | Component library เป็นโค้ดจริง | T4.1, T0.8 |
+| ✅ **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
 | **T5.3** | Onboarding 4 ขั้น + คำนวณ LMP↔EDD | T4.6, T3.3 |
 | **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
 | **T5.5** | Health list + form | T4.3, T3.5 |

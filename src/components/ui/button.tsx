@@ -1,0 +1,49 @@
+import { cn } from "@/lib/cn";
+
+type Variant = "primary" | "secondary" | "ghost" | "danger";
+
+/** สเปกจาก design-system.md §4 — สูง 44px, padding-x 20px, radius 12px */
+const VARIANTS: Record<Variant, string> = {
+  primary: "bg-brown-700 text-white hover:bg-brown-900 disabled:bg-cream-200 disabled:text-ink-400",
+  secondary:
+    "bg-white text-brown-700 border border-brown-300 hover:bg-cream-50 disabled:text-ink-400 disabled:border-cream-200",
+  ghost: "bg-transparent text-brown-700 hover:bg-cream-100 disabled:text-ink-400",
+  danger: "bg-danger text-white hover:brightness-95 disabled:bg-cream-200 disabled:text-ink-400",
+};
+
+export function Button({
+  variant = "primary",
+  full,
+  loading,
+  className,
+  children,
+  disabled,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+  full?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      {...props}
+      disabled={disabled ?? loading}
+      className={cn(
+        "inline-flex h-11 items-center justify-center gap-2 rounded-md px-5 text-base font-medium",
+        "transition-colors disabled:cursor-not-allowed",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown-500",
+        VARIANTS[variant],
+        full && "w-full",
+        className,
+      )}
+    >
+      {loading && (
+        <span
+          aria-hidden
+          className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
+      )}
+      {children}
+    </button>
+  );
+}
