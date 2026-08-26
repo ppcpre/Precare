@@ -11,6 +11,8 @@ import * as schema from "@/db/schema";
 export async function getAuth() {
   const { env } = await getCloudflareContext({ async: true });
   const db = drizzle(env.DB, { schema });
+  const authTestMax =
+    Number((env as { AUTH_RATE_LIMIT_MAX?: string }).AUTH_RATE_LIMIT_MAX) || 0;
 
   return betterAuth({
     secret: env.BETTER_AUTH_SECRET,
@@ -65,8 +67,34 @@ export async function getAuth() {
       },
     },
 
-    // T2.7 — กันเดารหัสผ่านรัวๆ
-    rateLimit: { enabled: true, window: 60, max: 20 },
+    /**
+     * T2.7 — กันเดารหัสผ่านรัวๆ
+     *
+     * ระวัง: `max` ข้างล่างนี้ไม่ได้คุม /sign-in กับ /sign-up
+     * better-auth มี special rule ในตัวที่ 3 ครั้ง/10 วินาที สำหรับ
+     * /sign-in, /sign-up, /change-password, /change-email ซึ่งทับค่านี้เสมอ
+     * (ดู node_modules/better-auth/dist/api/rate-limiter/index.mjs
+     * ฟังก์ชัน getDefaultSpecialRules) — ค่า 20/60s จึงมีผลกับ endpoint
+     * อื่นเท่านั้น ส่วนการกันเดารหัสผ่านได้ special rule คุมอยู่แล้วและ
+     * เข้มกว่าที่เราตั้งไว้ด้วยซ้ำ
+     *
+     * customRules เป็นชั้นเดียวที่ทับ special rule ได้ ใช้ตอนรัน E2E
+     * ซึ่งสมัคร/ล็อกอินหลายสิบครั้งในนาทีเดียว ไม่ได้ตั้ง env นี้ =
+     * ไม่มี customRules เลย พฤติกรรมบน dev และ production จึงไม่เปลี่ยน
+     */
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 20,
+      ...(authTestMax > 0
+        ? {
+            customRules: {
+              "/sign-up/email": { window: 60, max: authTestMax },
+              "/sign-in/email": { window: 60, max: authTestMax },
+            },
+          }
+        : {}),
+    },
   });
 }
 

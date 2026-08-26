@@ -304,9 +304,14 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 |---|---|---|
 | **T6.1** | Unit test | `lib/pregnancy.ts` (มีอยู่แล้ว เขียน test ได้เลย) + query builders |
 | **T6.2** | Integration test | API routes ผ่าน `wrangler dev` + local D1 |
-| **T6.3** | **E2E (Playwright)** | signup → onboarding → บันทึกสุขภาพ → นัดหมาย → เชิญสมาชิก → รับคำเชิญ ครบ 1 รอบ |
+| ✅ **T6.3** | **E2E (Playwright)** | ครบ 1 รอบ + regression ของอัลบั้ม · รันกับ workerd จริง · เป็น gate ก่อน deploy ทั้ง CI และ dev |
 | **T6.4** | ทดสอบบนมือถือจริง | iOS Safari + Android Chrome · touch target ≥ 44px · bottom nav ไม่ทับ safe area |
 | **T6.5** | Production hardening | error boundary, 404/500, security headers, rate limit |
+
+> **สถานะ 26 ส.ค. 69 — T6.1–T6.3 เสร็จ** เหลือ T6.4 (มือถือจริง), T6.5, T6.6
+>
+> E2E 4 เทสต์ × 2 ขนาดจอ ใช้เวลา ~45 วินาที รันกับ worker ที่ build จริง
+> พิสูจน์แล้วว่าจับบั๊กอัปโหลดรูปทั้งสองตัวได้ ด้วยการใส่บั๊กกลับเข้าไปแล้วดูให้แดง
 | **T6.6** | Go-live checklist | ตามหัวข้อ 5.5 |
 
 ---

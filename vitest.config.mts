@@ -28,5 +28,8 @@ export default defineConfig({
   },
   test: {
     setupFiles: ["./test/apply-migrations.ts"],
+    // เทสต์ในนี้รันใน workerd ซึ่งไม่มี node:process — ถ้าไม่กัน e2e/ ออก
+    // vitest จะลากไฟล์ Playwright เข้ามารันแล้วพังด้วย error ที่ชี้ไปผิดที่
+    include: ["test/**/*.test.ts"],
   },
 });
