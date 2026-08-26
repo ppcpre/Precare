@@ -87,8 +87,10 @@ export async function getLogFormDefaults(db: Db, familyId: string) {
 }
 
 export async function listAppointments(db: Db, familyId: string, when: "upcoming" | "past" = "upcoming") {
-  const nowIso = new Date().toISOString();
-  return db
+  // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง (react-hooks/purity)
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const items = await db
     .select()
     .from(appointments)
     .where(
@@ -100,6 +102,15 @@ export async function listAppointments(db: Db, familyId: string, when: "upcoming
       ),
     )
     .orderBy(when === "upcoming" ? asc(appointments.apptDatetime) : desc(appointments.apptDatetime));
+  return { items, now };
+}
+
+export async function getAppointmentById(db: Db, familyId: string, id: string) {
+  return db
+    .select()
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.familyId, familyId)))
+    .get();
 }
 
 export async function listMembers(db: Db, familyId: string, meId: string) {
