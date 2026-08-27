@@ -324,6 +324,58 @@ def group_summary_card(name, kind, total, count, missing=0, pct=100):
                     justify='space-between', align='flex-start'),
                 bar, pad=14, gap=10)
 
+
+def month_nav(name, total, delta=None, groups=None, empty=False):
+    """หัวเดือน — ดูทีละเดือน ไม่ใช่ไล่ยาวทั้งปี
+
+    ลูกศรซ้ายขวาเปลี่ยนเดือน ตัวเลขใหญ่คือของเดือนที่เลือกอยู่เท่านั้น
+    """
+    arrow = lambda d: ('<div style="width: 36px; height: 36px; border-radius: 9999px; background: %s; '
+                       'display: flex; align-items: center; justify-content: center; flex: none;">%s</div>'
+                       ) % (CR100, ('<div style="transform: rotate(180deg); display: flex;">%s</div>' % ic('chev', 17, IN6, 2))
+                            if d == 'l' else ic('chev', 17, IN6, 2))
+    if empty:
+        big = txt('ยังไม่ได้ระบุ', 20, WARN, 600)
+        sub = txt('เดือนนี้มี 3 นัด ยังไม่ได้กรอกค่าใช้จ่ายสักนัด', 12, IN6)
+    else:
+        big = money(total, 32, IN9, 600)
+        if delta is None:
+            sub = txt('เดือนแรกที่มีข้อมูล', 12, IN4)
+        else:
+            up = delta > 0
+            sub = row(('<span style="display: inline-flex; transform: rotate(%ddeg);">%s</span>'
+                       ) % (0 if up else 180, ic('trend', 13, WARN if up else OK, 2)),
+                      txt('%s%s จากเดือนก่อน' % ('+' if up else '−', '฿' + format(abs(delta), ',')),
+                          12, IN6), gap=5)
+    gr = ''
+    if groups:
+        gr = row(*[row(group_dot(k, 8), txt('%s %s' % (n, '฿' + format(v, ',')), 11, IN6), gap=5)
+                   for n, k, v in groups], gap=12, wrap=True)
+    return card(
+        row(arrow('l'), txt(name, 16, IN9, 600), arrow('r'), justify='space-between'),
+        col(big, sub, gap=4, extra='align-items: center; text-align: center;'),
+        gr, pad=14, gap=12)
+
+def month_strip(items, sel=2):
+    """แถบเลือกเดือน — กดข้ามไปเดือนไหนก็ได้ ไม่ต้องกดลูกศรทีละที
+    แท่งเล็กใต้ชื่อเดือนทำให้เทียบได้ในตาเดียวว่าเดือนไหนจ่ายเยอะ
+    """
+    mx = max((v or 0) for _, v in items) or 1
+    out = []
+    for i, (n, v) in enumerate(items):
+        on = i == sel
+        h = max(3, int(round((v or 0) / mx * 26)))
+        bar_col = BR7 if on else BR3
+        out.append(
+            '<div style="flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; '
+            'gap: 5px; padding: 8px 0; border-radius: 10px; background: %s;">'
+            '<div style="height: 28px; display: flex; align-items: flex-end;">'
+            '<div style="width: 16px; height: %dpx; border-radius: 4px; background: %s;"></div></div>'
+            '<span style="font-size: 11px; color: %s; font-weight: %s;">%s</span></div>'
+            % (BR1 if on else 'transparent', h, bar_col, BR9 if on else IN4, '600' if on else '400', n))
+    return ('<div style="display: flex; gap: 2px; overflow-x: auto; background: %s; border: 1px solid %s; '
+            'border-radius: 12px; padding: 4px;">%s</div>') % (WHITE, CR200, ''.join(out))
+
 # ---------- 1. Login ----------
 write('Login.dc.html', screen(
   '<div style="flex: 1; padding: 56px 24px 24px; display: flex; flex-direction: column; gap: 28px;">',
@@ -1462,47 +1514,44 @@ write('CostSheet.dc.html',
       btn('บันทึก', 'primary'))),
   h=1400)
 
-# ---------- C. สรุปรายเดือน ----------
+# ---------- C. รายเดือน — ดูทีละเดือน ----------
+# เดิมไล่ทุกเดือนต่อกันเป็นพรืดในหน้าเดียว ยิ่งใช้ไปนานยิ่งยาวและอ่านไม่ออก
+# ว่าเดือนนี้จ่ายไปเท่าไหร่ ตอนนี้เลือกดูทีละเดือน ตัวเลขใหญ่คือของเดือนนั้นเท่านั้น
+MONTHS = [('เม.ย.', 2800), ('พ.ค.', 2000), ('มิ.ย.', 3600), ('ก.ค.', 2000),
+          ('ส.ค.', 3500), ('ก.ย.', 0), ('ต.ค.', 2000)]
+
 write('CostMonthly.dc.html',
-  '<div style="width: 390px; min-height: 1120px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
-    sheet_head('ค่าใช้จ่ายนัดหมาย', 'รายเดือน · ทุกกลุ่ม') +
+  '<div style="width: 390px; min-height: 1000px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
+    sheet_head('ค่าใช้จ่ายนัดหมาย', 'รายเดือน') +
     body(
-      card(
-        col(txt('รวมทั้งหมด', 13, IN6), money(12400, 32, IN9, 600), gap=2),
-        row(summary_stat('เฉลี่ยต่อเดือน', money(3100, 17, IN9, 600), 'จาก 4 เดือน'),
-            '<div style="width: 1px; align-self: stretch; background: %s;"></div>' % CR200,
-            summary_stat('ประมาณการจนคลอด', money(21000, 17, PE7, 600), 'อีก ~6 นัด'),
-            gap=14),
-        ('<div style="background: %s; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;">'
-         '%s<span style="font-size: 12px; color: %s; line-height: 1.5;">ประมาณการนับเฉพาะกลุ่มฝากครรภ์ '
-         'จากค่าเฉลี่ยต่อนัด x จำนวนนัดที่เหลือ เป็นตัวเลขคร่าวๆ ไว้วางแผน ไม่ใช่ยอดจริง</span></div>'
-         ) % (CR100, ic('trend', 16, PE7, 1.9), IN6),
-        gap=14),
       group_filter(0),
       segmented(['รายนัด', 'รายเดือน', 'รายกลุ่ม'], 1),
-      month_group('เมษายน 2569', 2800, [
-        mini_row('20 เม.ย.', 'ฝากครรภ์ครั้งแรก', 2800)]),
-      month_group('พฤษภาคม 2569', 2000, [
-        mini_row('18 พ.ค.', 'ตรวจครรภ์', 1200),
-        mini_row('30 พ.ค.', 'ตรวจเลือด', 800)]),
-      month_group('มิถุนายน 2569', 3600, [
-        mini_row('15 มิ.ย.', 'อัลตราซาวด์', 2400),
-        mini_row('29 มิ.ย.', 'ตรวจครรภ์', 1200)]),
-      month_group('กรกฎาคม 2569', 2000, [
-        mini_row('13 ก.ค.', 'ตรวจครรภ์', 1200),
-        mini_row('27 ก.ค.', 'ตรวจปัสสาวะ', 800)]),
-      month_group('สิงหาคม 2569', 3500, [
-        mini_row('5 ส.ค.', 'ขูดหินปูน', 1500, 'dent'),
-        mini_row('12 ส.ค.', 'ตรวจครรภ์ + อัลตราซาวด์', 2000)]),
-      # เดือนที่ยังไม่ได้ระบุเลย ต้องไม่โชว์ยอดรวมเป็นตัวเลข ไม่งั้นอ่านว่าจ่ายไปแล้วเท่านั้น
-      col(row(txt('กันยายน 2569', 14, IN6), txt('ยังไม่ระบุ', 13, WARN), justify='space-between'),
-          col(mini_row('2 ก.ย.', 'ฉีดวัคซีนบาดทะยัก', None),
-              mini_row('16 ก.ย.', 'ตรวจครรภ์ตามนัด', None),
-              mini_row('30 ก.ย.', 'ตรวจครรภ์ตามนัด', None), gap=8), gap=8),
-      month_group('ตุลาคม 2569', 2000, [
-        mini_row('3 ต.ค.', 'อุดฟัน', 2000, 'dent')]),
-      gap=16)),
-  h=1320)
+      month_nav('สิงหาคม 2569', 3500, delta=1500,
+                groups=[('ฝากครรภ์', 'preg', 2000), ('ทันตกรรม', 'dent', 1500)]),
+      month_strip(MONTHS, sel=4),
+      section_head('รายการในเดือนนี้'),
+      cost_row_mobile('ส.ค.', '5', 'ขูดหินปูน', 'คลินิกทันตกรรม', 1500, 'no',
+                      grp=('ทันตกรรม', 'dent')),
+      cost_row_mobile('ส.ค.', '12', 'ตรวจครรภ์ + อัลตราซาวด์', 'รพ. ตัวอย่าง', 2000, 'none'),
+      gap=14)),
+  h=1000)
+
+# ---------- C2. รายเดือน — เดือนที่ยังไม่ได้กรอก ----------
+# เดือนที่มีนัดแต่ยังไม่กรอกสักนัด ต้องไม่โชว์ ฿0 เพราะอ่านได้ว่าเดือนนั้นไม่เสียเงิน
+write('CostMonthEmpty.dc.html',
+  '<div style="width: 390px; min-height: 1000px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
+    sheet_head('ค่าใช้จ่ายนัดหมาย', 'รายเดือน') +
+    body(
+      group_filter(0),
+      segmented(['รายนัด', 'รายเดือน', 'รายกลุ่ม'], 1),
+      month_nav('กันยายน 2569', 0, empty=True),
+      month_strip(MONTHS, sel=5),
+      section_head('รายการในเดือนนี้'),
+      cost_row_mobile('ก.ย.', '2', 'ฉีดวัคซีนบาดทะยัก', 'คลินิกใกล้บ้าน', None, 'none'),
+      cost_row_mobile('ก.ย.', '16', 'ตรวจครรภ์ตามนัด', 'รพ. ตัวอย่าง', None, 'none', past=False),
+      cost_row_mobile('ก.ย.', '30', 'ตรวจครรภ์ตามนัด', 'รพ. ตัวอย่าง', None, 'none', past=False),
+      gap=14)),
+  h=1000)
 
 # ---------- D. เดสก์ท็อป — ตารางจริง ----------
 def th(t, align='left', w=None):
@@ -1622,63 +1671,60 @@ write('CostEmpty.dc.html',
   h=820)
 
 
-COST_DECISIONS = """ตัดสินใจแล้ว
+COST_DECISIONS = """ตัดสินใจครบแล้ว พร้อมเขียนโค้ด
 
+  ค่าใช้จ่ายผูกกับนัดหมาย — คอลัมน์ cost_satang ใน appointments
   นัดหมายมีกลุ่มการรักษา แยกยอดรายกลุ่มได้
   นัดหมายอนาคตกรอกค่าใช้จ่ายได้ แต่แยกกลุ่ม ยังไม่ถึงนัด
   ไม่ทำส่งออก CSV
+  แท็บรายเดือนดูทีละเดือน ไม่ไล่ทั้งปีในหน้าเดียว
 
 
-ที่เหลือให้ตัดสินก่อนเขียนโค้ด
+สิ่งที่ตามมาจากการเลือก ผูกกับนัด (ไม่ใช่ปัญหา แต่ควรรู้ไว้)
 
-1. กลุ่มการรักษาเก็บยังไง
-
-   แนะนำ: ตาราง care_groups (id, family_id, name, color, archived)
-   แล้ว appointments.group_id เป็น null ได้
-   เก็บเป็น text ตรงๆ ในนัดหมายจะเปลี่ยนชื่อกลุ่มทีหลังไม่ได้
-   ต้องไล่แก้ทุกแถว และสะกดต่างนิดเดียวก็กลายเป็นคนละกลุ่ม
-
-   ตอน migrate สร้างกลุ่ม ฝากครรภ์ ให้อัตโนมัติ 1 กลุ่ม
-   นัดหมายเดิมทั้งหมดเข้ากลุ่มนี้ ผู้ใช้เดิมจึงไม่เห็นอะไรเปลี่ยน
-   นัดที่ไม่เลือกกลุ่ม (group_id = null) แสดงเป็น ทั่วไป ไม่ต้องบังคับเลือก
-
-2. ค่าใช้จ่ายเก็บเป็นคอลัมน์ใน appointments หรือแยกตาราง expenses
-
-   ยังไม่ได้ตอบข้อนี้ ตอบก่อนถึงจะเริ่มได้
-   คอลัมน์ cost ง่ายกว่า แต่ผูกไว้ว่า 1 นัด = 1 ยอด
-   แยกตาราง expenses ที่มี appointment_id เป็น null ได้ ต้นทุนตอนนี้เท่ากัน
-   แต่รองรับสองอย่างที่จะตามมาโดยไม่ต้อง migrate ซ้ำ
-     - แยกรายการในนัดเดียว (ค่าตรวจ 500 + ค่ายา 800 + อัลตราซาวด์ 1,200)
-       ใบเสร็จโรงพยาบาลไทยแยกบรรทัดอยู่แล้ว
-     - ค่าใช้จ่ายที่ไม่ผูกกับนัด (วิตามิน ของเตรียมคลอด)
-   แนะนำ: แยกตาราง UI รอบนี้ยังเป็นช่องเดียวต่อนัดตามที่สั่ง
-
-3. เก็บเงินเป็นจำนวนเต็มสตางค์ ห้ามใช้ทศนิยม
-
-   REAL/float ทำให้ยอดรวมเพี้ยนแบบไล่ไม่เจอ เก็บ 120000 = 1,200 บาท
-   แล้วหารตอนแสดงผล D1 เป็น SQLite ไม่มี DECIMAL ให้ใช้
-   ข้อนี้ไม่ใช่ความชอบ ถ้าไม่ทำแบบนี้ยอดรวมจะผิดในบางเคสแน่นอน
+  1 นัด = 1 ยอด แยกบรรทัดค่าตรวจ/ค่ายา/อัลตราซาวด์ ในนัดเดียวไม่ได้
+  ถ้าวันหลังอยากแยก ต้อง migrate ไปตาราง expenses แล้วย้ายข้อมูลเดิม
+  ระหว่างนี้ใครอยากแยกก็เขียนลงช่องหมายเหตุแทนได้
+  ค่าใช้จ่ายที่ไม่ผูกกับนัด (วิตามิน ของเตรียมคลอด) ยังบันทึกไม่ได้ ตามที่ตกลง
 
 
-ที่คิดเพิ่มให้ นอกเหนือจากที่สั่ง
+โครงข้อมูลที่จะเขียน
 
-  สถานะการเบิก (ยังไม่เบิก / เบิกแล้ว / เบิกไม่ได้)
-    ประกันสังคมกับประกันบริษัทเบิกค่าฝากครรภ์ได้ คนไทยเก็บใบเสร็จไว้เบิกอยู่แล้ว
-    ค่าทำฟันมักเบิกไม่ได้ จึงต้องแยกจากยอดที่เบิกได้
+  appointments
+    + group_id  TEXT NULL  -> care_groups.id  (null = ทั่วไป)
+    + cost_satang INTEGER NULL   null = ยังไม่ได้ระบุ / 0 = ไปแล้วไม่เสียเงิน
+      สองอย่างนี้คนละความหมาย UI แยกให้เห็นชัดแล้ว
+    + claim_status TEXT NOT NULL DEFAULT 'none'   none | done | no
+    + cost_note TEXT NULL
 
-  ประมาณการจนถึงวันคลอด
-    นับเฉพาะกลุ่มฝากครรภ์ ไม่รวมเรื่องอื่น ไม่งั้นตัวเลขไม่มีความหมาย
-    เขียนกำกับไว้ว่าเป็นตัวเลขคร่าวๆ
+  care_groups (id, family_id, name, color, archived, created_at)
+    migration สร้างกลุ่ม ฝากครรภ์ ให้ทุกครอบครัวที่มีอยู่ 1 กลุ่ม
+    แล้วอัปเดตนัดหมายเดิมทั้งหมดเข้ากลุ่มนั้น ผู้ใช้เดิมจึงไม่เห็นอะไรเปลี่ยน
 
-  หมวดค่าใช้จ่ายย่อย (ค่าตรวจ / ค่ายา / อัลตราซาวด์)
-    ยังไม่ทำรอบนี้ ทำให้ตารางแน่นเกินบนมือถือ และซ้อนกับกลุ่มการรักษาจนสับสน
-    ถ้าทำข้อ 2 แบบแยกตาราง ค่อยเพิ่มทีหลังได้โดยไม่ต้องรื้อ
+  เก็บเงินเป็นจำนวนเต็มสตางค์ ห้ามใช้ REAL/float
+    120000 = 1,200 บาท แล้วหารตอนแสดงผล
+    D1 เป็น SQLite ไม่มี DECIMAL ให้ใช้ ถ้าใช้ float ยอดรวมจะผิดในบางเคสแน่นอน
 
-  สิทธิ์: editor ขึ้นไปแก้ได้ viewer เห็นเป็นข้อความธรรมดาไม่มีช่องกรอก
-    ใช้ชุดเดียวกับนัดหมาย ไม่ต้องมีกติกาใหม่
 
-  งานที่จะตามมาแน่หลังมีกลุ่ม
-    หน้ารายการนัดหมายควรกรองตามกลุ่มได้ด้วย ยังไม่ได้ออกแบบรอบนี้"""
+กติกาที่ UI ต้องรักษาไว้
+
+  ยอดรวมต้องบอกเสมอว่ายังไม่ได้ระบุกี่นัด ยอดที่เงียบๆ ไม่นับนัดที่ยังไม่กรอก
+  คือตัวเลขหลอก เอาไปวางแผนเงินไม่ได้
+
+  ช่องว่างเขียนว่า ยังไม่ระบุ ไม่ใช่ ฿0 · เดือนที่ยังไม่กรอกสักนัดก็เช่นกัน
+
+  ประมาณการจนคลอดนับเฉพาะกลุ่มฝากครรภ์ ไม่รวมเรื่องอื่น
+  ไม่งั้นกลายเป็นเอาค่าทำฟันไปคูณจำนวนนัดฝากครรภ์ที่เหลือ
+
+  สิทธิ์ใช้ชุดเดียวกับนัดหมาย editor ขึ้นไปแก้ได้
+  viewer เห็นเป็นข้อความธรรมดา ไม่มีช่องกรอก ไม่มีปุ่มบันทึก
+
+
+ยังไม่ได้ออกแบบ ไว้คุยรอบหน้า
+
+  หน้ารายการนัดหมายกรองตามกลุ่ม
+  หน้าจัดการกลุ่ม (เปลี่ยนชื่อ เปลี่ยนสี ซ่อนกลุ่มที่เลิกใช้)"""
+
 
 
 # ---------- canvas.json ----------
@@ -1696,8 +1742,8 @@ GROUPS = [
   ['Profile.dc.html','ProfileEdit.dc.html','Family.dc.html','FamilyViewer.dc.html','FamilyInvite.dc.html'],
   "โปรไฟล์ = ทางเข้าครอบครัว\nbottom nav สลับ ครอบครัว ออก เอา อัลบั้ม เข้ามาแทน\nอัปโหลดรูปโปรไฟล์ย้ายมาอยู่ Phase 1 แล้ว · อีเมลแก้ไม่ได้เพราะเป็นชื่อผู้ใช้\nเมนู ⋮ และปุ่มเชิญยังเห็นเฉพาะ owner"),
  ('cost', 'ค่าใช้จ่ายนัดหมาย — เสนอใหม่',
-  ['CostEntry.dc.html','CostSheet.dc.html','CostMonthly.dc.html','CostGroups.dc.html',
-   'CostDesktop.dc.html','CostEmpty.dc.html'],
+  ['CostEntry.dc.html','CostSheet.dc.html','CostMonthly.dc.html','CostMonthEmpty.dc.html',
+   'CostGroups.dc.html','CostDesktop.dc.html','CostEmpty.dc.html'],
   """ค่าใช้จ่ายนัดหมาย — ยังไม่ได้ลงมือ รอ approve (แก้รอบ 2)
 นัดหมายมีกลุ่มการรักษาได้ เช่น ฝากครรภ์ ทันตกรรม โรคประจำตัว ยอดจึงแยกดูรายกลุ่มได้
 ไม่งั้นค่าทำฟันจะไปปนกับค่าฝากครรภ์แล้วตัวเลขไม่มีความหมาย
@@ -1710,7 +1756,7 @@ GROUPS = [
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
 ]
 heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html':1120,
-           'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,
+           'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,'CostMonthly.dc.html':1000,'CostMonthEmpty.dc.html':1000,
            'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
            'AppointmentForm.dc.html':1230,'Family.dc.html':940,'FamilyInvite.dc.html':700,
            'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
@@ -1725,7 +1771,8 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'ProfileEdit.dc.html':'แก้ไขโปรไฟล์ + อัปโหลดรูป','Family.dc.html':'ครอบครัว · owner',
           'FamilyViewer.dc.html':'ครอบครัว · viewer','FamilyInvite.dc.html':'เชิญสมาชิก',
           'CostEntry.dc.html':'นัดหมาย + ทางเข้าค่าใช้จ่าย','CostSheet.dc.html':'Popup · ระบุรายนัด',
-          'CostMonthly.dc.html':'Popup · รายเดือน','CostGroups.dc.html':'Popup · รายกลุ่ม',
+          'CostMonthly.dc.html':'Popup · รายเดือน','CostMonthEmpty.dc.html':'รายเดือน · ยังไม่กรอก',
+          'CostGroups.dc.html':'Popup · รายกลุ่ม',
           'CostDesktop.dc.html':'เดสก์ท็อป · ตาราง',
           'CostEmpty.dc.html':'ว่าง + สิทธิ์ viewer',
           'Album.dc.html':'อัลบั้ม · Phase 2','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
