@@ -3,6 +3,8 @@ import { Plus, Eye } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
+import { WeeklyDevelopmentCard, WeeklySizeCard } from "@/components/dashboard/weekly";
+import { weeklyContent } from "@/data/weekly-content";
 import { getDashboard, requireFamilyContext } from "@/lib/queries";
 import { can } from "@/lib/authz";
 
@@ -28,6 +30,8 @@ export default async function DashboardPage() {
   const { now } = data;
 
   const canWrite = can.writeRecords(role);
+  // null เมื่ออายุครรภ์ยังไม่ถึง 4 สัปดาห์ หรือเลย 40 ไปแล้ว — การ์ดจะไม่ขึ้น
+  const weekly = weeklyContent(data.ga?.weeks);
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,9 +54,12 @@ export default async function DashboardPage() {
           ) : (
             <SetupPrompt canEdit={can.editPregnancy(role)} />
           )}
+
+          {weekly && <WeeklyDevelopmentCard content={weekly} />}
         </div>
 
         <div className="flex flex-col gap-4">
+          {weekly && <WeeklySizeCard content={weekly} />}
           <NextAppointmentCard appt={data.nextAppointment} now={now} />
           <RecentLogsCard logs={data.recentLogs} />
         </div>

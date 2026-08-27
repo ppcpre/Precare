@@ -312,7 +312,7 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 >
 > E2E 4 เทสต์ × 2 ขนาดจอ ใช้เวลา ~45 วินาที รันกับ worker ที่ build จริง
 > พิสูจน์แล้วว่าจับบั๊กอัปโหลดรูปทั้งสองตัวได้ ด้วยการใส่บั๊กกลับเข้าไปแล้วดูให้แดง
-| **T6.6** | Go-live checklist | ตามหัวข้อ 5.5 |
+| 🔶 **T6.6** | Go-live checklist | `npm run go-live` ตรวจอัตโนมัติแล้ว · เหลือข้อที่ต้องกดใน dashboard/Google Console |
 
 ---
 
@@ -422,16 +422,31 @@ merge เข้า main  (deploy.yml)
 
 ### 5.5 Go-live Checklist (T6.6)
 
-- [ ] `npm run db:migrate:remote` (production) รันครบทุกไฟล์ · ผ่านบน dev มาก่อนแล้ว
-- [ ] Secrets ครบทั้ง 5 ตัวใน production (และใน `--env dev` ครบเช่นกัน)
-- [ ] Google OAuth redirect URI มี production URL แล้ว
-- [ ] bundle < 3 MiB (gzip) — ถ้าเกินตัดสินใจเรื่อง Workers Paid
-- [ ] Authorization test ผ่านทั้งชุด (T3.8) — **ข้อนี้ห้ามข้าม**
-- [ ] E2E ผ่านบน production URL จริง
-- [ ] ทดสอบบนมือถือจริงอย่างน้อย 2 เครื่อง
-- [ ] `.dev.vars` และ secret ทั้งหมดไม่หลุดขึ้น git
-- [ ] เปิดใช้ Cloudflare Web Analytics (ฟรี)
-- [ ] ตั้ง billing alert ไว้กันเซอร์ไพรส์
+**รันด้วย `npm run go-live`** — เขียนเป็นสคริปต์แทน checklist ที่ไล่ติ๊กมือ
+เพราะสิ่งที่ทำให้ production ใช้ไม่ได้จริงคือ worker ถูก deploy ขึ้นไปแล้ว
+แต่ **ไม่มี secret และ D1 ยังไม่ได้ migrate เลยสักไฟล์** ซึ่งอยู่ใน checklist
+อยู่แล้วแต่ไม่มีใครไปเปิดดู หน้าเว็บตอบ 200 ได้เพราะ `/login` แทบไม่แตะ DB
+
+| ข้อ | ตรวจโดย | สถานะ (27 ส.ค. 69) |
+|---|---|---|
+| secret ของ worker ครบ 2 ตัว | สคริปต์ | ❌ production ยังว่างเปล่า |
+| migration ของ `precare-db` ครบ | สคริปต์ | ❌ ค้าง 3 ไฟล์ (workflow รันให้เองตอน merge) |
+| bundle < 3 MiB gzip | สคริปต์ | ✅ 2,055 KiB (67%) |
+| `.dev.vars` ไม่หลุดขึ้น git | สคริปต์ | ✅ |
+| `BETTER_AUTH_URL` ตรงกับที่ deploy | สคริปต์ | ✅ |
+| lint + authz check + 82 unit test | CI | ✅ |
+| E2E 22 เทสต์ | CI (gate ก่อน deploy ทั้ง 3 workflow) | ✅ |
+| Google OAuth redirect URI + Publishing status | **คน** | 🔲 |
+| Cloudflare Web Analytics | **คน** | 🔲 |
+| Billing alert | **คน** | 🔲 |
+| ทดสอบมือถือจริง (T6.4) | **คน** | 🔲 |
+
+สองข้อแรกต้องรันเองเพราะเป็นค่าลับ:
+
+```bash
+npx wrangler secret put BETTER_AUTH_SECRET     # สุ่มด้วย openssl rand -base64 32
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+```
 
 ---
 

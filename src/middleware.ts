@@ -16,7 +16,9 @@ import { getSessionCookie } from "better-auth/cookies";
  * ⚠️ ห้ามใช้ตรงนี้แทน authz จริง — การเช็คสิทธิ์ที่เชื่อถือได้อยู่ที่
  *    requireRole() ใน RSC และ Server Action ซึ่งคุยกับ D1 จริงเสมอ
  */
-const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth"];
+// /api/asset เป็นภาพประกอบของระบบล้วน ไม่มีข้อมูลผู้ใช้ ปล่อยให้ CDN cache ได้
+// (ของผู้ใช้อยู่ที่ /api/media ซึ่งไม่อยู่ในลิสต์นี้และเช็คสิทธิ์เองในตัว route)
+const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth", "/api/asset"];
 
 /**
  * T6.5 — CSP แบบมี nonce

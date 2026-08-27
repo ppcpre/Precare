@@ -19,7 +19,8 @@
     "db:seed:dev": "wrangler d1 execute precare-dev-db --remote --env dev --file=scripts/seed-dev.sql",
     "test": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "go-live": "node scripts/go-live-check.mjs"
   },
   "dependencies": {
     "better-auth": "^1.7.1",
