@@ -81,6 +81,9 @@ ICONS = {
  'download':'<path d="M12 4v11M7.6 11.2 12 15.6l4.4-4.4"/><path d="M4.5 19.4h15"/>',
  'sparkle':'<path d="M12 3.6 13.7 9l5.4 1.7-5.4 1.7L12 17.8l-1.7-5.4L4.9 10.7 10.3 9Z"/>',
  'google':'GOOGLE',
+  'wallet':'<path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H18a2 2 0 0 1 2 2v1"/><path d="M3 8.5V17a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M21 10v5h-4a2.5 2.5 0 0 1 0-5h4"/>',
+  'receipt':'<path d="M5 3v18l2.5-1.6L10 21l2-1.6L14 21l2.5-1.6L19 21V3H5Z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/>',
+  'trend':'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'
 }
 
 def ic(name, size=20, color=IN6, sw=1.75):
@@ -1246,6 +1249,303 @@ write('FamilyViewer.dc.html', screen(
   bottomnav(4),
 ), h=844)
 
+
+# ============================================================
+#  ค่าใช้จ่ายนัดหมาย — ออกแบบใหม่ (รอ approve ก่อนลงมือ)
+# ============================================================
+
+def money(n, size=16, color=None, weight=400):
+    """แสดงเงินแบบไทย — ไม่โชว์ทศนิยมถ้าเป็นจำนวนเต็ม"""
+    txt_ = '฿' + format(n, ',')
+    return txt(txt_, size, color or IN9, weight, 'font-variant-numeric: tabular-nums;')
+
+def money_input(value=None, w=110, state='default'):
+    """ช่องกรอกเงินในแถว — ว่างไว้ = ยังไม่ได้ระบุ ไม่ใช่ศูนย์"""
+    border = CR200 if state == 'default' else (BR5 if state == 'focus' else CR200)
+    bw = '1.5px' if state == 'focus' else '1px'
+    shown = ('฿' + format(value, ',')) if value is not None else 'ยังไม่ระบุ'
+    col_ = IN9 if value is not None else IN4
+    return ('<div style="width: %dpx; height: 40px; background: %s; border: %s solid %s; border-radius: 8px; '
+            'padding: 0 10px; display: flex; align-items: center; justify-content: flex-end; box-sizing: border-box;">'
+            '<span style="font-size: 15px; color: %s; font-variant-numeric: tabular-nums;">%s</span></div>'
+            ) % (w, CR50, bw, border, col_, shown)
+
+CLAIM = {'none': ('ยังไม่เบิก', CR200, IN6), 'done': ('เบิกแล้ว', '#E5EBE2', '#5F7358'),
+         'no': ('เบิกไม่ได้', CR100, IN4)}
+
+def claim_pill(kind='none'):
+    t, bg, fg = CLAIM[kind]
+    return ('<span style="background: %s; color: %s; border-radius: 9999px; padding: 5px 10px; '
+            'font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">%s %s</span>'
+            ) % (bg, fg, t, ic('chev', 12, fg, 2))
+
+def cost_entry_strip(total=12400, missing=3):
+    """ทางเข้าฟีเจอร์บนหน้านัดหมาย — ตัวเลขเป็นทั้งข้อมูลและปุ่มในตัวเดียว"""
+    right = col(
+        row(money(total, 22, IN9, 600), ic('chev', 18, IN4), gap=6),
+        (txt('%d นัดยังไม่ได้ระบุ' % missing, 12, WARN) if missing else txt('ระบุครบแล้ว', 12, OK)),
+        gap=2, extra='align-items: flex-end;')
+    return card(
+        row(row(ic('wallet', 20, PE7), txt('ค่าใช้จ่ายทั้งหมด', 14, IN6), gap=8),
+            right, justify='space-between'),
+        pad=14, bg=PE1, border=PE3)
+
+def summary_stat(label_, value_html, sub=None, flex=True):
+    return col(txt(label_, 12, IN6), value_html,
+               (txt(sub, 11, IN4) if sub else ''),
+               gap=3, extra=('flex: 1;' if flex else ''))
+
+def cost_summary_card(total=12400, avg=1550, counted=8, missing=3):
+    warn_row = ''
+    if missing:
+        # ยอดรวมที่เงียบๆ ไม่นับนัดที่ยังไม่กรอก = ตัวเลขหลอก ต้องบอกให้เห็นชัด
+        warn_row = ('<div style="background: %s; border-radius: 8px; padding: 10px 12px; display: flex; '
+                    'align-items: center; gap: 8px;">%s<span style="font-size: 13px; color: %s;">'
+                    'ยังไม่ได้ระบุอีก <b>%d นัด</b> ยอดรวมจึงยังไม่ครบ</span></div>'
+                    ) % (CR100, ic('alert', 16, WARN, 1.9), IN6, missing)
+    return card(
+        col(txt('รวมทั้งหมด', 13, IN6), money(total, 32, IN9, 600), gap=2),
+        row(summary_stat('เฉลี่ยต่อนัด', money(avg, 17, IN9, 600), 'จาก %d นัดที่ระบุแล้ว' % counted),
+            '<div style="width: 1px; align-self: stretch; background: %s;"></div>' % CR200,
+            summary_stat('เบิกได้', money(6400, 17, IN9, 600), 'เบิกแล้ว ฿3,200'),
+            gap=14),
+        warn_row, gap=14)
+
+def cost_row_mobile(mon, day, title, place, value=None, claim='none', past=True):
+    return card(
+        row(datebox(mon, day, past=past),
+            col(txt(title, 15, IN9, 500), txt(place, 12, IN4), gap=3, extra='flex: 1; min-width: 0;'),
+            gap=10),
+        row(money_input(value, 118), claim_pill(claim), justify='space-between'),
+        pad=12, gap=10)
+
+def month_group(name, subtotal, rows_):
+    return col(
+        row(txt(name, 14, IN6), money(subtotal, 15, IN9, 600), justify='space-between'),
+        col(*rows_, gap=8), gap=8)
+
+def mini_row(day, title, value=None):
+    v = money(value, 15, IN9, 500) if value is not None else txt('ยังไม่ระบุ', 13, WARN)
+    return row(txt(day, 13, IN4, extra='width: 52px; flex: none;'),
+               txt(title, 14, IN9, extra='flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'),
+               v, justify='space-between', gap=8,
+               extra='padding: 9px 12px; background: %s; border: 1px solid %s; border-radius: 10px;' % (WHITE, CR200))
+
+def sheet_head(title, sub=None):
+    return ('<div style="height: 56px; flex: none; padding: 0 8px 0 4px; background: %s; border-bottom: 1px solid %s; '
+            'display: flex; align-items: center; gap: 4px;">'
+            '<div style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">%s</div>'
+            '<div style="display: flex; flex-direction: column;"><span style="font-size: 16px; font-weight: 600; color: %s;">%s</span>'
+            '%s</div></div>'
+            ) % (WHITE, CR200, ic('x', 22, IN6), IN9, title,
+                 ('<span style="font-size: 12px; color: %s;">%s</span>' % (IN4, sub)) if sub else '')
+
+def sticky_footer(*parts):
+    return ('<div style="margin-top: auto; flex: none; background: %s; border-top: 1px solid %s; '
+            'padding: 12px 16px; display: flex; flex-direction: column; gap: 10px;">%s</div>'
+            ) % (WHITE, CR200, ''.join(parts))
+
+# ---------- A. หน้านัดหมาย + ทางเข้าค่าใช้จ่าย ----------
+write('CostEntry.dc.html', screen(
+  dash_topbar(),
+  body(
+    row(txt('นัดหมายแพทย์', 24, IN9, 600), justify='space-between'),
+    cost_entry_strip(12400, 3),
+    toggle2('กำลังจะถึง', 'ผ่านมาแล้ว', 0),
+    section_head('สัปดาห์นี้'),
+    appt_card('ก.ย.', '1', '09:30', 'ตรวจครรภ์ตามนัด', 'พญ. สมหญิง', 'รพ. ตัวอย่าง',
+              'เตือนก่อน 1 ชั่วโมง', 'อีก 6 วัน', 'soft'),
+    gap=14),
+  fab(), bottomnav(2)), h=900)
+
+# ---------- B. Popup มือถือ — ระบุค่าใช้จ่ายรายนัด ----------
+write('CostSheet.dc.html',
+  '<div style="width: 390px; min-height: 1180px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
+    sheet_head('ค่าใช้จ่ายนัดหมาย', '8 จาก 11 นัดระบุแล้ว') +
+    body(
+      cost_summary_card(12400, 1550, 8, 3),
+      toggle2('รายนัด', 'สรุปรายเดือน', 0),
+      section_head('ผ่านมาแล้ว'),
+      cost_row_mobile('ก.ค.', '13', 'ตรวจครรภ์', 'รพ. ตัวอย่าง', 1200, 'done'),
+      cost_row_mobile('ก.ค.', '27', 'ตรวจปัสสาวะ', 'รพ. ตัวอย่าง', 800, 'none'),
+      cost_row_mobile('ส.ค.', '12', 'ตรวจครรภ์ + อัลตราซาวด์', 'รพ. ตัวอย่าง', 2000, 'none'),
+      cost_row_mobile('ก.ย.', '2', 'ฉีดวัคซีนบาดทะยัก', 'คลินิกใกล้บ้าน', None, 'none'),
+      section_head('ยังไม่ถึงนัด'),
+      cost_row_mobile('ก.ย.', '16', 'ตรวจครรภ์ตามนัด', 'รพ. ตัวอย่าง', None, 'none', past=False),
+      gap=14) +
+    sticky_footer(
+      row(txt('รวมที่ระบุแล้ว', 14, IN6), money(12400, 20, IN9, 600), justify='space-between'),
+      btn('บันทึก', 'primary'))),
+  h=1180)
+
+# ---------- C. สรุปรายเดือน ----------
+write('CostMonthly.dc.html',
+  '<div style="width: 390px; min-height: 1120px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
+    sheet_head('ค่าใช้จ่ายนัดหมาย', 'สรุปรายเดือน') +
+    body(
+      card(
+        col(txt('รวมทั้งหมด', 13, IN6), money(12400, 32, IN9, 600), gap=2),
+        row(summary_stat('เฉลี่ยต่อเดือน', money(3100, 17, IN9, 600), 'จาก 4 เดือน'),
+            '<div style="width: 1px; align-self: stretch; background: %s;"></div>' % CR200,
+            summary_stat('ประมาณการจนคลอด', money(21000, 17, PE7, 600), 'อีก ~6 นัด'),
+            gap=14),
+        ('<div style="background: %s; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px;">'
+         '%s<span style="font-size: 12px; color: %s; line-height: 1.5;">ประมาณการคำนวณจากค่าเฉลี่ยต่อนัด '
+         'x จำนวนนัดที่เหลือ เป็นตัวเลขคร่าวๆ ไว้วางแผน ไม่ใช่ยอดจริง</span></div>'
+         ) % (CR100, ic('trend', 16, PE7, 1.9), IN6),
+        gap=14),
+      toggle2('รายนัด', 'สรุปรายเดือน', 1),
+      month_group('เมษายน 2569', 2800, [
+        mini_row('20 เม.ย.', 'ฝากครรภ์ครั้งแรก', 2800)]),
+      month_group('พฤษภาคม 2569', 2000, [
+        mini_row('18 พ.ค.', 'ตรวจครรภ์', 1200),
+        mini_row('30 พ.ค.', 'ตรวจเลือด', 800)]),
+      month_group('มิถุนายน 2569', 3600, [
+        mini_row('15 มิ.ย.', 'อัลตราซาวด์', 2400),
+        mini_row('29 มิ.ย.', 'ตรวจครรภ์', 1200)]),
+      month_group('กรกฎาคม 2569', 2000, [
+        mini_row('13 ก.ค.', 'ตรวจครรภ์', 1200),
+        mini_row('27 ก.ค.', 'ตรวจปัสสาวะ', 800)]),
+      month_group('สิงหาคม 2569', 2000, [
+        mini_row('12 ส.ค.', 'ตรวจครรภ์ + อัลตราซาวด์', 2000)]),
+      # เดือนที่ยังไม่ได้ระบุเลย ต้องไม่โชว์ยอดรวมเป็นตัวเลข ไม่งั้นอ่านว่าจ่ายไปแล้วเท่านั้น
+      col(row(txt('กันยายน 2569', 14, IN6), txt('ยังไม่ระบุ', 13, WARN), justify='space-between'),
+          col(mini_row('2 ก.ย.', 'ฉีดวัคซีนบาดทะยัก', None),
+              mini_row('16 ก.ย.', 'ตรวจครรภ์ตามนัด', None),
+              mini_row('30 ก.ย.', 'ตรวจครรภ์ตามนัด', None), gap=8), gap=8),
+      gap=16)),
+  h=1120)
+
+# ---------- D. เดสก์ท็อป — ตารางจริง ----------
+def th(t, align='left', w=None):
+    return ('<div style="font-size: 12px; color: %s; text-align: %s; %s">%s</div>'
+            ) % (IN6, align, ('width: %dpx; flex: none;' % w) if w else 'flex: 1; min-width: 0;', t)
+
+def td(html, align='left', w=None):
+    return ('<div style="text-align: %s; %s display: flex; align-items: center; %s">%s</div>'
+            ) % (align, ('width: %dpx; flex: none;' % w) if w else 'flex: 1; min-width: 0;',
+                 'justify-content: flex-end;' if align == 'right' else '', html)
+
+def trow(*cells, head=False):
+    bg = 'transparent' if head else WHITE
+    bd = ('border-bottom: 1px solid %s;' % CR200)
+    return ('<div style="display: flex; align-items: center; gap: 12px; padding: %s; background: %s; %s">%s</div>'
+            ) % ('8px 14px' if head else '12px 14px', bg, bd, ''.join(cells))
+
+write('CostDesktop.dc.html',
+  ('<div style="width: 1000px; min-height: 720px; background: rgba(43,36,32,0.35); padding: 40px; '
+   'box-sizing: border-box; display: flex; align-items: flex-start; justify-content: center; color: %s;">'
+   '<div style="width: 100%%; background: %s; border-radius: 16px; box-shadow: 0 8px 24px rgba(43,36,32,0.12); '
+   'overflow: hidden; display: flex; flex-direction: column;">%s</div></div>'
+  ) % (IN9, CR50,
+    ('<div style="height: 60px; flex: none; padding: 0 20px; background: %s; border-bottom: 1px solid %s; '
+     'display: flex; align-items: center; justify-content: space-between;">'
+     '<div style="display: flex; align-items: center; gap: 10px;">%s<span style="font-size: 17px; font-weight: 600;">ค่าใช้จ่ายนัดหมาย</span>'
+     '<span style="font-size: 13px; color: %s;">8 จาก 11 นัดระบุแล้ว</span></div>%s</div>'
+     ) % (WHITE, CR200, ic('wallet', 21, PE7), IN4, ic('x', 22, IN6)) +
+    ('<div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 16px;">' +
+      row(
+        card(col(txt('รวมทั้งหมด', 12, IN6), money(12400, 26, IN9, 600), gap=2), pad=14, extra='flex: 1;'),
+        card(col(txt('เฉลี่ยต่อนัด', 12, IN6), money(1550, 26, IN9, 600), gap=2), pad=14, extra='flex: 1;'),
+        card(col(txt('เบิกได้', 12, IN6), money(6400, 26, IN9, 600), gap=2), pad=14, extra='flex: 1;'),
+        card(col(txt('ยังไม่ได้ระบุ', 12, IN6), txt('3 นัด', 26, WARN, 600), gap=2), pad=14, extra='flex: 1;'),
+        gap=12) +
+      row('<div style="width: 280px; flex: none;">%s</div>' % toggle2('รายนัด', 'สรุปรายเดือน', 0),
+          '<div style="flex: 1;"></div>',
+          btn('ส่งออก CSV', 'secondary', ic('download', 17, BR7), full=False),
+          gap=10) +
+      ('<div style="background: %s; border: 1px solid %s; border-radius: 12px; overflow: hidden;">' % (WHITE, CR200)) +
+      trow(th('วันที่', w=110), th('นัดหมาย'), th('สถานที่', w=140),
+           th('จำนวนเงิน', 'right', 130), th('การเบิก', 'right', 120), head=True) +
+      trow(td(txt('13 ก.ค. 69', 14, IN6), w=110), td(txt('ตรวจครรภ์', 15)),
+           td(txt('รพ. ตัวอย่าง', 13, IN4), w=140),
+           td(money_input(1200, 118), 'right', 130), td(claim_pill('done'), 'right', 120)) +
+      trow(td(txt('12 ส.ค. 69', 14, IN6), w=110), td(txt('ตรวจครรภ์ + อัลตราซาวด์', 15)),
+           td(txt('รพ. ตัวอย่าง', 13, IN4), w=140),
+           td(money_input(2000, 118), 'right', 130), td(claim_pill('none'), 'right', 120)) +
+      trow(td(txt('2 ก.ย. 69', 14, IN6), w=110), td(txt('ฉีดวัคซีนบาดทะยัก', 15)),
+           td(txt('คลินิกใกล้บ้าน', 13, IN4), w=140),
+           td(money_input(None, 118, 'focus'), 'right', 130), td(claim_pill('none'), 'right', 120)) +
+      trow(td(txt('16 ก.ย. 69', 14, IN6), w=110),
+           td(row(txt('ตรวจครรภ์ตามนัด', 15), badge('ยังไม่ถึงนัด', 'past'), gap=8)),
+           td(txt('รพ. ตัวอย่าง', 13, IN4), w=140),
+           td(money_input(None, 118), 'right', 130), td(claim_pill('none'), 'right', 120)) +
+      '</div>' +
+      row('<div style="flex: 1;"></div>',
+          row(txt('รวมที่ระบุแล้ว', 14, IN6), money(12400, 22, IN9, 600), gap=12),
+          btn('บันทึก', 'primary', full=False), gap=16) +
+     '</div>')),
+  w=1000, h=720)
+
+# ---------- E. สถานะว่าง + viewer ----------
+write('CostEmpty.dc.html',
+  '<div style="width: 390px; min-height: 820px; background: %s; display: flex; flex-direction: column; color: %s;">%s</div>' % (CR50, IN9,
+    sheet_head('ค่าใช้จ่ายนัดหมาย') +
+    body(
+      col(('<div style="width: 88px; height: 88px; border-radius: 9999px; background: %s; display: flex; '
+           'align-items: center; justify-content: center; margin: 0 auto;">%s</div>') % (CR100, ic('receipt', 38, BR3, 1.5)),
+          txt('ยังไม่มีนัดหมายให้ระบุค่าใช้จ่าย', 17, IN9, 600, 'text-align: center;'),
+          txt('เพิ่มนัดหมายก่อน แล้วค่อยกลับมาบันทึกค่าใช้จ่ายของแต่ละครั้ง', 14, IN6,
+              extra='text-align: center; line-height: 1.6;'),
+          btn('เพิ่มนัดหมาย', 'secondary', ic('plus', 18, BR7)),
+          gap=14, extra='padding: 48px 12px 0;'),
+      '<div style="height: 28px;"></div>',
+      section_head('เมื่อเป็น viewer'),
+      card(
+        row(ic('eye', 18, IN6), txt('คุณมีสิทธิ์ดูอย่างเดียว', 14, IN6), gap=8),
+        row(datebox('ส.ค.', '12'),
+            col(txt('ตรวจครรภ์ + อัลตราซาวด์', 15, IN9, 500), txt('รพ. ตัวอย่าง', 12, IN4), gap=3,
+                extra='flex: 1; min-width: 0;'),
+            money(2400, 17, IN9, 600), gap=10),
+        txt('ตัวเลขเป็นข้อความธรรมดา ไม่ใช่ช่องกรอก และไม่มีปุ่มบันทึก', 12, IN4),
+        pad=12, gap=10),
+      gap=14)),
+  h=820)
+
+
+COST_DECISIONS = """สามเรื่องที่ต้องตัดสินใจก่อนเขียนโค้ด
+
+1. เก็บเป็นคอลัมน์ใน appointments หรือแยกตาราง expenses
+
+   คอลัมน์ cost ในตาราง appointments ง่ายกว่า แต่ผูกไว้ว่า 1 นัด = 1 ยอด
+   แยกตาราง expenses ที่มี appointment_id เป็น null ได้ ทำงานเท่ากันตอนนี้
+   แต่รองรับสองอย่างที่จะตามมาแน่โดยไม่ต้อง migrate ซ้ำ
+     - แยกรายการในนัดเดียว (ค่าตรวจ 500 + ค่ายา 800 + อัลตราซาวด์ 1,200)
+       ใบเสร็จโรงพยาบาลไทยแยกบรรทัดอยู่แล้ว
+     - ค่าใช้จ่ายที่ไม่ผูกกับนัด (วิตามิน ของเตรียมคลอด)
+   แนะนำ: แยกตาราง แต่ UI รอบนี้ยังเป็นช่องเดียวต่อนัดตามที่สั่ง
+   ต้นทุนตอนนี้เท่ากัน ต่างกันตอนจะต่อยอด
+
+2. เก็บเงินเป็นจำนวนเต็มสตางค์ ห้ามใช้ทศนิยม
+
+   REAL/float ทำให้ยอดรวมเพี้ยนแบบไล่ไม่เจอ เก็บ 120000 = 1,200 บาท
+   แล้วหารตอนแสดงผล D1 เป็น SQLite ไม่มี DECIMAL ให้ใช้
+
+3. นัดในอนาคตให้กรอกได้ไหม
+
+   ปกติจ่ายหลังไปตรวจ แต่บางที่เก็บค่าฝากครรภ์เหมาจ่ายล่วงหน้า
+   แนะนำ: กรอกได้ แต่แยกกลุ่ม ยังไม่ถึงนัด ให้เห็นชัดว่าไม่ใช่ยอดที่จ่ายไปแล้ว
+
+
+ที่คิดเพิ่มให้ นอกเหนือจากที่สั่ง
+
+  สถานะการเบิก (ยังไม่เบิก / เบิกแล้ว / เบิกไม่ได้)
+    ประกันสังคมกับประกันบริษัทเบิกค่าฝากครรภ์ได้ คนไทยเก็บใบเสร็จไว้เบิกอยู่แล้ว
+    ทำให้แอปมีประโยชน์จริงมากกว่าแค่ดูยอดรวม
+
+  ประมาณการจนถึงวันคลอด
+    เฉลี่ยต่อนัด x จำนวนนัดที่เหลือ ใช้วางแผนเงินได้ ต้องเขียนกำกับว่าเป็นตัวเลขคร่าวๆ
+
+  ส่งออก CSV
+    เอาไปแนบเรื่องเบิกได้เลย ทำเป็น route handler ไม่ใช่ Server Action
+
+  หมวดค่าใช้จ่าย (ค่าตรวจ / ค่ายา / อัลตราซาวด์ / วัคซีน)
+    ยังไม่ทำรอบนี้ ทำให้ตารางแน่นเกินบนมือถือ ถ้าทำข้อ 1 แบบแยกตาราง
+    ค่อยเพิ่มทีหลังได้โดยไม่ต้องรื้อ
+
+  สิทธิ์: editor ขึ้นไปแก้ได้ viewer เห็นเป็นข้อความธรรมดาไม่มีช่องกรอก
+    ใช้ชุดเดียวกับนัดหมาย ไม่ต้องมีกติกาใหม่"""
+
 # ---------- canvas.json ----------
 GROUPS = [
  ('auth', 'Auth + Onboarding',
@@ -1260,11 +1560,20 @@ GROUPS = [
  ('profile', 'โปรไฟล์ + ครอบครัว',
   ['Profile.dc.html','ProfileEdit.dc.html','Family.dc.html','FamilyViewer.dc.html','FamilyInvite.dc.html'],
   "โปรไฟล์ = ทางเข้าครอบครัว\nbottom nav สลับ ครอบครัว ออก เอา อัลบั้ม เข้ามาแทน\nอัปโหลดรูปโปรไฟล์ย้ายมาอยู่ Phase 1 แล้ว · อีเมลแก้ไม่ได้เพราะเป็นชื่อผู้ใช้\nเมนู ⋮ และปุ่มเชิญยังเห็นเฉพาะ owner"),
+ ('cost', 'ค่าใช้จ่ายนัดหมาย — เสนอใหม่',
+  ['CostEntry.dc.html','CostSheet.dc.html','CostMonthly.dc.html','CostDesktop.dc.html','CostEmpty.dc.html'],
+  """ค่าใช้จ่ายนัดหมาย — ยังไม่ได้ลงมือ รอ approve
+ทางเข้าเป็นแถบสรุปบนหน้านัดหมาย ตัวเลขเป็นทั้งข้อมูลและปุ่มในตัวเดียว ดีกว่าปุ่มเปล่าที่ไม่บอกอะไร
+มือถือเปิดเป็น sheet เต็มจอ (แบบเดียวกับเพิ่มรูป) เดสก์ท็อปเป็น modal ที่มีตารางจริง
+ยอดรวมต้องบอกเสมอว่ายังไม่ได้ระบุกี่นัด ไม่งั้นเป็นตัวเลขหลอก
+ประเด็นที่ต้องตัดสินใจก่อนเขียนโค้ด อยู่ในโน้ตใต้ใบสุดท้าย"""),
  ('album', 'อัลบั้ม — Phase 2',
   ['Album.dc.html','AlbumUpload.dc.html','PhotoDetail.dc.html'],
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
 ]
-heights = {'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
+heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html':1120,
+           'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,
+           'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
            'AppointmentForm.dc.html':1020,'Family.dc.html':940,'FamilyInvite.dc.html':700,
            'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
            'DashboardV2.dc.html':1080}
@@ -1277,15 +1586,26 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'AppointmentForm.dc.html':'ฟอร์มนัดหมาย','Profile.dc.html':'โปรไฟล์',
           'ProfileEdit.dc.html':'แก้ไขโปรไฟล์ + อัปโหลดรูป','Family.dc.html':'ครอบครัว · owner',
           'FamilyViewer.dc.html':'ครอบครัว · viewer','FamilyInvite.dc.html':'เชิญสมาชิก',
+          'CostEntry.dc.html':'นัดหมาย + ทางเข้าค่าใช้จ่าย','CostSheet.dc.html':'Popup · ระบุรายนัด',
+          'CostMonthly.dc.html':'Popup · สรุปรายเดือน','CostDesktop.dc.html':'เดสก์ท็อป · ตาราง',
+          'CostEmpty.dc.html':'ว่าง + สิทธิ์ viewer',
           'Album.dc.html':'อัลบั้ม · Phase 2','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
           'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
 
 arts, notes, y = [], [], 0
 for gid, gname, files, note in GROUPS:
     notes.append({"id": "note-" + gid, "x": 0, "y": y - 190, "w": 470, "page": "screens", "text": note})
-    for i, f in enumerate(files):
-        arts.append({"file": f, "x": i * 470, "y": y, "w": 390,
+    x = 0
+    for f in files:
+        w = 1000 if f == 'CostDesktop.dc.html' else 390
+        arts.append({"file": f, "x": x, "y": y, "w": w,
                      "h": heights.get(f, 844), "title": titles[f], "page": "screens"})
+        x += w + 80
+    if gid == 'cost':
+        # โน้ตตัดสินใจวางใต้แถว วางบนหัวเหมือนกลุ่มอื่นไม่ได้เพราะยาวเกิน
+        notes.append({"id": "note-cost-decide", "x": 0,
+                      "y": y + max(heights.get(f, 844) for f in files) + 40,
+                      "w": 1400, "page": "screens", "text": COST_DECISIONS})
     y += max(heights.get(f, 844) for f in files) + 420
 
 arts.append({"file": "Logo.dc.html", "x": 0, "y": 0, "w": 900, "h": 1680,
@@ -1301,7 +1621,7 @@ canvas = {
   "pages": [{"id":"logo","name":"โลโก้ Pre Care"},
             {"id":"screens","name":"หน้าจอ"},
             {"id":"components","name":"Component Library"}],
-  "launch": {"view":"canvas","page":"logo"}
+  "launch": {"view":"canvas","page":"screens"}
 }
 open(os.path.join(OUT,'canvas.json'),'w',encoding='utf-8').write(json.dumps(canvas, ensure_ascii=False, indent=2))
 print('generated %d artboards + canvas.json' % len(arts))
