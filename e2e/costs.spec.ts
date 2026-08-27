@@ -20,7 +20,8 @@ async function addAppointment(
   await page.getByLabel("หัวข้อนัด").fill(opts.title);
   if (opts.group) await page.getByRole("button", { name: opts.group }).click();
   await page.getByRole("button", { name: "บันทึกนัดหมาย" }).click();
-  await page.waitForURL(/\/appointments$/, { timeout: 30_000 });
+  // นัดย้อนหลังถูกพาไปแท็บ ผ่านมาแล้ว จึงมี query string ต่อท้าย
+  await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
 }
 
 test("กรอกค่าใช้จ่าย แยกกลุ่ม และดูสรุปได้ครบ", async ({ page }) => {
@@ -46,7 +47,7 @@ test("กรอกค่าใช้จ่าย แยกกลุ่ม แล
     await page.getByRole("button", { name: "เพิ่ม", exact: true }).click();
     await expect(page.getByRole("button", { name: "ทันตกรรม" })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "บันทึกนัดหมาย" }).click();
-    await page.waitForURL(/\/appointments$/, { timeout: 30_000 });
+    await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
   });
 
   await addAppointment(page, {
@@ -54,7 +55,7 @@ test("กรอกค่าใช้จ่าย แยกกลุ่ม แล
   });
 
   await test.step("แถบทางเข้าโชว์ว่ายังไม่ได้ระบุครบ", async () => {
-    await expect(page.getByText("3 นัดยังไม่ได้ระบุ")).toBeVisible();
+    await expect(page.getByRole("link", { name: /ยังไม่ได้ระบุ 3 นัด/ })).toBeVisible();
   });
 
   await test.step("กรอกค่าใช้จ่าย รวมทั้ง 0 บาท", async () => {
@@ -80,8 +81,8 @@ test("กรอกค่าใช้จ่าย แยกกลุ่ม แล
 
   await test.step("กลับไปหน้านัดหมาย แถบต้องบอกว่าระบุครบแล้ว", async () => {
     await page.getByRole("link", { name: "ปิด" }).click();
-    await page.waitForURL(/\/appointments$/, { timeout: 30_000 });
-    await expect(page.getByText("ระบุครบแล้ว")).toBeVisible();
+    await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
+    await expect(page.getByRole("link", { name: /^ค่าใช้จ่ายทั้งหมด ฿2,700$/ })).toBeVisible();
     await page.getByRole("link", { name: /ค่าใช้จ่ายทั้งหมด/ }).click();
     await page.waitForURL(/\/appointments\/costs/, { timeout: 30_000 });
   });
@@ -130,4 +131,38 @@ test("ยังไม่มีนัดหมาย ต้องขึ้นส�
   // แถบทางเข้าก็ต้องไม่โผล่บนหน้านัดหมายที่ยังว่าง
   await page.goto("/appointments");
   await expect(page.getByRole("link", { name: /ค่าใช้จ่ายทั้งหมด/ })).toHaveCount(0);
+});
+
+/**
+ * นัดย้อนหลัง — เดิม input มี min เป็นวันนี้ จึงเลือกวันที่ผ่านมาแล้วไม่ได้
+ * ทั้งที่คนส่วนใหญ่เพิ่งมาเริ่มใช้แอปตอนฝากครรภ์ไปหลายครั้งแล้ว
+ */
+test("บันทึกนัดย้อนหลังได้ และไม่โชว์การแจ้งเตือนที่ไม่มีวันทำงาน", async ({ page }) => {
+  await signUp(page, uniqueEmail("past"), "แม่ย้อนหลัง");
+  await completeOnboarding(page, "ครอบครัวย้อนหลัง");
+
+  await gotoApp(page, "/appointments/new");
+  await page.getByLabel("วันที่").fill(daysAgo(45));
+  await page.getByLabel("เวลา").fill("10:00");
+  await page.getByLabel("หัวข้อนัด").fill("ฝากครรภ์ครั้งแรก");
+
+  await test.step("เลือกวันย้อนหลังแล้วการ์ดแจ้งเตือนต้องหายไป", async () => {
+    await expect(page.getByText(/บันทึกไว้เก็บค่าใช้จ่ายย้อนหลังได้/)).toBeVisible();
+    await expect(page.getByRole("switch", { name: "เปิดการแจ้งเตือน" })).toHaveCount(0);
+  });
+
+  await page.getByRole("button", { name: "บันทึกนัดหมาย" }).click();
+
+  await test.step("พาไปแท็บที่นัดนั้นอยู่จริง ไม่ใช่แท็บกำลังจะถึงที่ไม่เห็นอะไร", async () => {
+    await page.waitForURL(/tab=past/, { timeout: 30_000 });
+    await expect(page.getByText("ฝากครรภ์ครั้งแรก")).toBeVisible();
+  });
+
+  await test.step("แล้วกรอกค่าใช้จ่ายย้อนหลังได้", async () => {
+    await page.getByRole("link", { name: /ค่าใช้จ่ายทั้งหมด/ }).click();
+    await page.waitForURL(/\/appointments\/costs/, { timeout: 30_000 });
+    await page.getByLabel("ค่าใช้จ่าย ฝากครรภ์ครั้งแรก").fill("2800");
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+    await expect(page.getByText("1 จาก 1 นัดระบุแล้ว")).toBeVisible({ timeout: 30_000 });
+  });
 });

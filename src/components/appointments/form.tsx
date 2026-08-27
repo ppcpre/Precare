@@ -51,8 +51,17 @@ export function AppointmentForm({
   const [minutes, setMinutes] = useState(appt?.reminderMinutesBefore ?? 60);
   const [note, setNote] = useState(appt?.note ?? "");
 
+  /**
+   * เทียบเป็นเวลาท้องถิ่นทั้งคู่ ไม่แปลงเป็น ISO/UTC
+   * apptDatetime เก็บเป็นเวลาที่โรงพยาบาลแบบไม่มี timezone อยู่แล้ว
+   * ถ้าเอาไปเทียบกับ toISOString() จะเพี้ยนไป 7 ชั่วโมงในไทย
+   */
+  const isPast = Boolean(date) && new Date(`${date}T${time || "23:59"}:00`) < new Date();
+
   const done = () => {
-    router.push("/appointments");
+    // บันทึกนัดย้อนหลังแล้วพากลับไปแท็บ "กำลังจะถึง" ผู้ใช้จะไม่เห็นสิ่งที่เพิ่งบันทึก
+    // แล้วนึกว่าหาย ต้องพาไปแท็บที่นัดนั้นอยู่จริง
+    router.push(isPast ? "/appointments?tab=past" : "/appointments");
     router.refresh();
   };
   const create = useAction(createAppointment, { onSuccess: done });
@@ -70,7 +79,7 @@ export function AppointmentForm({
       doctorName: doctor.trim() || null,
       location: location.trim() || null,
       note: note.trim() || null,
-      reminderEnabled: remind,
+      reminderEnabled: isPast ? false : remind,
       reminderMinutesBefore: minutes,
       groupId,
     };
@@ -106,7 +115,7 @@ export function AppointmentForm({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              min={appt ? undefined : new Date().toISOString().slice(0, 10)}
+              hint={isPast ? "นัดที่ผ่านมาแล้ว — บันทึกไว้เก็บค่าใช้จ่ายย้อนหลังได้" : undefined}
             />
           </div>
           <div className="flex-1">
@@ -152,6 +161,9 @@ export function AppointmentForm({
           maxLength={200}
         />
 
+        {/* นัดที่ผ่านมาแล้วไม่ต้องมีแจ้งเตือน ตั้งไว้ก็ไม่มีวันทำงาน
+            ซ่อนทั้งการ์ดดีกว่าโชว์สวิตช์ที่กดแล้วไม่เกิดอะไรขึ้น */}
+        {!isPast && (
         <div className="flex flex-col gap-3.5 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center justify-between gap-3">
             <span className="flex flex-col">
@@ -188,6 +200,7 @@ export function AppointmentForm({
             </>
           )}
         </div>
+        )}
 
         <Textarea
           label="บันทึก"

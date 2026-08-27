@@ -1398,23 +1398,21 @@ def claim_pill(kind='none'):
             'font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">%s %s</span>'
             ) % (bg, fg, t, ic('chev', 12, fg, 2))
 
-def cost_entry_strip(total=15900, missing=3):
-    """ทางเข้าฟีเจอร์บนหน้านัดหมาย — ตัวเลขเป็นทั้งข้อมูลและปุ่มในตัวเดียว"""
-    right = col(
-        row(money(total, 22, IN9, 600), ic('chev', 18, IN4), gap=6),
-        (txt('%d นัดยังไม่ได้ระบุ' % missing, 12, WARN) if missing else txt('ระบุครบแล้ว', 12, OK)),
-        gap=2, extra='align-items: flex-end;')
-    # บอกตั้งแต่ตรงนี้ว่ายอดรวมมาจากหลายเรื่อง กดเข้าไปแยกดูได้
-    breakdown = row(
-        row(group_dot('preg', 8), txt('ฝากครรภ์ ฿12,400', 11, IN6), gap=5),
-        row(group_dot('dent', 8), txt('ทันตกรรม ฿3,500', 11, IN6), gap=5),
-        gap=12, wrap=True)
-    return card(
-        row(row(ic('wallet', 20, PE7), txt('ค่าใช้จ่ายทั้งหมด', 14, IN6), gap=8),
-            right, justify='space-between'),
-        '<div style="height: 1px; background: %s;"></div>' % PE3,
-        breakdown,
-        pad=14, gap=10, bg=PE1, border=PE3)
+def cost_entry_button(total=15900, missing=3):
+    """ทางเข้าฟีเจอร์ — อยู่แถวหัวข้อคู่กับปุ่มเพิ่มนัดหมาย
+
+    เดิมออกแบบเป็นการ์ดเต็มความกว้าง แต่พอขึ้นจริงบนจอกว้างกลายเป็นแถบยาว
+    ที่มีข้อความซ้ายสุด ตัวเลขขวาสุด แล้วว่างกลางทั้งแถบ ไม่เข้ากับหน้าอื่น
+    ย่อเป็นปุ่ม ยังเห็นยอดรวมโดยไม่ต้องกด และไม่กินพื้นที่แนวตั้ง
+    """
+    dot = ('<span style="position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; '
+           'border-radius: 9999px; background: %s; border: 2px solid %s;"></span>' % (WARN, CR50)) if missing else ''
+    return ('<div style="position: relative; height: 40px; display: inline-flex; align-items: center; gap: 6px; '
+            'background: %s; border: 1px solid %s; border-radius: 12px; padding: 0 8px 0 12px;">'
+            '%s<span style="font-size: 14px; color: %s;">ค่าใช้จ่าย</span>'
+            '<span style="font-size: 15px; font-weight: 600; color: %s;">%s</span>%s%s</div>'
+            ) % (WHITE, CR200, ic('wallet', 17, PE7, 1.9), IN6, IN9,
+                 '฿' + format(total, ','), ic('chev', 16, IN4, 2), dot)
 
 def summary_stat(label_, value_html, sub=None, flex=True):
     return col(txt(label_, 12, IN6), value_html,
@@ -1479,8 +1477,7 @@ def sticky_footer(*parts):
 write('CostEntry.dc.html', screen(
   dash_topbar(),
   body(
-    row(txt('นัดหมายแพทย์', 24, IN9, 600), justify='space-between'),
-    cost_entry_strip(12400, 3),
+    row(txt('นัดหมายแพทย์', 24, IN9, 600), cost_entry_button(15900, 3), justify='space-between'),
     toggle2('กำลังจะถึง', 'ผ่านมาแล้ว', 0),
     section_head('สัปดาห์นี้'),
     appt_card('ก.ย.', '1', '09:30', 'ตรวจครรภ์ตามนัด', 'พญ. สมหญิง', 'รพ. ตัวอย่าง',

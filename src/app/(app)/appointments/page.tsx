@@ -7,7 +7,7 @@ import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
 import { daysFromNow } from "@/components/ui/badge";
 import { listAppointmentCosts, listAppointments, requireFamilyContext } from "@/lib/queries";
-import { CostEntryStrip } from "@/components/costs/entry-strip";
+import { CostEntryButton } from "@/components/costs/entry-button";
 import { can } from "@/lib/authz";
 import { cn } from "@/lib/cn";
 import type { Appointment } from "@/types";
@@ -66,8 +66,10 @@ export default async function AppointmentsPage({
 
   return (
     <div className="flex flex-col gap-4 pb-20">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-ink-900">นัดหมายแพทย์</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          <CostEntryButton items={costItems} />
         {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join
             ไม่ได้ merge class ที่ชนกัน ตัวปุ่มมี inline-flex เป็น base อยู่แล้ว
             พอเติม hidden เข้าไปทั้งคู่จะอยู่ใน class list แล้วลำดับใน CSS
@@ -80,9 +82,8 @@ export default async function AppointmentsPage({
             </ButtonLink>
           </span>
         )}
+        </div>
       </header>
-
-      <CostEntryStrip items={costItems} />
 
       <div className="flex gap-1 rounded-[10px] bg-cream-100 p-1">
         <Link href="/appointments" className={tabCls(!past)}>
