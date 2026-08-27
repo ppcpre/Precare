@@ -1,39 +1,11 @@
 import Link from "next/link";
-import { Bell, User } from "lucide-react";
+import { Bell } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
+import { Logo } from "@/components/logo";
 
-/** avatar วงกลม — ถ้ายังไม่มีรูปใช้ตัวอักษรแรกของชื่อ */
-export function Avatar({
-  name,
-  image,
-  size = 32,
-}: {
-  name: string;
-  image?: string | null;
-  size?: number;
-}) {
-  if (image) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2/Google, next/image ตั้ง unoptimized อยู่แล้วจึงไม่ได้ประโยชน์
-      <img
-        src={image}
-        alt=""
-        width={size}
-        height={size}
-        className="shrink-0 rounded-full object-cover"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-brown-300 font-semibold text-white"
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
-    >
-      {name.trim().charAt(0) || <User size={size * 0.5} />}
-    </span>
-  );
-}
+// ย้าย Avatar ไปเป็น client component (ต้องใช้ onError) แต่ re-export ไว้ที่เดิม
+// เพราะมีหน้าอื่นอีกหลายที่ import จากไฟล์นี้อยู่
+export { Avatar };
 
 /**
  * Header ร่วมของทุกหน้าในแอป
@@ -55,12 +27,12 @@ export function AppHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-cream-200 bg-white px-4">
-      <Link href="/dashboard" className="flex min-w-0 flex-col">
-        <span className="flex items-center gap-1.5 text-[15px] font-semibold text-brown-900">
-          <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-peach-500" />
-          Pre Care
+      <Link href="/dashboard" className="flex min-w-0 items-center gap-2">
+        <Logo size={30} className="shrink-0" />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[15px] font-semibold leading-tight text-brown-900">Pre Care</span>
+          {familyName && <span className="truncate text-xs text-ink-400">{familyName}</span>}
         </span>
-        {familyName && <span className="truncate text-xs text-ink-400">{familyName}</span>}
       </Link>
 
       <div className="flex shrink-0 items-center gap-1">

@@ -33,6 +33,10 @@ const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth", "/api/asse
  *   style={{...}} อยู่ใน global-error.tsx (ซึ่งต้องทำงานได้แม้ CSS พัง)
  *   การใส่ nonce ให้ style ทุกจุดไม่คุ้มกับที่ได้ เพราะ style ก่อ XSS ได้ยาก
  * - img-src blob:: หน้าอัลบั้มแสดง preview จาก URL.createObjectURL ก่อนอัปโหลด
+ * - img-src googleusercontent: รูปโปรไฟล์ของคนที่ล็อกอินด้วย Google เก็บเป็น
+ *   URL ของ Google ไม่ได้ก๊อปลง R2 ตอน T6.5 ลืมข้อนี้ไป avatar เลยพังทั้งเว็บ
+ *   (เห็นเป็นไอคอนรูปพังบน header) ต้องใช้ wildcard เพราะ Google สลับใช้
+ *   lh3/lh4/lh5/lh6 ตามแต่ละบัญชี
  * - connect-src 'self': Server Action ยิงกลับ origin เดิมเท่านั้น
  *
  * strict-dynamic ทำให้ script ที่ script ที่มี nonce โหลดต่อ เชื่อถือตามไปด้วย
@@ -43,7 +47,7 @@ function buildCsp(nonce: string) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https://*.googleusercontent.com",
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",

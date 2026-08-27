@@ -51,3 +51,38 @@ test("รูปประกอบต้อง cache แบบ public ได้ �
   expect(res.status()).not.toBe(302);
   await anon.close();
 });
+
+/**
+ * Regression — ปุ่มเพิ่มบนหน้า list ต้องไม่โผล่คู่กับ FAB บนมือถือ
+ *
+ * cn() เป็นแค่ join ไม่ได้ merge class ที่ชนกัน การใส่ hidden ทับ inline-flex
+ * ของปุ่มจึงไม่ได้ผล ลำดับใน CSS เป็นตัวตัดสิน ทำให้ทั้งสามหน้ามี CTA ซ้ำ
+ */
+test("มือถือเห็น FAB อย่างเดียว เดสก์ท็อปเห็นปุ่มบนหัวข้ออย่างเดียว", async ({ page }, testInfo) => {
+  await signUp(page, uniqueEmail("cta"), "แม่ซีทีเอ");
+  await completeOnboarding(page, "ครอบครัวซีทีเอ");
+
+  const mobile = testInfo.project.name === "mobile";
+  // fab เขียนแยกเพราะ aria-label ของ FAB ไม่ได้ตรงกับข้อความบนปุ่มเสมอไป
+  const pages: { path: string; title: string; label: string; fab: string }[] = [
+    { path: "/health", title: "บันทึกสุขภาพ", label: "เพิ่มบันทึก", fab: "เพิ่มบันทึกสุขภาพ" },
+    { path: "/appointments", title: "นัดหมายแพทย์", label: "เพิ่มนัดหมาย", fab: "เพิ่มนัดหมาย" },
+    { path: "/album", title: "อัลบั้ม", label: "เพิ่มรูป", fab: "เพิ่มรูป" },
+  ];
+
+  for (const { path, title, label, fab: fabLabel } of pages) {
+    await page.goto(path);
+    // จำกัดขอบเขตไว้ที่แถวหัวข้อ ไม่งั้นไปชนกับลิงก์ชื่อเดียวกันใน empty state
+    const headerRow = page.getByRole("heading", { name: title, exact: true }).locator("..");
+    const topButton = headerRow.getByRole("link", { name: label });
+    const fab = page.locator(`a.fixed[aria-label="${fabLabel}"]`);
+
+    if (mobile) {
+      await expect(topButton, `${path} มือถือไม่ควรมีปุ่มบนหัวข้อ`).toHaveCount(0);
+      await expect(fab, `${path} มือถือควรมี FAB`).toBeVisible();
+    } else {
+      await expect(topButton, `${path} เดสก์ท็อปควรมีปุ่มบนหัวข้อ`).toBeVisible();
+      await expect(fab, `${path} เดสก์ท็อปไม่ควรมี FAB`).toBeHidden();
+    }
+  }
+});

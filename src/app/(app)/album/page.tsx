@@ -57,11 +57,17 @@ export default async function AlbumPage({
     <div className="flex flex-col gap-4 pb-20">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-ink-900">อัลบั้ม</h1>
+        {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join
+            ไม่ได้ merge class ที่ชนกัน ตัวปุ่มมี inline-flex เป็น base อยู่แล้ว
+            พอเติม hidden เข้าไปทั้งคู่จะอยู่ใน class list แล้วลำดับใน CSS
+            เป็นตัวตัดสิน ซึ่ง inline-flex ชนะ ปุ่มเลยโผล่บนมือถือคู่กับ FAB */}
         {canWrite && (
-          <ButtonLink href="/album/upload" variant="secondary" className="hidden md:inline-flex">
-            <Plus size={18} strokeWidth={2} />
-            เพิ่มรูป
-          </ButtonLink>
+          <span className="hidden md:block">
+            <ButtonLink href="/album/upload" variant="secondary">
+              <Plus size={18} strokeWidth={2} />
+              เพิ่มรูป
+            </ButtonLink>
+          </span>
         )}
       </header>
 

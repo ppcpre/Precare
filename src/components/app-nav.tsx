@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "@/components/logo";
 import { NAV_ITEMS } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -41,7 +42,10 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 border-r border-cream-200 bg-cream-100 p-4 md:block"
            aria-label="เมนูหลัก">
-      <div className="mb-6 px-2 py-3 text-lg font-semibold text-brown-900">Pre Care</div>
+      <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2 py-3">
+        <Logo size={34} className="shrink-0" />
+        <span className="text-lg font-semibold text-brown-900">Pre Care</span>
+      </Link>
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);

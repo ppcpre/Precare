@@ -24,6 +24,11 @@ test("หน้าล็อกอินส่ง security header ครบ", asy
   // nonce ต้องสุ่มใหม่ทุก request ไม่ใช่ค่าคงที่ที่เดาได้
   expect(csp).toMatch(/'nonce-[a-f0-9]{32}'/);
   expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+
+  // regression: CSP รอบแรกลืมโฮสต์รูปโปรไฟล์ของ Google
+  // avatar เลยกลายเป็นไอคอนรูปพังบน header ทุกหน้าสำหรับคนที่ล็อกอินด้วย Google
+  expect(csp).toContain("googleusercontent.com");
+  expect(csp).toContain("blob:");
 });
 
 test("nonce ต้องไม่ซ้ำกันระหว่าง request", async ({ page }) => {
