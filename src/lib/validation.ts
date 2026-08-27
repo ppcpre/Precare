@@ -22,7 +22,16 @@ export const weeklyLogInput = createInsertSchema(weeklyLogs)
   });
 
 export const appointmentInput = createInsertSchema(appointments)
-  .omit({ id: true, familyId: true, createdBy: true })
+  // ตัดฟิลด์ค่าใช้จ่ายออกจากฟอร์มนัดหมาย แก้ได้ที่หน้าค่าใช้จ่ายที่เดียว
+  // ไม่งั้นมีสองทางเขียนค่าเดียวกัน แล้วต้องคอยกันไม่ให้ทับกันเอง
+  .omit({
+    id: true,
+    familyId: true,
+    createdBy: true,
+    costSatang: true,
+    claimStatus: true,
+    costNote: true,
+  })
   .extend({
     apptDatetime: z.string().min(10, "ต้องระบุวันและเวลา"),
     title: z.string().max(120).nullable().optional(),
@@ -31,6 +40,8 @@ export const appointmentInput = createInsertSchema(appointments)
     note: z.string().max(2000).nullable().optional(),
     reminderEnabled: z.boolean().default(true),
     reminderMinutesBefore: z.number().int().min(0).max(10080).default(60),
+    /** null = ไม่เลือกกลุ่ม แสดงเป็น "ทั่วไป" — ตรวจว่าเป็นกลุ่มของครอบครัวนี้ใน action */
+    groupId: z.string().min(1).nullable().optional(),
   });
 
 export const onboardingInput = z

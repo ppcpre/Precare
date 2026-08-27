@@ -28,6 +28,15 @@ export const timeOf = (iso: string) => {
 };
 
 export const monthShort = (iso: string) => M_SHORT[new Date(iso).getMonth()];
+
+/** "2569-08" -> "สิงหาคม 2569" — รับคีย์เดือนแบบ YYYY-MM ไม่ต้องผ่าน Date */
+export const monthKeyLabel = (key: string) => {
+  const [y, m] = key.split("-").map(Number);
+  return `${M_FULL[m - 1]} ${y + 543}`;
+};
+
+/** "2569-08" -> "ส.ค." สำหรับแถบเลือกเดือนที่พื้นที่แคบ */
+export const monthKeyShort = (key: string) => M_SHORT[Number(key.split("-")[1]) - 1];
 export const dayOf = (iso: string) => new Date(iso).getDate();
 
 /** ความดันเกินเกณฑ์ — แสดงแบบหม่น ไม่ใช่แถบแดงทั้งการ์ด (design principle ข้อ 3) */

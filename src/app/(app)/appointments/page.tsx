@@ -6,7 +6,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
 import { daysFromNow } from "@/components/ui/badge";
-import { listAppointments, requireFamilyContext } from "@/lib/queries";
+import { listAppointmentCosts, listAppointments, requireFamilyContext } from "@/lib/queries";
+import { CostEntryStrip } from "@/components/costs/entry-strip";
 import { can } from "@/lib/authz";
 import { cn } from "@/lib/cn";
 import type { Appointment } from "@/types";
@@ -41,7 +42,11 @@ export default async function AppointmentsPage({
   }
 
   // now มาจาก query ไม่ใช่เรียก Date.now() ใน render
-  const { items, now } = await listAppointments(ctx.db, ctx.familyId, past ? "past" : "upcoming");
+  // ดึงคู่กันไปเลย แถบค่าใช้จ่ายต้องนับทุกนัดไม่ใช่แค่แท็บที่เปิดอยู่
+  const [{ items, now }, costItems] = await Promise.all([
+    listAppointments(ctx.db, ctx.familyId, past ? "past" : "upcoming"),
+    listAppointmentCosts(ctx.db, ctx.familyId),
+  ]);
   const canWrite = can.writeRecords(ctx.role);
 
   const groups = new Map<string, { appt: Appointment; days: number }[]>();
@@ -76,6 +81,8 @@ export default async function AppointmentsPage({
           </span>
         )}
       </header>
+
+      <CostEntryStrip items={costItems} />
 
       <div className="flex gap-1 rounded-[10px] bg-cream-100 p-1">
         <Link href="/appointments" className={tabCls(!past)}>

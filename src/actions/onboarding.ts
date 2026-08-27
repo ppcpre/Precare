@@ -2,7 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { families, familyMembers, pregnancyProfiles, user } from "@/db/schema";
+import { careGroups, families, familyMembers, pregnancyProfiles, user } from "@/db/schema";
 import { authAction, AppError } from "@/lib/safe-action";
 import { onboardingInput } from "@/lib/validation";
 import { calculateDueDate, calculateLmpFromDueDate } from "@/lib/pregnancy";
@@ -43,6 +43,14 @@ export const completeOnboarding = authAction
         status: "active",
       }),
       ctx.db.insert(pregnancyProfiles).values({ familyId, lmpDate: lmp, dueDate: due }),
+      // กลุ่มตั้งต้นให้ครอบครัวใหม่ — migration สร้างให้เฉพาะครอบครัวที่มีอยู่
+      // ตอนนั้น ถ้าไม่สร้างตรงนี้ด้วย ครอบครัวใหม่จะไม่มีกลุ่มให้เลือกเลย
+      ctx.db.insert(careGroups).values({
+        id: newId(),
+        familyId,
+        name: "ฝากครรภ์",
+        color: "peach",
+      }),
       ctx.db.update(user).set({ activeFamilyId: familyId }).where(eq(user.id, ctx.user.id)),
     ]);
 

@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { AppointmentForm } from "@/components/appointments/form";
-import { getAppointmentById, requireFamilyContext } from "@/lib/queries";
+import { getAppointmentById, listCareGroups, requireFamilyContext } from "@/lib/queries";
 
 export const metadata = { title: "แก้ไขนัดหมาย · Pre Care" };
 
@@ -21,8 +21,11 @@ export default async function EditAppointmentPage({
     redirect("/appointments");
   }
 
-  const appt = await getAppointmentById(ctx.db, ctx.familyId, id);
+  const [appt, groups] = await Promise.all([
+    getAppointmentById(ctx.db, ctx.familyId, id),
+    listCareGroups(ctx.db, ctx.familyId),
+  ]);
   if (!appt) notFound();
 
-  return <AppointmentForm appt={appt} />;
+  return <AppointmentForm appt={appt} groups={groups} />;
 }

@@ -7,6 +7,7 @@ import { X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { Chip } from "@/components/ui/chip";
+import { GroupPicker, type CareGroupOption } from "@/components/costs/group-picker";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/actions/appointments";
 import type { Appointment } from "@/types";
 
@@ -30,7 +31,13 @@ const splitIso = (iso?: string) => {
   };
 };
 
-export function AppointmentForm({ appt }: { appt?: Appointment }) {
+export function AppointmentForm({
+  appt,
+  groups = [],
+}: {
+  appt?: Appointment;
+  groups?: CareGroupOption[];
+}) {
   const router = useRouter();
   const init = splitIso(appt?.apptDatetime);
 
@@ -38,6 +45,7 @@ export function AppointmentForm({ appt }: { appt?: Appointment }) {
   const [time, setTime] = useState(init.t);
   const [title, setTitle] = useState(appt?.title ?? "");
   const [doctor, setDoctor] = useState(appt?.doctorName ?? "");
+  const [groupId, setGroupId] = useState<string | null>(appt?.groupId ?? null);
   const [location, setLocation] = useState(appt?.location ?? "");
   const [remind, setRemind] = useState(appt?.reminderEnabled ?? true);
   const [minutes, setMinutes] = useState(appt?.reminderMinutesBefore ?? 60);
@@ -64,6 +72,7 @@ export function AppointmentForm({ appt }: { appt?: Appointment }) {
       note: note.trim() || null,
       reminderEnabled: remind,
       reminderMinutesBefore: minutes,
+      groupId,
     };
     if (appt) update.execute({ ...payload, id: appt.id });
     else create.execute(payload);
@@ -126,6 +135,8 @@ export function AppointmentForm({ appt }: { appt?: Appointment }) {
             ))}
           </div>
         </div>
+
+        <GroupPicker groups={groups} value={groupId} onChange={setGroupId} />
 
         <Field
           label="แพทย์"

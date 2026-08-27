@@ -1,17 +1,19 @@
 import { redirect } from "next/navigation";
 import { AppointmentForm } from "@/components/appointments/form";
-import { requireFamilyContext } from "@/lib/queries";
+import { listCareGroups, requireFamilyContext } from "@/lib/queries";
 
 export const metadata = { title: "เพิ่มนัดหมาย · Pre Care" };
 
 export default async function NewAppointmentPage() {
+  let ctx;
   try {
-    await requireFamilyContext("editor");
+    ctx = await requireFamilyContext("editor");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "UNAUTHENTICATED") redirect("/login");
     if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
     redirect("/appointments");
   }
-  return <AppointmentForm />;
+  const groups = await listCareGroups(ctx.db, ctx.familyId);
+  return <AppointmentForm groups={groups} />;
 }

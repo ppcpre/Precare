@@ -89,6 +89,35 @@ export const weeklyLogs = sqliteTable(
   (t) => [index("idx_logs_family").on(t.familyId, t.logDate)],
 );
 
+
+/** สีของกลุ่ม — จำกัดชุดไว้เพื่อให้ทุกกลุ่มยังอยู่ในพาเลตต์เดียวกับแอป */
+export const CARE_GROUP_COLORS = ["peach", "sky", "sage", "plum", "clay"] as const;
+
+/** สถานะการเบิก — ค่าฝากครรภ์เบิกประกันสังคมได้ ค่าทำฟันส่วนใหญ่เบิกไม่ได้ */
+export const CLAIM_STATUSES = ["none", "done", "no"] as const;
+export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+
+/**
+ * กลุ่มการรักษา — ใช้แยกยอดค่าใช้จ่ายตามเรื่องที่รักษา
+ *
+ * ทำเป็นตารางแทนที่จะเก็บชื่อเป็น text ในนัดหมายตรงๆ เพราะถ้าเก็บเป็น text
+ * จะเปลี่ยนชื่อกลุ่มทีหลังไม่ได้ ต้องไล่แก้ทุกแถว และสะกดต่างนิดเดียว
+ * ก็กลายเป็นคนละกลุ่มทันที
+ */
+export const careGroups = sqliteTable(
+  "care_groups",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color", { enum: CARE_GROUP_COLORS }).notNull().default("peach"),
+    /** ซ่อนกลุ่มที่เลิกใช้ โดยไม่ลบเพื่อไม่ให้นัดหมายเก่าเสียกลุ่มไป */
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_care_groups_family").on(t.familyId)],
+);
+
 export const appointments = sqliteTable(
   "appointments",
   {
@@ -103,8 +132,26 @@ export const appointments = sqliteTable(
     note: text("note"),
     reminderEnabled: integer("reminder_enabled", { mode: "boolean" }).notNull().default(true),
     reminderMinutesBefore: integer("reminder_minutes_before").notNull().default(60),
+
+    /** null = ยังไม่ได้เลือกกลุ่ม แสดงเป็น "ทั่วไป" ไม่บังคับให้เลือก */
+    groupId: text("group_id").references(() => careGroups.id, { onDelete: "set null" }),
+
+    /**
+     * ค่าใช้จ่ายเก็บเป็นจำนวนเต็ม "สตางค์" ห้ามใช้ REAL เด็ดขาด
+     * 120000 = 1,200 บาท — D1 เป็น SQLite ไม่มี DECIMAL ให้ใช้
+     * ถ้าเก็บเป็น float ยอดรวมจะเพี้ยนในบางเคสแบบไล่ไม่เจอ
+     *
+     * null = ยังไม่ได้ระบุ · 0 = ไปมาแล้วแต่ไม่เสียเงิน
+     * สองอย่างนี้คนละความหมาย ยอดรวมต้องนับเฉพาะที่ไม่ใช่ null
+     */
+    costSatang: integer("cost_satang"),
+    claimStatus: text("claim_status", { enum: CLAIM_STATUSES }).notNull().default("none"),
+    costNote: text("cost_note"),
   },
-  (t) => [index("idx_appts_family").on(t.familyId, t.apptDatetime)],
+  (t) => [
+    index("idx_appts_family").on(t.familyId, t.apptDatetime),
+    index("idx_appts_group").on(t.groupId),
+  ],
 );
 
 export const PHOTO_TYPES = ["ultrasound", "family", "other"] as const;

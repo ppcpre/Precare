@@ -27,13 +27,18 @@
   --color-peach-500: #E89A6C;
   --color-peach-700: #D97A4E;
 
-  /* Feature accent สำหรับฟีเจอร์อื่นในอนาคต — ห้ามใช้เป็นสีปุ่มหลัก */
+  /* Feature accent สำหรับฟีเจอร์อื่นในอนาคต — ห้ามใช้เป็นสีปุ่มหลัก
+     เฉด 700 เติมตอนทำกลุ่มการรักษา ใช้เป็นสีตัวอักษรบนพื้นเฉด 100
+     เฉด 500 คอนทราสต์ไม่พอสำหรับข้อความขนาดเล็ก */
   --color-sage-100: #E5EBE2;
   --color-sage-500: #8AA383;
+  --color-sage-700: #5F7358;
   --color-sky-100:  #E3EAF0;
   --color-sky-500:  #8AA3B8;
+  --color-sky-700:  #5E7B94;
   --color-plum-100: #EEE6EC;
   --color-plum-500: #A38C9C;
+  --color-plum-700: #7C6472;
 
   /* Semantic — ใช้แบบหม่น ไม่ใช่สีสดจัด */
   --color-success: #7A9B76;

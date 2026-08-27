@@ -120,6 +120,11 @@ test("เจ้าของครอบครัวใช้งานครบ�
 
       await guest.goto("/album/upload");
       await expect(guest).not.toHaveURL(/\/album\/upload/);
+
+      // หน้าค่าใช้จ่าย viewer เปิดดูได้ (ต่างจากหน้าแก้ไข) แต่ต้องไม่มีปุ่มบันทึก
+      await guest.goto("/appointments/costs");
+      await expect(guest).toHaveURL(/\/appointments\/costs/);
+      await expect(guest.getByRole("button", { name: "บันทึก", exact: true })).toHaveCount(0);
     });
 
     await ctx.close();

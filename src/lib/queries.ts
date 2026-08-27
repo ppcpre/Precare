@@ -10,9 +10,10 @@ import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import {
-  appointments, families, familyInvites, familyMembers,
+  appointments, careGroups, families, familyInvites, familyMembers,
   photos, pregnancyProfiles, user, weeklyLogs,
 } from "@/db/schema";
+import type { CostItem } from "@/lib/costs";
 import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
 import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
 
@@ -103,6 +104,44 @@ export async function listAppointments(db: Db, familyId: string, when: "upcoming
     )
     .orderBy(when === "upcoming" ? asc(appointments.apptDatetime) : desc(appointments.apptDatetime));
   return { items, now };
+}
+
+
+/**
+ * นัดหมายทั้งหมดพร้อมค่าใช้จ่ายและกลุ่ม — ใช้กับหน้าค่าใช้จ่ายทุกมุมมอง
+ *
+ * ดึงทีเดียวทั้งชุดแล้วให้ฝั่ง src/lib/costs.ts จัดกลุ่มเอง แทนที่จะยิง
+ * GROUP BY แยกต่อมุมมอง เพราะจำนวนนัดต่อครอบครัวอยู่ในหลักสิบ ไม่ใช่หลักหมื่น
+ * และการคำนวณในหน่วยความจำทำให้สลับมุมมองได้โดยไม่ต้องแตะ D1 ซ้ำ
+ *
+ * leftJoin เพราะ group_id เป็น null ได้ (นัดที่ยังไม่เลือกกลุ่ม = ทั่วไป)
+ */
+export async function listAppointmentCosts(db: Db, familyId: string): Promise<CostItem[]> {
+  return db
+    .select({
+      id: appointments.id,
+      apptDatetime: appointments.apptDatetime,
+      title: appointments.title,
+      location: appointments.location,
+      groupId: appointments.groupId,
+      groupName: careGroups.name,
+      groupColor: careGroups.color,
+      costSatang: appointments.costSatang,
+      claimStatus: appointments.claimStatus,
+    })
+    .from(appointments)
+    .leftJoin(careGroups, eq(careGroups.id, appointments.groupId))
+    .where(eq(appointments.familyId, familyId))
+    .orderBy(desc(appointments.apptDatetime));
+}
+
+/** กลุ่มที่ยังใช้อยู่ เรียงตามเวลาสร้าง เพื่อให้ลำดับคงที่ทุกหน้า */
+export async function listCareGroups(db: Db, familyId: string) {
+  return db
+    .select({ id: careGroups.id, name: careGroups.name, color: careGroups.color })
+    .from(careGroups)
+    .where(and(eq(careGroups.familyId, familyId), eq(careGroups.archived, false)))
+    .orderBy(asc(careGroups.createdAt));
 }
 
 export async function getAppointmentById(db: Db, familyId: string, id: string) {
