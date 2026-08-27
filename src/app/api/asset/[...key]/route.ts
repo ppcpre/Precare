@@ -19,13 +19,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   // ยังไม่ได้ใส่ไฟล์ = 404 ปกติ ฝั่ง UI มี fallback รออยู่แล้ว
   if (!obj) return new Response(null, { status: 404 });
 
+  // อ่านทั้งก้อนด้วยเหตุผลเดียวกับ /api/media — ไฟล์เล็กและตัดปัญหาอายุของสตรีม
+  // ไม่ตั้ง content-length เอง ปล่อยให้ runtime คำนวณจากไบต์จริง
+  const bytes = await obj.arrayBuffer();
   const declared = obj.httpMetadata?.contentType ?? "";
-  return new Response(obj.body, {
+  return new Response(bytes, {
     headers: {
       "content-type": SERVABLE.has(declared) ? declared : "application/octet-stream",
       // ภาพประกอบไม่เปลี่ยน ปล่อยให้ CDN เก็บยาวได้
       "cache-control": "public, max-age=31536000, immutable",
-      "content-length": String(obj.size),
       "x-content-type-options": "nosniff",
     },
   });
