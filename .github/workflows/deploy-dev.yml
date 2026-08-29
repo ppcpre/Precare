@@ -71,6 +71,17 @@ jobs:
         if: steps.probe.outputs.app == 'true'
         run: npx playwright test
 
+      # wrangler เขียน log ของตัวเองไว้อีกที่ ซึ่งมีรายละเอียดที่ stdout ไม่มี
+      # ตอน worker ตาย stdout พ่นแค่ ✘ [ERROR] เปล่าๆ ไล่สาเหตุไม่ได้เลย
+      - name: log ของ wrangler ตอน E2E ล้ม
+        if: failure() && steps.probe.outputs.app == 'true'
+        run: |
+          for f in ~/.config/.wrangler/logs/*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            tail -200 "$f"
+          done
+
       - name: เก็บ report ตอน E2E ล้ม
         if: failure() && steps.probe.outputs.app == 'true'
         uses: actions/upload-artifact@v5

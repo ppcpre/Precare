@@ -19,19 +19,26 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
 
   await gotoApp(page, "/album/upload");
 
-  // ต้องใหญ่กว่า PHOTO_EDGE (1600) เพื่อให้เดินผ่าน path ย่อรูปจริง
-  const files = [0, 1, 2].map((i) => ({
+  /**
+   * ใหญ่กว่า PHOTO_EDGE (1600) เพื่อให้เดินผ่าน path ย่อรูปจริง
+   * และเป็น noise เพื่อให้ย่อแล้วยังเกิน 1 MB (ทดสอบ bodySizeLimit จริง)
+   *
+   * ใช้ 2 ใบไม่ใช่ 3 — บน runner 2 คอร์ การเสิร์ฟรูปใหญ่พร้อมกันหลายใบ
+   * ทำให้ worker ใช้เวลาต่อคำขอพุ่งเป็นวินาที และเคยทำให้ wrangler dev ตายกลางคัน
+   * 2 ใบยังเกิน 1 MB ตามที่ assertion ต้องการ แต่กดดันเครื่องน้อยกว่าครึ่ง
+   */
+  const files = [0, 1].map((i) => ({
     name: `photo-${i}.png`,
     mimeType: "image/png",
-    buffer: makePng(1800, 1400, i),
+    buffer: makePng(1700, 1300, i),
   }));
 
   await pickFiles(page, files);
 
   await test.step("preview ต้องขึ้นครบทุกใบ", async () => {
     // จุดที่บั๊กเดิมพัง — ได้ FileList ว่างจึงไม่มี blob สักใบ
-    await expect(page.locator('img[src^="blob:"]')).toHaveCount(3, { timeout: 30_000 });
-    await expect(page.getByText(/3 รูป · รวม/)).toBeVisible();
+    await expect(page.locator('img[src^="blob:"]')).toHaveCount(2, { timeout: 30_000 });
+    await expect(page.getByText(/2 รูป · รวม/)).toBeVisible();
   });
 
   await test.step("ย่อรูปแล้วเล็กลงจริง แต่ยังใหญ่พอจะกดดัน body limit", async () => {
@@ -48,15 +55,15 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
   });
 
   await test.step("อัปโหลดผ่าน — ตัวชี้ขาดว่า bodySizeLimit พอ", async () => {
-    await page.getByRole("button", { name: /เพิ่ม 3 รูปเข้าอัลบั้ม/ }).click();
+    await page.getByRole("button", { name: /เพิ่ม 2 รูปเข้าอัลบั้ม/ }).click();
     await page.waitForURL(/\/album$/, { timeout: 45_000 });
-    await expect(page.getByText("3 รูป")).toBeVisible();
+    await expect(page.getByText("2 รูป")).toBeVisible();
   });
 
   await test.step("รูปโหลดขึ้นจริง ไม่ใช่กรอบว่าง", async () => {
     const tiles = page.locator('img[src^="/api/media/"]');
-    await expect(tiles).toHaveCount(3);
-    for (let i = 0; i < 3; i++) {
+    await expect(tiles).toHaveCount(2);
+    for (let i = 0; i < 2; i++) {
       await expect
         .poll(() => tiles.nth(i).evaluate((el: HTMLImageElement) => el.naturalWidth))
         .toBeGreaterThan(0);

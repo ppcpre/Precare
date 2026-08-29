@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { trackingSessions } from "@/db/schema";
@@ -92,37 +92,48 @@ export const recordKick = editorAction
   .metadata({ name: "recordKick" })
   .inputSchema(idInput.extend({ at: localTime }))
   .action(async ({ parsedInput, ctx }) => {
-    const row = await ctx.db
-      .select({ events: trackingSessions.events, endedAt: trackingSessions.endedAt })
-      .from(trackingSessions)
-      .where(
-        and(
-          eq(trackingSessions.id, parsedInput.sessionId),
-          eq(trackingSessions.familyId, ctx.familyId),
-        ),
-      )
-      .get();
-    if (!row) throw new AppError("ไม่พบรอบการนับนี้");
-    if (row.endedAt) throw new AppError("รอบนี้ปิดไปแล้ว");
+    /**
+     * ต่อท้าย events ด้วย SQL statement เดียว ไม่อ่านมาแก้แล้วเขียนกลับ
+     *
+     * แม่แตะรัวๆ ได้ตลอด สองคำขอที่ทับกันจะอ่าน events ชุดเดียวกันแล้วเขียนทับกัน
+     * ครั้งที่แตะจะหายไปเงียบๆ โดยที่หน้าจอยังขึ้นเลขถูก เพราะนับฝั่ง client
+     * (CI จับได้เพราะเครื่องช้ากว่าเครื่องพัฒนา คำขอจึงทับกันจริง)
+     *
+     * json_insert กับ '$[#]' ต่อท้าย array ให้ในตัว statement เดียว จึง atomic
+     * และ json_array_length นับจากค่าหลังเขียนแล้ว ไม่ใช่ค่าที่อ่านมาก่อนหน้า
+     */
+    const guard = and(
+      eq(trackingSessions.id, parsedInput.sessionId),
+      eq(trackingSessions.familyId, ctx.familyId),
+      isNull(trackingSessions.endedAt),
+    );
 
-    const events = parseEvents(row.events);
-    if (events.length >= MAX_EVENTS) throw new AppError("บันทึกครบจำนวนสูงสุดแล้ว");
-
-    // ใช้เวลาที่ client ส่งมา เพราะเป็นเวลาที่แม่รู้สึกจริง
-    // ไม่ใช่เวลาที่ request วิ่งถึงเซิร์ฟเวอร์ ซึ่งช้ากว่าตามสัญญาณเน็ต
-    events.push({ at: parsedInput.at });
-
-    await ctx.db
+    const res = await ctx.db
       .update(trackingSessions)
-      .set({ events: JSON.stringify(events) })
-      .where(
-        and(
-          eq(trackingSessions.id, parsedInput.sessionId),
-          eq(trackingSessions.familyId, ctx.familyId),
-        ),
-      );
+      .set({
+        events: sql`json_insert(${trackingSessions.events}, '$[#]', json_object('at', ${parsedInput.at}))`,
+      })
+      .where(and(guard, sql`json_array_length(${trackingSessions.events}) < ${MAX_EVENTS}`));
+
+    if (!res.meta.changes) {
+      // แยกให้ชัดว่าไม่เจอ ปิดไปแล้ว หรือครบจำนวนสูงสุด ไม่งั้นดีบักไม่ออก
+      const row = await ctx.db
+        .select({ endedAt: trackingSessions.endedAt, events: trackingSessions.events })
+        .from(trackingSessions)
+        .where(
+          and(
+            eq(trackingSessions.id, parsedInput.sessionId),
+            eq(trackingSessions.familyId, ctx.familyId),
+          ),
+        )
+        .get();
+      if (!row) throw new AppError("ไม่พบรอบการนับนี้");
+      if (row.endedAt) throw new AppError("รอบนี้ปิดไปแล้ว");
+      throw new AppError("บันทึกครบจำนวนสูงสุดแล้ว");
+    }
+
     revalidatePath("/kicks");
-    return { count: events.length };
+    return { ok: true };
   });
 
 /** ลบครั้งล่าสุด — แตะพลาดได้ตลอด โดยเฉพาะตอนง่วง */
@@ -130,32 +141,22 @@ export const undoKick = editorAction
   .metadata({ name: "undoKick" })
   .inputSchema(idInput)
   .action(async ({ parsedInput, ctx }) => {
-    const row = await ctx.db
-      .select({ events: trackingSessions.events, endedAt: trackingSessions.endedAt })
-      .from(trackingSessions)
-      .where(
-        and(
-          eq(trackingSessions.id, parsedInput.sessionId),
-          eq(trackingSessions.familyId, ctx.familyId),
-        ),
-      )
-      .get();
-    if (!row) throw new AppError("ไม่พบรอบการนับนี้");
-    if (row.endedAt) throw new AppError("รอบนี้ปิดไปแล้ว");
-
-    const events = parseEvents(row.events);
-    events.pop();
-    await ctx.db
+    // json_remove กับ '$[#-1]' ตัดตัวท้ายออกใน statement เดียว ด้วยเหตุผลเดียวกับ recordKick
+    const res = await ctx.db
       .update(trackingSessions)
-      .set({ events: JSON.stringify(events) })
+      .set({ events: sql`json_remove(${trackingSessions.events}, '$[#-1]')` })
       .where(
         and(
           eq(trackingSessions.id, parsedInput.sessionId),
           eq(trackingSessions.familyId, ctx.familyId),
+          isNull(trackingSessions.endedAt),
+          sql`json_array_length(${trackingSessions.events}) > 0`,
         ),
       );
+    if (!res.meta.changes) throw new AppError("ไม่มีรายการให้ลบ");
+
     revalidatePath("/kicks");
-    return { count: events.length };
+    return { ok: true };
   });
 
 export const finishKickSession = editorAction

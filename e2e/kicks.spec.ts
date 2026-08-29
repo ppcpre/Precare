@@ -49,10 +49,14 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
     const tap = page.getByRole("button", { name: /บันทึกการดิ้น/ });
     await expect(tap).toBeVisible({ timeout: 30_000 });
 
-    for (let i = 0; i < 3; i++) {
-      await tap.click();
-      await page.waitForTimeout(150);
-    }
+    // ยิงสามครั้งในจังหวะเดียวกัน ไม่ใช่ไล่คลิกทีละครั้ง
+    // Playwright จะรอ actionability ระหว่างคลิก ทำให้คำขอไม่ทับกันบนเครื่องเร็ว
+    // แล้วบั๊กแบบอ่าน-แก้-เขียนจะไม่โผล่จนกว่าจะไปเจอบน CI ที่ช้ากว่า
+    await tap.evaluate((el: HTMLElement) => {
+      el.click();
+      el.click();
+      el.click();
+    });
     await expect(page.getByText("7 ครั้ง", { exact: true })).toBeVisible();
 
     // เวลาที่ผ่านไปต้องนับจากนาฬิกาของผู้ใช้ ไม่ใช่ของ worker ที่รันในโซน UTC
@@ -76,16 +80,18 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
 
   await test.step("นับจนครบ 10 แล้วบันทึก", async () => {
     const tap = page.getByRole("button", { name: /บันทึกการดิ้น/ });
-    for (let i = 0; i < 8; i++) {
-      await tap.click();
-      await page.waitForTimeout(150);
-    }
+    for (let i = 0; i < 8; i++) await tap.click();
     await expect(page.getByText("ครบ 10 ครั้งแล้ว")).toBeVisible();
     await expectNoReassurance(page);
 
     await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await expect(page.getByRole("button", { name: "เริ่มนับ" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("รอบที่ผ่านมา")).toBeVisible();
+    // ยอดที่บันทึกไว้ต้องเป็น 10 จริง ไม่ใช่ 10 เฉพาะบนหน้าจอ
+    await expect(
+      page.getByText("10 ครั้ง"),
+      "หน้าจอขึ้นครบ 10 แต่เซิร์ฟเวอร์เก็บไม่ครบ",
+    ).toBeVisible();
   });
 
   await test.step("ประวัติขึ้นแล้ว และยังไม่มีคำที่ให้ความมั่นใจ", async () => {
