@@ -59,7 +59,14 @@ export default defineConfig({
       `--var AUTH_RATE_LIMIT_MAX:500`,
     url: `http://localhost:${PORT}/login`,
     reuseExistingServer: !process.env.CI,
-    timeout: 240_000,
+    /**
+     * เผื่อไว้มาก เพราะคำสั่งนี้ทำสามอย่างต่อกันบนฐานที่ว่างเปล่า
+     * migrate ทุกไฟล์ + build worker ใหม่ทั้งก้อน + สตาร์ต wrangler
+     * บน CI ที่ checkout ใหม่ทุกครั้งต้องจ่ายเต็มทุกรอบ และจะช้าลงเรื่อยๆ
+     * ตามจำนวน migration ที่เพิ่มขึ้น เคยตั้งไว้ 240 วินาทีแล้วเกินจนล้มทั้งชุด
+     * โดยขึ้น error ว่า webServer ไม่ยอมสตาร์ต ซึ่งชี้ไปผิดที่
+     */
+    timeout: 600_000,
     stdout: "pipe",
     stderr: "pipe",
   },
