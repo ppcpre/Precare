@@ -88,7 +88,10 @@ ICONS = {
   'phone':'<path d="M6.2 3.8h3l1.5 3.7-2 1.4a11 11 0 0 0 5.4 5.4l1.4-2 3.7 1.5v3a1.7 1.7 0 0 1-1.9 1.7C10.6 18 6 13.4 4.5 5.7A1.7 1.7 0 0 1 6.2 3.8Z"/>',
   'timer':'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.8v3.7l2.4 1.6M9.4 2.6h5.2"/>',
   'play':'<path d="M7.5 4.8 19 12 7.5 19.2V4.8Z"/>',
-  'stop':'<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>'
+  'stop':'<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>',
+  'question':'<path d="M9.3 9a2.8 2.8 0 1 1 3.6 2.7c-.6.2-.9.8-.9 1.4v.6"/><path d="M12 17.2v.1"/><circle cx="12" cy="12" r="9"/>',
+  'stethoscope':'<path d="M5 3v5a4.2 4.2 0 0 0 8.4 0V3"/><path d="M3.4 3h3M12 3h3"/><path d="M9.2 12.2v2.4a4.6 4.6 0 0 0 9.2 0v-1.2"/><circle cx="18.4" cy="11" r="2.2"/>',
+  'wave':'<path d="M2 15c1.6 0 2-6 3.6-6S7.2 19 8.8 19s2-14 3.6-14 2 14 3.6 14 2-10 3.6-10S21 15 22 15"/>'
 }
 
 def ic(name, size=20, color=IN6, sw=1.75):
@@ -1881,6 +1884,372 @@ write('KickEarly.dc.html', screen(
     gap=14),
   bottomnav(0)), h=820)
 
+
+# ============================================================
+#  A. สรุปก่อนพบแพทย์ — ออกแบบใหม่ (รอ approve)
+#
+#  ข้อจำกัดที่กำหนดทุกอย่าง: หมอมีเวลาต่อคนไม่ถึง 10 นาที
+#  หน้านี้ต้องอ่านจบใน 15 วินาที และอ่านจากระยะแขนได้ (หมอมองจอเราจากอีกฝั่งโต๊ะ)
+#  ของผิดปกติต้องอยู่บนสุด ไม่ใช่ให้หมอไล่หาเอง
+# ============================================================
+
+def flag_row(text_, kind='warn'):
+    col_ = {'warn': WARN, 'bad': BAD, 'info': IN6}[kind]
+    return row(ic('alert', 16, col_, 2), txt(text_, 14, IN9, extra='line-height: 1.5;'),
+               gap=8, align='flex-start')
+
+def big_stat(label_, value_, sub=None, warn=False):
+    return col(txt(label_, 13, IN6),
+               txt(value_, 26, BAD if warn else IN9, 600),
+               (txt(sub, 12, IN4) if sub else ''),
+               gap=2, extra='flex: 1;')
+
+def summary_block(title_, *rows_, icon_name=None):
+    head = row((ic(icon_name, 17, IN4, 1.9) if icon_name else ''),
+               txt(title_, 13, IN6), gap=7)
+    return card(head, *rows_, pad=14, gap=10)
+
+def qrow(text_, checked=False, asked=False):
+    box = ('<div style="width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid %s; '
+           'background: %s; flex: none; display: flex; align-items: center; justify-content: center;">%s</div>'
+           ) % (BR5 if checked else CR200, BR7 if checked else WHITE,
+                ic('check', 13, WHITE, 2.6) if checked else '')
+    style = 'text-decoration: line-through; color: %s;' % IN4 if asked else ''
+    return row(box, txt(text_, 15, IN4 if asked else IN9, extra=style + ' line-height: 1.5;'),
+               gap=10, align='flex-start')
+
+# ============================================================
+#  B. จับเวลาการบีบตัวของมดลูก — ออกแบบใหม่ (รอ approve)
+#
+#  ต่างจากนับลูกดิ้นตรงที่ต้องจับ "ช่วงเวลา" ไม่ใช่ "จำนวนครั้ง"
+#  กดตอนเริ่มบีบ กดอีกทีตอนคลาย ระบบคำนวณความนานและระยะห่างเอง
+#  เกณฑ์ 5-1-1 คือ ทุก 5 นาที ครั้งละ 1 นาที ต่อเนื่อง 1 ชั่วโมง
+# ============================================================
+
+def hold_button(active=False):
+    if active:
+        return ('<div style="width: 232px; height: 232px; border-radius: 9999px; background: %s; '
+                'margin: 0 auto; display: flex; flex-direction: column; align-items: center; '
+                'justify-content: center; gap: 6px;">'
+                '<span style="font-size: 15px; color: rgba(255,255,255,0.85);">กำลังบีบ</span>'
+                '<span style="font-size: 54px; font-weight: 600; color: %s; line-height: 1;">0:42</span>'
+                '<span style="font-size: 13px; color: rgba(255,255,255,0.85);">แตะอีกครั้งเมื่อคลายแล้ว</span></div>'
+                ) % (BR7, WHITE)
+    return ('<div style="width: 232px; height: 232px; border-radius: 9999px; background: %s; '
+            'border: 3px solid %s; margin: 0 auto; display: flex; flex-direction: column; '
+            'align-items: center; justify-content: center; gap: 6px;">%s'
+            '<span style="font-size: 19px; font-weight: 600; color: %s;">แตะเมื่อเริ่มบีบ</span>'
+            '<span style="font-size: 13px; color: %s;">ครั้งล่าสุด 4 นาทีที่แล้ว</span></div>'
+            ) % (CR100, CR200, ic('wave', 34, BR5, 1.8), BR9, IN6)
+
+def rule511(freq_ok=False, dur_ok=False, hour_ok=False):
+    def line(label_, val, ok):
+        mark = ic('check', 15, OK, 2.6) if ok else ('<span style="width: 15px; height: 15px; '
+               'border-radius: 9999px; border: 1.5px solid %s; display: block;"></span>' % CR300)
+        return row(mark, txt(label_, 13, IN6, extra='flex: 1;'),
+                   txt(val, 14, IN9 if ok else IN4, 600 if ok else 400), gap=8)
+    done = sum([freq_ok, dur_ok, hour_ok])
+    return card(
+        row(txt('เกณฑ์ 5-1-1', 14, IN9, 500), txt('ครบ %d จาก 3' % done, 12, IN4), justify='space-between'),
+        '<div style="height: 1px; background: %s;"></div>' % CR200,
+        line('ห่างกันไม่เกิน 5 นาที', '4 นาที', freq_ok),
+        line('บีบนานอย่างน้อย 1 นาที', '52 วินาที', dur_ok),
+        line('เป็นแบบนี้ต่อเนื่อง 1 ชั่วโมง', '38 นาที', hour_ok),
+        pad=14, gap=10)
+
+def contraction_row(time_, dur, gap_):
+    return row(txt(time_, 13, IN4, extra='width: 54px; flex: none;'),
+               col(('<div style="height: 8px; background: %s; border-radius: 4px; width: %d%%;"></div>'
+                    ) % (BR5, min(100, int(dur / 90 * 100))), gap=0, extra='flex: 1;'),
+               txt('%d วิ' % dur, 13, IN9, extra='width: 46px; text-align: right; flex: none;'),
+               txt(gap_, 12, IN4, extra='width: 62px; text-align: right; flex: none;'),
+               gap=8, extra='padding: 9px 12px; background: %s; border: 1px solid %s; border-radius: 10px;' % (WHITE, CR200))
+
+
+# ---------- A1. ทางเข้าจากการ์ดนัดหมาย ----------
+write('VisitEntry.dc.html', screen(
+  dash_topbar(),
+  body(
+    section_head('นัดหมายถัดไป'),
+    card(
+      row(datebox('ก.ย.', '16'),
+          col(txt('09:30 · ตรวจครรภ์ตามนัด', 15, IN9, 500),
+              row(ic('pin', 13, IN4, 1.9), txt('รพ. ตัวอย่าง', 12, IN4), gap=4),
+              gap=4, extra='flex: 1; min-width: 0;'),
+          badge('อีก 3 วัน', 'soft'), gap=10),
+      '<div style="height: 1px; background: %s;"></div>' % CR200,
+      # ทางเข้าอยู่ตรงนี้เพราะเป็นจังหวะที่ผู้ใช้กำลังคิดถึงการไปหาหมอพอดี
+      row(row(ic('stethoscope', 18, PE7, 1.9),
+              col(txt('สรุปให้หมอดู', 15, IN9, 500),
+                  txt('รวมข้อมูลตั้งแต่ครั้งที่แล้ว · มีคำถาม 3 ข้อ', 12, IN4), gap=2), gap=10),
+          ic('chev', 18, IN4), justify='space-between'),
+      gap=12),
+    card(
+      row(ic('alert', 17, WARN, 1.9),
+          txt('มี 2 อย่างที่ควรบอกหมอ — ความดันครั้งล่าสุดสูงกว่าเกณฑ์ และมีวันที่ลูกดิ้นช้ากว่าปกติ',
+              13, IN6, extra='line-height: 1.6;'), gap=8, align='flex-start'),
+      pad=14, bg=CR100, border=CR300, gap=0),
+    gap=14),
+  bottomnav(0)), h=820)
+
+# ---------- A2. หน้าสรุป (ตัวหลัก) ----------
+write('VisitSummary.dc.html', screen(
+  topbar('สรุปให้หมอดู', left=ic('chev', 22, IN6), right=ic('share', 20, IN6)),
+  body(
+    col(txt('อายุครรภ์ 27 สัปดาห์ 2 วัน', 20, IN9, 600),
+        txt('ตั้งแต่พบแพทย์ครั้งที่แล้ว 19 ส.ค. 2569 · 28 วัน', 13, IN6), gap=3),
+
+    # ของผิดปกติอยู่บนสุดเสมอ หมอมีเวลาไม่ถึง 10 นาที ไม่ควรต้องไล่หาเอง
+    card(
+      txt('สิ่งที่ควรบอกหมอ', 13, IN6),
+      flag_row('ความดัน 148/92 เมื่อ 12 ก.ย. สูงกว่าเกณฑ์', 'bad'),
+      flag_row('29 ส.ค. นับลูกดิ้นครบ 10 ครั้งใช้เวลา 1 ชม. 8 นาที (ปกติ 28 นาที)'),
+      flag_row('น้ำหนักขึ้น 2.4 กก. ใน 2 สัปดาห์'),
+      pad=14, gap=10, bg='#FBF0EE', border=CR300),
+
+    summary_block('น้ำหนัก',
+      row(big_stat('ล่าสุด', '64.8', 'กก. · 12 ก.ย.'),
+          big_stat('จากครั้งที่แล้ว', '+2.4', 'กก. ใน 4 สัปดาห์', warn=True),
+          big_stat('รวมทั้งครรภ์', '+9.6', 'กก.')),
+      icon_name='scale'),
+
+    summary_block('ความดันโลหิต',
+      row(big_stat('ล่าสุด', '148/92', '12 ก.ย.', warn=True),
+          big_stat('ก่อนหน้า', '118/76', '29 ส.ค.'),
+          big_stat('บันทึกไว้', '6', 'ครั้ง')),
+      icon_name='pulse'),
+
+    summary_block('ลูกดิ้น',
+      row(big_stat('เฉลี่ยจนครบ 10', '28', 'นาที'),
+          big_stat('ช้าที่สุด', '1:08', 'ชม. · 29 ส.ค.', warn=True),
+          big_stat('นับไว้', '21', 'รอบ')),
+      icon_name='foot'),
+
+    summary_block('อาการที่บันทึกไว้',
+      row(chip('บวมที่เท้า'), chip('ปวดหลัง'), chip('นอนไม่หลับ'), gap=6, wrap=True),
+      icon_name='alert'),
+    gap=12)), h=1240)
+
+# ---------- A3. คำถามที่อยากถามหมอ ----------
+write('VisitQuestions.dc.html', screen(
+  topbar('คำถามที่อยากถาม', left=ic('chev', 22, IN6)),
+  body(
+    # เรื่องที่คนลืมถามหมอมากที่สุดคือเรื่องที่นึกได้ตอนอยู่บ้าน
+    # จดไว้ล่วงหน้าได้ตลอด แล้วติ๊กทิ้งตอนถามแล้ว
+    card(
+      txt('จดไว้ตอนไหนก็ได้ แล้วเปิดดูตอนอยู่ในห้องตรวจ', 13, IN6, extra='line-height: 1.6;'),
+      pad=14, bg=CR100, border=CR200, gap=0),
+    section_head('ยังไม่ได้ถาม · 3 ข้อ'),
+    card(qrow('บวมที่เท้าตอนเย็นเป็นเรื่องปกติไหม'), pad=14, gap=0),
+    card(qrow('กินยาแก้แพ้ที่มีอยู่ที่บ้านได้ไหม'), pad=14, gap=0),
+    card(qrow('ต้องเตรียมอะไรบ้างสำหรับการคลอด'), pad=14, gap=0),
+    section_head('ถามแล้ว · 2 ข้อ'),
+    card(qrow('ต้องฉีดวัคซีนอะไรอีกไหม', checked=True, asked=True), pad=14, gap=0),
+    card(qrow('ออกกำลังกายได้แค่ไหน', checked=True, asked=True), pad=14, gap=0),
+    '<div style="height: 4px;"></div>',
+    card(row(ic('plus', 18, BR7, 2), txt('เพิ่มคำถาม', 15, BR7, 500), gap=8),
+         pad=14, gap=0, extra='border-style: dashed;'),
+    gap=12),
+  bottomnav(2)), h=1000)
+
+# ---------- A4. ข้อมูลยังไม่พอ ----------
+write('VisitEmpty.dc.html', screen(
+  topbar('สรุปให้หมอดู', left=ic('chev', 22, IN6)),
+  body(
+    col(('<div style="width: 88px; height: 88px; border-radius: 9999px; background: %s; display: flex; '
+         'align-items: center; justify-content: center; margin: 0 auto;">%s</div>') % (CR100, ic('stethoscope', 38, BR3, 1.5)),
+        txt('ยังไม่มีข้อมูลตั้งแต่ครั้งที่แล้ว', 17, IN9, 600, 'text-align: center;'),
+        txt('บันทึกน้ำหนักหรือความดันสักครั้ง แล้วหน้านี้จะสรุปให้เอง', 14, IN6,
+            extra='text-align: center; line-height: 1.6;'),
+        gap=12, extra='padding: 40px 12px 0;'),
+    '<div style="height: 12px;"></div>',
+    btn('บันทึกสุขภาพ', 'secondary', ic('plus', 18, BR7)),
+    # ถึงยังไม่มีตัวเลข คำถามก็จดได้ตั้งแต่วันนี้ ไม่ต้องรอ
+    card(
+      row(ic('question', 17, IN6, 1.9),
+          col(txt('จดคำถามไว้ก่อนได้', 14, IN9, 500),
+              txt('ไม่ต้องรอให้มีข้อมูลครบ นึกอะไรได้จดไว้เลย', 12, IN4), gap=3), gap=10),
+      pad=14, gap=0),
+    gap=14),
+  bottomnav(2)), h=820)
+
+
+# ---------- B1. ทางเข้า (สัปดาห์ 36 ขึ้นไป) ----------
+write('LaborEntry.dc.html', screen(
+  dash_topbar(),
+  body(
+    card(
+      row(row(ic('wave', 20, PE7), txt('จับเวลาการบีบตัว', 15, IN9, 500), gap=8),
+          badge('สัปดาห์ที่ 37', 'soft'), justify='space-between'),
+      txt('ใช้ตอนเริ่มรู้สึกท้องแข็งเป็นจังหวะ ระบบจะจับความนานและระยะห่างให้ '
+          'แล้วบอกว่าเข้าเกณฑ์ไปโรงพยาบาลหรือยัง', 13, IN6, extra='line-height: 1.6;'),
+      btn('เริ่มจับเวลา', 'primary', ic('play', 18, WHITE, 2)),
+      gap=12),
+    # ของที่ต้องไปโรงพยาบาลทันทีโดยไม่ต้องรอเกณฑ์ ต้องอยู่ตรงนี้ ไม่ใช่ซ่อนใน help
+    card(
+      txt('ไปโรงพยาบาลทันที ไม่ต้องรอครบเกณฑ์ ถ้ามีอาการเหล่านี้', 14, IN9, 500),
+      col(row(kick_dot(True, 6), txt('น้ำเดิน หรือมีน้ำไหลออกมา', 13, IN6), gap=8),
+          row(kick_dot(True, 6), txt('เลือดออกทางช่องคลอด', 13, IN6), gap=8),
+          row(kick_dot(True, 6), txt('ลูกดิ้นน้อยลงหรือหยุดดิ้น', 13, IN6), gap=8),
+          row(kick_dot(True, 6), txt('ปวดหัวมาก ตาพร่า หรือบวมขึ้นเร็ว', 13, IN6), gap=8),
+          gap=7),
+      pad=14, gap=10, bg=CR100, border=CR300),
+    gap=14),
+  bottomnav(0)), h=880)
+
+# ---------- B2. กำลังจับเวลา — ยังไม่บีบ ----------
+write('LaborTiming.dc.html', screen(
+  topbar('จับเวลาการบีบตัว', left=ic('x', 22, IN6)),
+  body(
+    row(stat_pill('timer', 'จับมาแล้ว', '38 นาที'),
+        stat_pill('wave', 'บันทึกไว้', '9 ครั้ง'), gap=10),
+    '<div style="height: 6px;"></div>',
+    hold_button(active=False),
+    '<div style="height: 10px;"></div>',
+    rule511(freq_ok=True, dur_ok=False, hour_ok=False),
+    section_head('ครั้งที่ผ่านมา'),
+    row(txt('เวลา', 11, IN4, extra='width: 54px; flex: none;'),
+        txt('ความนาน', 11, IN4, extra='flex: 1;'),
+        txt('ห่างจากครั้งก่อน', 11, IN4, extra='text-align: right;'),
+        gap=8, extra='padding: 0 12px;'),
+    contraction_row('21:14', 52, '4:10'),
+    contraction_row('21:10', 48, '4:32'),
+    contraction_row('21:05', 44, '5:05'),
+    gap=12),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s; '
+   'display: flex; flex-direction: column; gap: 8px;">%s'
+   '<div style="text-align: center; font-size: 12px; color: %s;">ปิดหน้าจอไปก่อนได้ ระบบจับต่อให้</div></div>'
+   ) % (WHITE, CR200, btn('หยุดจับเวลา', 'secondary', ic('stop', 17, BR7, 1.9)), IN4)), h=1120)
+
+# ---------- B3. กำลังบีบอยู่ ----------
+write('LaborActive.dc.html', screen(
+  topbar('จับเวลาการบีบตัว', left=ic('x', 22, IN6)),
+  body(
+    row(stat_pill('timer', 'จับมาแล้ว', '39 นาที'),
+        stat_pill('wave', 'บันทึกไว้', '9 ครั้ง'), gap=10),
+    '<div style="height: 6px;"></div>',
+    hold_button(active=True),
+    '<div style="height: 10px;"></div>',
+    # ตอนกำลังบีบคือตอนที่เจ็บที่สุด ต้องไม่มีอะไรให้อ่านหรือให้ตัดสินใจ
+    # เหลือแค่ปุ่มเดียวที่แตะพลาดยาก
+    card(txt('ตอนนี้ต้องการแค่ให้แตะอีกครั้งเมื่อคลายแล้ว อย่างอื่นรอได้',
+             13, IN6, extra='line-height: 1.6; text-align: center;'),
+         pad=14, gap=0, bg=CR100, border=CR200),
+    gap=12)), h=880)
+
+# ---------- B4. เข้าเกณฑ์แล้ว ----------
+write('LaborReady.dc.html', screen(
+  topbar('จับเวลาการบีบตัว', left=ic('x', 22, IN6)),
+  body(
+    row(stat_pill('timer', 'จับมาแล้ว', '1 ชม. 12 นาที'),
+        stat_pill('wave', 'บันทึกไว้', '17 ครั้ง'), gap=10),
+    escalate_card('เข้าเกณฑ์ 5-1-1 แล้ว',
+                  'บีบทุก 4 นาที ครั้งละราว 1 นาที ต่อเนื่องมา 1 ชั่วโมง '
+                  'ตำราแนะนำให้ติดต่อโรงพยาบาลตอนนี้', urgent=True),
+    rule511(freq_ok=True, dur_ok=True, hour_ok=True),
+    # แม้เข้าเกณฑ์แล้วก็ยังต้องไม่บอกว่า "คลอดแล้ว" หรือ "ถึงเวลาแล้ว"
+    # แอปบอกได้แค่ว่าตรงกับเกณฑ์ที่ตำราใช้ คนตัดสินคือหมอ
+    card(txt('เกณฑ์นี้เป็นแนวทางทั่วไป ไม่ใช่การวินิจฉัย '
+             'บางคนหมออาจนัดให้มาเร็วหรือช้ากว่านี้ตามประวัติของแต่ละคน',
+             12, IN4, extra='line-height: 1.6;'), pad=14, gap=0),
+    btn('หยุดจับเวลาและบันทึก', 'secondary', ic('stop', 17, BR7, 1.9)),
+    gap=12)), h=1000)
+
+# ---------- B5. ประวัติ ----------
+write('LaborHistory.dc.html', screen(
+  topbar('ประวัติการจับเวลา', left=ic('chev', 22, IN6)),
+  body(
+    card(
+      row(txt('รอบล่าสุด', 14, IN6), txt('เมื่อวาน 21:02', 12, IN4), justify='space-between'),
+      row(big_stat('จับนาน', '1:12', 'ชม.'),
+          big_stat('ครั้งทั้งหมด', '17', 'ครั้ง'),
+          big_stat('ห่างเฉลี่ย', '4:12', 'นาที')),
+      pad=14, gap=12),
+    section_head('รอบที่ผ่านมา'),
+    session_row('เมื่อวาน · 21:02', '1 ชม. 12 นาที', count=17),
+    session_row('26 ก.ย. · 03:40', '48 นาที', count=9),
+    session_row('24 ก.ย. · 22:15', '26 นาที', count=5),
+    '<div style="height: 4px;"></div>',
+    card(row(ic('alert', 16, IN4, 1.9),
+             txt('ท้องแข็งเป็นพักๆ ที่ไม่ถี่ขึ้นและไม่แรงขึ้น มักเป็นการบีบตัวเตือน '
+                 'ซึ่งพบได้ทั่วไปในช่วงท้าย', 12, IN6, extra='line-height: 1.5;'),
+             gap=8, align='flex-start'),
+         pad=12, bg=CR100, border=CR200, gap=0),
+    gap=12),
+  bottomnav(0)), h=980)
+
+VISIT_DECISIONS = """สรุปก่อนพบแพทย์ — เรื่องที่ต้องตัดสินใจ
+
+1. นับ ตั้งแต่ครั้งที่แล้ว จากอะไร
+
+   แนะนำ: จากนัดหมายที่ผ่านมาแล้วล่าสุดในกลุ่มฝากครรภ์
+   ถ้ายังไม่เคยมีนัดที่ผ่านมา ให้นับตั้งแต่วันที่เริ่มใช้แอป
+   ใช้กลุ่มการรักษาที่ทำไว้แล้วได้เลย ค่าทำฟันจะได้ไม่มาปนในสรุปฝากครรภ์
+
+2. เกณฑ์ที่ใช้ตัดสินว่า ควรบอกหมอ
+
+   ความดัน >= 140/90 ใช้ isHighBp ที่มีอยู่แล้วใน src/lib/format.ts
+   น้ำหนักขึ้นเร็วผิดปกติ ต้องตกลงเกณฑ์ก่อน เช่น เกิน 1 กก. ต่อสัปดาห์ในไตรมาส 2-3
+   ลูกดิ้นช้ากว่าค่าเฉลี่ยของตัวเองมาก ต้องตกลงว่าเท่าไหร่ถึงนับ เช่น เกิน 2 เท่า
+
+   ทุกเกณฑ์เขียนเป็นค่าคงที่ในไฟล์เดียวพร้อมที่มา ไม่กระจายอยู่ในหน้า
+   วันหนึ่งหมอบอกว่าเกณฑ์ควรเป็นอีกค่า จะได้แก้ที่เดียว
+
+3. แชร์ยังไง
+
+   Phase นี้: ยังไม่ทำ ให้เปิดหน้าจอให้หมอดูตรงๆ พอ
+   ปุ่มแชร์บนหัวข้อวางโครงไว้แล้วแต่ยังไม่เปิด
+   ถ้าจะทำจริง ลิงก์อ่านอย่างเดียวที่หมดอายุใน 24 ชั่วโมงน่าจะพอ
+   แต่นั่นแปลว่าเปิดข้อมูลสุขภาพให้คนที่ไม่ได้ล็อกอิน ต้องคิดให้จบก่อน
+
+4. คำถามที่อยากถาม เก็บที่ไหน
+
+   ตารางใหม่ visit_questions (id, family_id, text, asked_at, created_by)
+   ผูกกับครอบครัว ไม่ผูกกับนัดหมาย เพราะคำถามเกิดตอนไหนก็ได้
+   ติ๊กว่าถามแล้วคือใส่ asked_at ไม่ใช่ลบทิ้ง จะได้ย้อนดูได้ว่าเคยถามอะไรไป
+
+
+ข้อห้ามเดียวกับนับลูกดิ้น
+
+  สิ่งที่ควรบอกหมอ เป็นการชี้ให้ดู ไม่ใช่การวินิจฉัย
+  เขียนว่า ความดัน 148/92 สูงกว่าเกณฑ์ ได้ แต่ห้ามเขียนว่า เสี่ยงครรภ์เป็นพิษ"""
+
+LABOR_DECISIONS = """จับเวลาการบีบตัว — เรื่องที่ต้องตัดสินใจ
+
+1. ใช้เกณฑ์ 5-1-1 หรือ 4-1-1
+
+   แนะนำ: 5-1-1 เพราะเป็นตัวที่โรงพยาบาลไทยใช้บ่อยที่สุด
+   บางที่ใช้ 4-1-1 สำหรับคนท้องแรก และ 5-1-1 สำหรับท้องหลัง
+   ถ้าจะทำให้ถูกจริงต้องให้ตั้งค่าได้ตามที่หมอสั่ง ซึ่งเพิ่มความซับซ้อน
+   ทางออกกลาง: ใช้ 5-1-1 เป็นค่าตั้งต้น แล้วเขียนกำกับว่าให้ยึดตามที่หมอบอก
+
+2. เปิดให้ใช้ตั้งแต่สัปดาห์ไหน
+
+   แนะนำ: 36 การบีบตัวเตือนเริ่มรู้สึกได้ก่อนหน้านั้น แต่การเปิดเร็วเกินไป
+   จะทำให้จับเวลาการบีบตัวเตือนแล้วตกใจโดยไม่จำเป็น
+   ก่อนสัปดาห์ 36 ถ้าท้องแข็งถี่ผิดปกติคือเรื่องที่ต้องไปหาหมอ ไม่ใช่เรื่องที่ต้องมาจับเวลา
+   หน้าก่อนถึงเวลาจึงต้องพาไปหาหมอ ไม่ใช่แค่บอกว่ายังไม่ถึงเวลา
+
+3. โครงข้อมูล
+
+   ใช้โครงเดียวกับนับลูกดิ้นได้ทั้งหมด ต่างแค่เก็บคู่ started/ended ต่อครั้ง
+   แทนที่จะเก็บจุดเวลาเดียว
+   ถ้าทำนับลูกดิ้นก่อน ให้ออกแบบตารางเผื่อไว้ตั้งแต่แรกจะไม่ต้อง migrate ซ้ำ
+
+4. หน้าจอต้องไม่ดับตอนจับเวลา
+
+   ตอนเจ็บท้องคนไม่อยากปลดล็อกจอซ้ำๆ
+   Wake Lock API ใช้ได้บน Chrome Android และ Safari 16.4 ขึ้นไป
+   ต้องมีทางถอยเมื่อเบราว์เซอร์ไม่รองรับ ไม่ใช่พังเงียบ
+
+
+ข้อห้ามที่เข้มกว่านับลูกดิ้น
+
+  ฟีเจอร์นี้ถูกใช้ตอนตัดสินใจว่าจะไปโรงพยาบาลไหม
+  ห้ามเขียนว่า ยังไม่ต้องไป หรือ รอได้ ไม่ว่าตัวเลขจะเป็นยังไง
+  เข้าเกณฑ์แล้วบอกว่า ตรงกับเกณฑ์ที่ตำราใช้ ไม่ใช่ ถึงเวลาคลอดแล้ว
+  อาการที่ต้องไปทันทีโดยไม่ต้องรอเกณฑ์ ต้องอยู่หน้าแรก ไม่ใช่ใน help"""
+
 KICK_DECISIONS = """เรื่องที่ต้องตัดสินใจก่อนเขียนโค้ด
 
 1. ใช้เกณฑ์ไหน
@@ -2025,6 +2394,23 @@ GROUPS = [
 ตัวเลขที่ครบ 10 ไม่ได้แปลว่าปลอดภัย ทางติดต่อโรงพยาบาลจึงต้องหาเจอทุกหน้า ไม่ใช่ซ่อนในเมนู
 ปุ่มแตะทำใหญ่เต็มจอ เพราะใช้ตอนนอนตะแคงด้วยมือเดียว บางทีหลับตาอยู่ด้วย
 ประเด็นที่ต้องตัดสินใจ อยู่ในโน้ตใต้แถว"""),
+ ('visit', 'สรุปก่อนพบแพทย์ — เสนอใหม่',
+  ['VisitEntry.dc.html','VisitSummary.dc.html','VisitQuestions.dc.html','VisitEmpty.dc.html'],
+  """สรุปก่อนพบแพทย์ — ยังไม่ได้ลงมือ รอเลือก
+ไม่เพิ่มโครงข้อมูลใหม่เลยสักตัว ใช้ของที่เก็บอยู่แล้วทั้งหมด
+ข้อจำกัดที่กำหนดทุกอย่าง: หมอมีเวลาต่อคนไม่ถึง 10 นาที
+หน้านี้ต้องอ่านจบใน 15 วินาที และอ่านจากระยะแขนได้ เพราะหมอมองจอเราจากอีกฝั่งโต๊ะ
+ของผิดปกติจึงอยู่บนสุดเสมอ ไม่ใช่ให้หมอไล่หาเอง
+คำถามที่อยากถามเป็นส่วนที่คนลืมมากที่สุด จดไว้ตอนไหนก็ได้ ติ๊กทิ้งตอนถามแล้ว"""),
+ ('labor', 'จับเวลาการบีบตัว — เสนอใหม่',
+  ['LaborEntry.dc.html','LaborTiming.dc.html','LaborActive.dc.html',
+   'LaborReady.dc.html','LaborHistory.dc.html'],
+  """จับเวลาการบีบตัวของมดลูก — ยังไม่ได้ลงมือ รอเลือก
+โครงหน้าจอเป็นตัวเดียวกับนับลูกดิ้นเกือบทั้งหมด ทำต่อกันจะได้ของสองอย่างในราคาที่ใกล้กับอย่างเดียว
+ต่างกันตรงที่จับ ช่วงเวลา ไม่ใช่ จำนวนครั้ง กดตอนเริ่มบีบ กดอีกทีตอนคลาย
+เกณฑ์ 5-1-1 คือ ทุก 5 นาที ครั้งละ 1 นาที ต่อเนื่อง 1 ชั่วโมง
+ตอนกำลังบีบคือตอนที่เจ็บที่สุด หน้าจอจึงเหลือแค่ปุ่มเดียวที่แตะพลาดยาก
+อาการที่ต้องไปโรงพยาบาลทันทีโดยไม่ต้องรอครบเกณฑ์ อยู่หน้าแรกของฟีเจอร์ ไม่ซ่อนใน help"""),
  ('album', 'อัลบั้ม — Phase 2',
   ['Album.dc.html','AlbumUpload.dc.html','PhotoDetail.dc.html'],
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
@@ -2033,6 +2419,9 @@ heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html
            'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,'CostMonthly.dc.html':1000,'CostMonthEmpty.dc.html':1000,
            'KickEntry.dc.html':900,'KickCount.dc.html':980,'KickDone.dc.html':900,
            'KickSlow.dc.html':1020,'KickHistory.dc.html':1060,'KickEarly.dc.html':820,
+           'VisitEntry.dc.html':820,'VisitSummary.dc.html':1240,'VisitQuestions.dc.html':1000,
+           'VisitEmpty.dc.html':820,'LaborEntry.dc.html':880,'LaborTiming.dc.html':1120,
+           'LaborActive.dc.html':880,'LaborReady.dc.html':1000,'LaborHistory.dc.html':980,
            'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
            'AppointmentForm.dc.html':1230,'Family.dc.html':940,'FamilyInvite.dc.html':700,
            'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
@@ -2054,6 +2443,11 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'KickEntry.dc.html':'การ์ดบนหน้าแรก','KickCount.dc.html':'กำลังนับ',
           'KickDone.dc.html':'ครบ 10 ครั้ง','KickSlow.dc.html':'ช้ากว่าเกณฑ์ · พาไปหาหมอ',
           'KickHistory.dc.html':'ประวัติ + แนวโน้ม','KickEarly.dc.html':'ยังไม่ถึงสัปดาห์ 28',
+          'VisitEntry.dc.html':'ทางเข้าจากการ์ดนัดหมาย','VisitSummary.dc.html':'สรุปให้หมอดู',
+          'VisitQuestions.dc.html':'คำถามที่อยากถาม','VisitEmpty.dc.html':'ข้อมูลยังไม่พอ',
+          'LaborEntry.dc.html':'ทางเข้า + อาการที่ต้องไปทันที','LaborTiming.dc.html':'กำลังจับเวลา',
+          'LaborActive.dc.html':'กำลังบีบอยู่','LaborReady.dc.html':'เข้าเกณฑ์ 5-1-1',
+          'LaborHistory.dc.html':'ประวัติ',
           'Album.dc.html':'อัลบั้ม · Phase 2','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
           'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
 
@@ -2066,6 +2460,11 @@ for gid, gname, files, note in GROUPS:
         arts.append({"file": f, "x": x, "y": y, "w": w,
                      "h": heights.get(f, 844), "title": titles[f], "page": "screens"})
         x += w + 80
+    if gid in ('visit', 'labor'):
+        notes.append({"id": "note-" + gid + "-decide", "x": 0,
+                      "y": y + max(heights.get(f, 844) for f in files) + 40,
+                      "w": 1400, "page": "screens",
+                      "text": VISIT_DECISIONS if gid == 'visit' else LABOR_DECISIONS})
     if gid == 'kick':
         notes.append({"id": "note-kick-decide", "x": 0,
                       "y": y + max(heights.get(f, 844) for f in files) + 40,
