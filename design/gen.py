@@ -1035,14 +1035,33 @@ def week_head(week_txt, date_txt, count=None):
                right, justify='space-between',
                extra='padding: 6px 0 2px;')
 
-def day_head(day_txt, count):
-    """หัวย่อยรายวัน — เล็กกว่าหัวสัปดาห์ชัดเจน เพื่อให้ลำดับชั้นอ่านออกในตาเดียว"""
-    return row(('<span style="width: 5px; height: 5px; border-radius: 9999px; background: %s; flex: none;"></span>' % BR3),
-               txt(day_txt, 12, IN6),
-               txt('%d รูป' % count, 11, IN4),
-               gap=7, extra='padding: 4px 0 0;')
+def day_head(day_txt, count, scrollable=False):
+    """หัวย่อยรายวัน — เล็กกว่าหัวสัปดาห์ชัดเจน เพื่อให้ลำดับชั้นอ่านออกในตาเดียว
 
-def caption_tile(kind='scan', caption=None, date_txt='26 ส.ค.', badge_txt=None, w='100%'):
+    บอกจำนวนรูปเสมอ เพราะแถวเลื่อนแนวนอนซ่อนรูปที่เกินขอบไว้
+    ถ้าไม่บอกจำนวน ผู้ใช้จะไม่รู้ว่ายังมีอีกกี่ใบให้ไถ
+    """
+    hint = (row(txt('ไถดูเพิ่ม', 10, IN4), ic('chev', 11, IN4, 2), gap=2) if scrollable else '')
+    return row(row(('<span style="width: 5px; height: 5px; border-radius: 9999px; background: %s; flex: none;"></span>' % BR3),
+                   txt(day_txt, 12, IN6), txt('%d รูป' % count, 11, IN4), gap=7),
+               hint, justify='space-between', extra='padding: 4px 0 0;')
+
+def scroll_row(*tiles, gap=8):
+    """แถวเลื่อนแนวนอน — หนึ่งวันหนึ่งแถว ไม่ตัดขึ้นบรรทัดใหม่
+
+    เหตุผลที่ไม่ให้ wrap: อัลบั้มจะยาวขึ้นเรื่อยๆ ตามอายุครรภ์ ถ้าวันที่มีรูปเยอะ
+    ดันความสูงจนวันอื่นหลุดจอ การหาว่า "วันนั้นถ่ายอะไรไว้" จะช้าลงทุกสัปดาห์
+    แถวเลื่อนทำให้หนึ่งวันสูงเท่ากันเสมอ ไม่ว่าจะมี 2 รูปหรือ 20 รูป
+
+    แลกกับการที่ต้องไถถึงจะเห็นครบ จึงต้องมีจำนวนรูปบอกที่หัววันเสมอ
+    และปล่อยให้ใบสุดท้ายโผล่ครึ่งใบ เป็นสัญญาณว่ายังมีต่อ
+    """
+    return ('<div style="display: flex; gap: %dpx; overflow-x: auto; padding-bottom: 2px; '
+            'scroll-snap-type: x proximity;">%s</div>'
+            ) % (gap, ''.join('<div style="flex: none; scroll-snap-align: start;">%s</div>' % t
+                              for t in tiles))
+
+def caption_tile(kind='scan', caption=None, date_txt='26 ส.ค.', badge_txt=None, w=176):
     """การ์ดรูปแบบเห็นแคปชัน
 
     แคปชันอยู่ใต้รูป ไม่ทับบนรูป เพราะข้อความไทยตัวสูงและรูปอัลตราซาวด์
@@ -1051,15 +1070,10 @@ def caption_tile(kind='scan', caption=None, date_txt='26 ส.ค.', badge_txt=No
     cap = (txt(caption, 12, IN9, extra='line-height: 1.45; display: -webkit-box; '
                '-webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;')
            if caption else txt('ไม่มีคำบรรยาย', 12, IN4))
-    return ('<div style="width: %s; display: flex; flex-direction: column; gap: 6px;">'
-            '%s<div style="display: flex; flex-direction: column; gap: 3px; padding: 0 2px;">'
-            '%s%s</div></div>'
-            ) % (w, phototile(kind, '100%%', 118, 10, badge_txt), cap,
-                 txt(date_txt, 11, IN4))
-
-def two_col(*cards_):
-    return row(*[('<div style="flex: 1; min-width: 0;">%s</div>' % c) for c in cards_],
-               gap=10, align='flex-start')
+    return ('<div style="width: %dpx; display: flex; flex-direction: column; gap: 6px;">'
+            '%s<div style="display: flex; flex-direction: column; gap: 3px; padding: 0 2px; '
+            'min-height: 52px;">%s%s</div></div>'
+            ) % (w, phototile(kind, w, 132, 10, badge_txt), cap, txt(date_txt, 11, IN4))
 
 # ---------- Album: กริดรูป ----------
 write('Album.dc.html', screen(
@@ -1100,7 +1114,16 @@ def thumb_pick(kind, badge=None, removable=True):
             ) % (phototile(kind, 96, 96, 10, badge), x)
 
 
-# ---------- แบบ A: จัดกลุ่มย่อยตามวัน ----------
+# ---------- แบบ A (default): แถวเลื่อนรายวัน ----------
+def view_toggle(sel=0):
+    def one(label, on):
+        return ('<div style="padding: 4px 10px; border-radius: 6px; font-size: 12px; '
+                'font-weight: %s; color: %s; %s">%s</div>'
+                ) % ('500' if on else '400', BR9 if on else IN6,
+                     ('background: %s; box-shadow: %s;' % (WHITE, SHADOW)) if on else '', label)
+    return ('<div style="display: flex; gap: 2px; background: %s; border-radius: 8px; padding: 3px;">%s%s</div>'
+            ) % (CR100, one('ตาราง', sel == 0), one('รายละเอียด', sel == 1))
+
 write('AlbumByDay.dc.html', screen(
   topbar('อัลบั้ม', right=ic('camera', 22, IN6)),
   ('<div style="flex: none; padding: 12px 16px; display: flex; gap: 8px; background: %s; '
@@ -1108,31 +1131,26 @@ write('AlbumByDay.dc.html', screen(
    chip('ทั้งหมด', True) + chip('อัลตราซาวด์') + chip('ครอบครัว') + chip('อื่นๆ')),
   body(
     card(quota_bar(62, '3.1 GB', '5 GB'), pad=14),
-    row(sort_pill('เรียงจากใหม่ไปเก่า'), txt('28 รูป', 12, IN4), justify='space-between'),
+    row(sort_pill('เรียงจากใหม่ไปเก่า'), view_toggle(0), justify='space-between'),
 
-    # หัวสัปดาห์บอกช่วงวัน ไม่ใช่วันของรูปใบแรก
-    week_head('สัปดาห์ที่ 24', '22 – 26 ส.ค. 2569', 5),
-    day_head('26 ส.ค. · อังคาร', 3),
-    album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
-              phototile('photo', '100%', 108, 10, 'ครอบครัว'),
-              phototile('photo', '100%', 108, 10)),
+    week_head('สัปดาห์ที่ 24', '22 – 26 ส.ค. 2569', 9),
+    day_head('26 ส.ค. · อังคาร', 6, scrollable=True),
+    scroll_row(*[phototile(k, 108, 108, 10, b) for k, b in
+                 [('scan', 'อัลตราซาวด์'), ('photo', 'ครอบครัว'), ('photo', None),
+                  ('scan', 'อัลตราซาวด์'), ('photo', None), ('photo', None)]]),
     day_head('22 ส.ค. · ศุกร์', 2),
-    album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
-              phototile('photo', '100%', 108, 10),
-              '<div style="flex: 1;"></div>'),
+    scroll_row(phototile('scan', 108, 108, 10, 'อัลตราซาวด์'),
+               phototile('photo', 108, 108, 10)),
 
     week_head('สัปดาห์ที่ 23', '5 ส.ค. 2569', 3),
-    # สัปดาห์ที่มีวันเดียวไม่ต้องมีหัวย่อย ไม่งั้นซ้ำกับหัวสัปดาห์เปล่าๆ
-    album_row(phototile('scan', '100%', 108, 10, 'อัลตราซาวด์'),
-              phototile('photo', '100%', 108, 10),
-              phototile('photo', '100%', 108, 10)),
+    scroll_row(phototile('scan', 108, 108, 10, 'อัลตราซาวด์'),
+               phototile('photo', 108, 108, 10),
+               phototile('photo', 108, 108, 10)),
 
     week_head('ไม่ระบุสัปดาห์', 'ถ่ายก่อนเริ่มบันทึกการตั้งครรภ์', 2),
-    album_row(phototile('photo', '100%', 108, 10),
-              phototile('photo', '100%', 108, 10),
-              '<div style="flex: 1;"></div>'),
+    scroll_row(phototile('photo', 108, 108, 10), phototile('photo', 108, 108, 10)),
     pad=16, gap=12),
-  fab(), bottomnav(3)), h=1180)
+  fab(), bottomnav(3)), h=1020)
 
 # ---------- แบบ B: เห็นแคปชัน ----------
 write('AlbumCaption.dc.html', screen(
@@ -1142,31 +1160,23 @@ write('AlbumCaption.dc.html', screen(
    chip('ทั้งหมด', True) + chip('อัลตราซาวด์') + chip('ครอบครัว') + chip('อื่นๆ')),
   body(
     card(quota_bar(62, '3.1 GB', '5 GB'), pad=14),
-    # สลับมุมมองได้ ไม่ต้องเลือกอย่างใดอย่างหนึ่งไปตลอด
-    row(sort_pill('เรียงจากใหม่ไปเก่า'),
-        ('<div style="display: flex; gap: 2px; background: %s; border-radius: 8px; padding: 3px;">'
-         '<div style="padding: 4px 10px; border-radius: 6px; font-size: 12px; color: %s;">ตาราง</div>'
-         '<div style="padding: 4px 10px; border-radius: 6px; background: %s; box-shadow: %s; '
-         'font-size: 12px; font-weight: 500; color: %s;">รายละเอียด</div></div>'
-         ) % (CR100, IN6, WHITE, SHADOW, BR9),
-        justify='space-between'),
+    row(sort_pill('เรียงจากใหม่ไปเก่า'), view_toggle(1), justify='space-between'),
 
-    week_head('สัปดาห์ที่ 24', '22 – 26 ส.ค. 2569', 5),
-    day_head('26 ส.ค. · อังคาร', 3),
-    two_col(caption_tile('scan', 'อัลตราซาวด์ครั้งที่ 3 คุณหมอบอกว่าลูกหนัก 700 กรัมแล้ว',
-                         '26 ส.ค. 14:20', 'อัลตราซาวด์'),
-            caption_tile('photo', 'ถ่ายกับพี่สาวก่อนไปโรงพยาบาล', '26 ส.ค. 09:05', 'ครอบครัว')),
-    two_col(caption_tile('photo', None, '26 ส.ค. 19:40'),
-            '<div></div>'),
+    week_head('สัปดาห์ที่ 24', '22 – 26 ส.ค. 2569', 9),
+    day_head('26 ส.ค. · อังคาร', 6, scrollable=True),
+    scroll_row(caption_tile('scan', 'อัลตราซาวด์ครั้งที่ 3 คุณหมอบอกว่าลูกหนัก 700 กรัมแล้ว',
+                            '26 ส.ค. 14:20', 'อัลตราซาวด์'),
+               caption_tile('photo', 'ถ่ายกับพี่สาวก่อนไปโรงพยาบาล', '26 ส.ค. 09:05', 'ครอบครัว'),
+               caption_tile('photo', None, '26 ส.ค. 19:40')),
     day_head('22 ส.ค. · ศุกร์', 2),
-    two_col(caption_tile('scan', 'เห็นหน้าชัดครั้งแรก', '22 ส.ค. 10:15', 'อัลตราซาวด์'),
-            caption_tile('photo', 'ท้อง 24 สัปดาห์', '22 ส.ค. 20:02')),
+    scroll_row(caption_tile('scan', 'เห็นหน้าชัดครั้งแรก', '22 ส.ค. 10:15', 'อัลตราซาวด์'),
+               caption_tile('photo', 'ท้อง 24 สัปดาห์', '22 ส.ค. 20:02')),
 
     week_head('สัปดาห์ที่ 23', '5 ส.ค. 2569', 2),
-    two_col(caption_tile('scan', 'ตรวจเลือดและอัลตราซาวด์', '5 ส.ค. 11:30', 'อัลตราซาวด์'),
-            caption_tile('photo', 'ของขวัญจากคุณยาย', '5 ส.ค. 18:22')),
+    scroll_row(caption_tile('scan', 'ตรวจเลือดและอัลตราซาวด์', '5 ส.ค. 11:30', 'อัลตราซาวด์'),
+               caption_tile('photo', 'ของขวัญจากคุณยาย', '5 ส.ค. 18:22')),
     pad=16, gap=12),
-  fab(), bottomnav(3)), h=1560)
+  fab(), bottomnav(3)), h=1180)
 
 write('AlbumUpload.dc.html', screen(
   '<div style="flex: 1; background: rgba(43,36,32,0.32);"></div>',
@@ -2290,59 +2300,64 @@ write('LaborHistory.dc.html', screen(
     gap=12),
   bottomnav(0)), h=980)
 
-ALBUM_DECISIONS = """อัลบั้ม — วันที่ผิดตรงไหน และสองทางแก้
+ALBUM_DECISIONS = """อัลบั้ม — ตกลงแล้ว ทำทั้งสองแบบ default คือ ตาราง
 
-ของจริงตอนนี้ (ใบซ้าย)
+ปัญหาเดิม (ใบซ้าย คือของจริงตอนนี้)
 
   หัวกลุ่มเขียนว่า สัปดาห์ที่ 24 · 26 ส.ค. 2569
   ตัวเลขวันที่นั้นมาจาก รูปใบแรกของกลุ่ม ใบเดียว
   แต่ในสัปดาห์นั้นมีรูปจาก 22, 24 และ 26 ส.ค. ปนกันอยู่
   คนอ่านจะเข้าใจว่ารูปทั้งกลุ่มถ่ายวันเดียวกัน ซึ่งไม่จริง
-  และรูปแต่ละใบก็ไม่ได้บอกวันของตัวเอง จึงแยกไม่ออกว่าใบไหนวันไหน
+  โค้ดอยู่ที่ src/app/(app)/album/page.tsx — thaiDate(list[0].takenAt)
 
 
-แบบ A — แยกกลุ่มย่อยตามวัน
+ที่ตกลงแล้ว
 
-  หัวสัปดาห์บอกช่วงวัน 22 – 26 ส.ค. 2569 ไม่ใช่วันของรูปใบแรก
+  หัวสัปดาห์บอกช่วงวัน 22 - 26 ส.ค. 2569 ไม่ใช่วันของรูปใบแรก
   ใต้หัวสัปดาห์แยกเป็นหัวย่อยรายวัน พร้อมจำนวนรูปของวันนั้น
-  สัปดาห์ที่มีรูปวันเดียวไม่ต้องมีหัวย่อย ไม่งั้นซ้ำกับหัวสัปดาห์เปล่าๆ
-
-  ข้อดี: ยังเป็นกริด 3 คอลัมน์เหมือนเดิม เห็นภาพรวมได้เร็ว เลื่อนน้อย
-  ข้อเสีย: ยังไม่เห็นคำบรรยาย ต้องกดเข้าไปดูทีละใบ
+  หนึ่งวัน = หนึ่งแถวเลื่อนแนวนอน ไม่ตัดขึ้นบรรทัดใหม่
+  ทำสองมุมมอง สลับได้ ตาราง เป็น default
 
 
-แบบ B — เห็นแคปชัน
+ทำไม default เป็น ตาราง
 
-  กริด 2 คอลัมน์ แต่ละใบมีคำบรรยาย 2 บรรทัด และวันที่พร้อมเวลา
-  แคปชันอยู่ใต้รูป ไม่ทับบนรูป เพราะข้อความไทยตัวสูง และรูปอัลตราซาวด์
-  พื้นหลังไม่สม่ำเสมอ ทับแล้วอ่านยากจนต้องใส่เงาทึบ ซึ่งบังรูปไปอีก
-  รูปที่ไม่มีคำบรรยายเขียนว่า ไม่มีคำบรรยาย ไม่ปล่อยช่องว่างให้การ์ดสูงไม่เท่ากัน
-
-  ข้อดี: อ่านออกทันทีว่ารูปไหนคืออะไร ตอบโจทย์คนที่ใส่แคปชันไว้
-  ข้อเสีย: เห็นรูปต่อหน้าจอน้อยลงราวครึ่งหนึ่ง อัลบั้มยาวขึ้นมาก
+  คนเปิดอัลบั้มส่วนใหญ่มาเพื่อ หา รูป ซึ่งเป็นงานทางสายตา
+  กริดเล็กตอบได้เร็วที่สุด และรูปจำนวนมากจะไม่มีคำบรรยาย
+  ถ้าเอา รายละเอียด เป็น default จะเสียพื้นที่ให้ช่อง ไม่มีคำบรรยาย เป็นแถบๆ
+  รายละเอียด เหมาะกับตอนอยาก อ่าน ย้อนความทรงจำ ซึ่งเป็นการใช้งานรอง
 
 
-ข้อเสนอ: ทำทั้งสองแบบ แล้วให้สลับได้
+ทำไมแถวเลื่อนแนวนอน ไม่ให้ตัดบรรทัด
 
-  ปุ่มสลับ ตาราง / รายละเอียด อยู่แถวเดียวกับตัวเรียง (เห็นในใบ B)
-  ทั้งสองแบบใช้การจัดกลุ่มชุดเดียวกัน ต่างกันแค่การ์ดที่วาด
-  งานเพิ่มจากการทำแบบเดียวจึงน้อย และไม่ต้องเลือกอย่างใดอย่างหนึ่งไปตลอด
-  จำค่าที่เลือกไว้ใน URL (?view=) เหมือนหน้าค่าใช้จ่าย จะได้แชร์ลิงก์แล้วเห็นเหมือนกัน
+  อัลบั้มยาวขึ้นเรื่อยๆ ตามอายุครรภ์ ถ้าวันที่มีรูปเยอะดันความสูงจนวันอื่นหลุดจอ
+  การหาว่า วันนั้นถ่ายอะไรไว้ จะช้าลงทุกสัปดาห์
+  แถวเลื่อนทำให้หนึ่งวันสูงเท่ากันเสมอ ไม่ว่าจะมี 2 รูปหรือ 20 รูป
+
+  แลกกับการที่ต้องไถถึงจะเห็นครบ จึงต้อง
+    - บอกจำนวนรูปที่หัววันเสมอ ผู้ใช้จะได้รู้ว่ายังมีอีกกี่ใบ
+    - ปล่อยให้ใบสุดท้ายโผล่ครึ่งใบ เป็นสัญญาณว่ายังมีต่อ
+    - ใส่คำว่า ไถดูเพิ่ม เฉพาะวันที่มีรูปเกินหน้าจอ ไม่ใส่ทุกวันให้รก
+    - scroll-snap แบบ proximity ไม่ใช่ mandatory เพราะ mandatory จะฝืนมือ
+      เวลาผู้ใช้อยากไถผ่านเร็วๆ
+
+  บนเดสก์ท็อปที่กว้างพอ รูปทั้งวันจะพอดีในแถวเดียวโดยไม่ต้องไถ
 
 
-ที่ต้องตัดสินใจ
+ยังต้องตัดสินใจ
 
-  1. เอาแบบไหน หรือทำทั้งสองแบบพร้อมปุ่มสลับ
-  2. แบบ B ให้จำนวนคอลัมน์เป็น 2 บนมือถือ และ 3-4 บนเดสก์ท็อปไหม
-  3. รูปที่ไม่มีสัปดาห์ (ถ่ายก่อนเริ่มบันทึกการตั้งครรภ์) จัดยังไง
-     ตอนนี้กองรวมกันที่ท้ายสุดในกลุ่ม ไม่ระบุสัปดาห์ ซึ่งพอใช้ได้
-     แต่ถ้ามีเยอะจะกลายเป็นกองใหญ่ที่ไม่มีลำดับ
+  1. รูปที่ไม่มีสัปดาห์ (ถ่ายก่อนเริ่มบันทึกการตั้งครรภ์) จัดยังไง
+     ตอนนี้กองรวมกันที่ท้ายสุดในกลุ่ม ไม่ระบุสัปดาห์
+     ถ้ามีเยอะจะกลายเป็นกองใหญ่ที่ไม่มีลำดับ อาจต้องแบ่งตามเดือนแทน
+
+  2. จำมุมมองที่เลือกไว้ที่ไหน
+     แนะนำ URL (?view=detail) เหมือนหน้าค่าใช้จ่าย แชร์ลิงก์แล้วเห็นเหมือนกัน
+     ถ้าอยากให้จำข้ามการเปิดแอป ต้องเก็บใน localStorage เพิ่ม
 
 
 หมายเหตุ: ตอนวาดใบเปรียบเทียบเจอว่า album_row ของเดิมทำให้รูปสามใบ
 รวมกันเป็น 300% แล้วล้นออกนอกจอ (phototile ตั้ง width 100% + flex none)
-แก้ใน gen.py แล้ว ใบ Album ที่เป็นของจริงจึงแสดงถูกด้วย
-เป็นบั๊กของไฟล์ออกแบบเท่านั้น ไม่เกี่ยวกับโค้ดแอป"""
+แก้ใน gen.py แล้ว เป็นบั๊กของไฟล์ออกแบบเท่านั้น ไม่เกี่ยวกับโค้ดแอป"""
+
 
 VISIT_DECISIONS = """สรุปก่อนพบแพทย์ — เรื่องที่ต้องตัดสินใจ
 
@@ -2577,7 +2592,8 @@ GROUPS = [
 ใบซ้ายคือของจริงตอนนี้: หัวกลุ่มเขียน สัปดาห์ที่ 24 · 12 ส.ค. 2569
 โดยเอาวันที่ของรูปใบแรกมาแปะ ทั้งที่ในสัปดาห์นั้นมีรูปจากหลายวัน
 คนอ่านจะเข้าใจว่ารูปทั้งกลุ่มถ่ายวันเดียวกัน และรูปแต่ละใบก็ไม่บอกวันของตัวเอง
-สองใบขวาคือทางแก้สองแบบ รายละเอียดอยู่ในโน้ตใต้แถว"""),
+ตกลงแล้วว่าทำสองมุมมองสลับได้ default คือ ตาราง และหนึ่งวันเป็นแถวเลื่อนแนวนอน
+รายละเอียดและเหตุผลอยู่ในโน้ตใต้แถว"""),
  ('album', 'อัลบั้ม — Phase 2',
   ['AlbumUpload.dc.html','PhotoDetail.dc.html'],
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
@@ -2593,7 +2609,7 @@ heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html
            'AppointmentForm.dc.html':1230,'Family.dc.html':940,'FamilyInvite.dc.html':700,
            'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
            'DashboardV2.dc.html':1080,
-           'AlbumByDay.dc.html':1180,'AlbumCaption.dc.html':1560}
+           'AlbumByDay.dc.html':1020,'AlbumCaption.dc.html':1180}
 titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'สมัครสมาชิก','Invite.dc.html':'รับคำเชิญ',
           'Onboarding.dc.html':'Onboarding · ขั้น 3','OnboardingDone.dc.html':'Onboarding · ขั้น 4',
           'Main.dc.html':'Dashboard · owner','DashboardSetup.dc.html':'Dashboard · ยังไม่ตั้ง LMP',
@@ -2617,8 +2633,8 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'LaborActive.dc.html':'กำลังบีบอยู่','LaborReady.dc.html':'เข้าเกณฑ์ 5-1-1',
           'LaborHistory.dc.html':'ประวัติ',
           'Album.dc.html':'ของจริงตอนนี้ · วันที่ผิด',
-          'AlbumByDay.dc.html':'แบบ A · แยกรายวัน',
-          'AlbumCaption.dc.html':'แบบ B · เห็นแคปชัน','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
+          'AlbumByDay.dc.html':'แบบ A · ตาราง (default)',
+          'AlbumCaption.dc.html':'แบบ B · รายละเอียด','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
           'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
 
 arts, notes, y = [], [], 0
