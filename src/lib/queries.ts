@@ -4,15 +4,16 @@
  * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import {
   appointments, careGroups, families, familyInvites, familyMembers,
-  photos, pregnancyProfiles, user, weeklyLogs,
+  photos, pregnancyProfiles, trackingSessions, user, weeklyLogs,
 } from "@/db/schema";
+import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
 import type { CostItem } from "@/lib/costs";
 import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
 import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
@@ -142,6 +143,63 @@ export async function listCareGroups(db: Db, familyId: string) {
     .from(careGroups)
     .where(and(eq(careGroups.familyId, familyId), eq(careGroups.archived, false)))
     .orderBy(asc(careGroups.createdAt));
+}
+
+
+const KICK_COLS = {
+  id: trackingSessions.id,
+  startedAt: trackingSessions.startedAt,
+  endedAt: trackingSessions.endedAt,
+  targetCount: trackingSessions.targetCount,
+  events: trackingSessions.events,
+  note: trackingSessions.note,
+};
+
+/**
+ * รอบที่ยังนับอยู่ (ถ้ามี)
+ *
+ * รอบที่ค้างเกิน STALE_HOURS ถือว่าลืมปิด ไม่ใช่รอบที่ยังใช้งานอยู่
+ * ถ้าไม่กรองทิ้ง ผู้ใช้จะเปิดแอปมาเจอรอบเมื่อวานที่นับมา 14 ชั่วโมงแล้วสับสน
+ * (ไม่ลบทิ้ง ยังอยู่ในประวัติ แค่ไม่เอามาแสดงเป็นรอบที่กำลังนับ)
+ */
+export async function getActiveKickSession(
+  db: Db,
+  familyId: string,
+): Promise<SessionView | null> {
+  const row = await db
+    .select(KICK_COLS)
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "kick"),
+        isNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .get();
+  if (!row) return null;
+
+  const cutoff = Date.now() - STALE_HOURS * 3600_000;
+  if (new Date(row.startedAt).getTime() < cutoff) return null;
+  return toView(row);
+}
+
+/** ประวัติรอบที่จบแล้ว ใหม่ไปเก่า */
+export async function listKickSessions(db: Db, familyId: string, limit = 30) {
+  const rows = await db
+    .select(KICK_COLS)
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "kick"),
+        isNotNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .limit(limit);
+  return rows.map(toView);
 }
 
 export async function getAppointmentById(db: Db, familyId: string, id: string) {

@@ -5,7 +5,9 @@ import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
 import { WeeklyDevelopmentCard, WeeklySizeCard } from "@/components/dashboard/weekly";
 import { weeklyContent } from "@/data/weekly-content";
-import { getDashboard, requireFamilyContext } from "@/lib/queries";
+import { getActiveKickSession, getDashboard, listKickSessions, requireFamilyContext } from "@/lib/queries";
+import { KickCard } from "@/components/kicks/dashboard-card";
+import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
 
 export const metadata = { title: "หน้าแรก · Pre Care" };
@@ -23,7 +25,11 @@ export default async function DashboardPage() {
   }
 
   const { db, familyId, role } = ctx;
-  const data = await getDashboard(db, familyId);
+  const [data, activeKick, kickSessions] = await Promise.all([
+    getDashboard(db, familyId),
+    getActiveKickSession(db, familyId),
+    listKickSessions(db, familyId, 10),
+  ]);
 
   // now มาจาก getDashboard ไม่ใช่เรียก Date.now() ใน render
   // เพราะ react-hooks/purity ห้ามฟังก์ชัน impure ใน component แม้เป็น server component
@@ -56,6 +62,12 @@ export default async function DashboardPage() {
           )}
 
           {weekly && <WeeklyDevelopmentCard content={weekly} />}
+          <KickCard
+            week={data.ga?.weeks ?? null}
+            active={activeKick != null}
+            lastDurationMs={kickSessions[0]?.durationMs ?? null}
+            avgMs={averageMs(kickSessions)}
+          />
         </div>
 
         <div className="flex flex-col gap-4">

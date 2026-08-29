@@ -207,3 +207,47 @@ export const storageObjects = sqliteTable(
   },
   (t) => [index("idx_storage_family").on(t.familyId)],
 );
+
+/**
+ * ประเภทของรอบจับเวลา
+ *
+ * ตอนนี้ใช้แค่ kick แต่ใส่คอลัมน์ไว้ตั้งแต่แรกเพราะการจับเวลาการบีบตัวของมดลูก
+ * (อยู่ใน backlog) ใช้โครงเดียวกันทั้งหมด ต่างแค่แต่ละครั้งมีเวลาเริ่มและเวลาจบ
+ * แทนที่จะเป็นจุดเวลาเดียว — ซึ่ง events เก็บเป็น JSON อยู่แล้วจึงรองรับได้เลย
+ * ถ้าไม่ใส่ตอนนี้ วันหลังต้อง migrate ทั้งตาราง
+ */
+export const TRACKING_KINDS = ["kick", "contraction"] as const;
+export type TrackingKind = (typeof TRACKING_KINDS)[number];
+
+/**
+ * รอบนับลูกดิ้น
+ *
+ * ⚠️ รอบหนึ่งกินเวลา 20 นาทีถึง 2 ชั่วโมง ผู้ใช้จะปิดจอ สลับแอป หรือรับสายแน่นอน
+ *    รอบที่กำลังนับจึงต้องอยู่ที่นี่ ไม่ใช่ใน state ของหน้า
+ *    endedAt เป็น null = ยังนับอยู่ ต่อได้จากอุปกรณ์ไหนก็ได้
+ *
+ * events เก็บเป็น JSON ของเวลาที่แตะแต่ละครั้ง ไม่แยกตาราง
+ * เพราะไม่เคยต้อง query รายครั้ง อ่านทีก็อ่านทั้งรอบอยู่แล้ว
+ * และช่วงห่างระหว่างครั้งคือข้อมูลที่หมอถามจริง จึงต้องเก็บ ไม่ใช่เก็บแค่จำนวน
+ */
+export const trackingSessions = sqliteTable(
+  "tracking_sessions",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    kind: text("kind", { enum: TRACKING_KINDS }).notNull().default("kick"),
+    startedAt: text("started_at").notNull(),
+    /** null = ยังนับอยู่ */
+    endedAt: text("ended_at"),
+    targetCount: integer("target_count").notNull().default(10),
+    /** JSON: [{ "at": "2026-08-28T20:14:00" }] — เวลาท้องถิ่นแบบไม่มี timezone */
+    events: text("events").notNull().default("[]"),
+    note: text("note"),
+  },
+  (t) => [
+    index("idx_tracking_family").on(t.familyId, t.kind, t.startedAt),
+    /** หารอบที่ยังไม่จบได้เร็ว — ทุกครั้งที่เปิดหน้าต้องเช็คว่ามีรอบค้างอยู่ไหม */
+    index("idx_tracking_open").on(t.familyId, t.endedAt),
+  ],
+);

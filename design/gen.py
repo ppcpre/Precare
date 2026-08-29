@@ -1714,21 +1714,19 @@ def stat_pill(icon_name, label, value, color=None):
             ) % (WHITE, CR200, IN6, ic(icon_name, 14, IN4, 1.9), label, color or IN9, value)
 
 def escalate_card(title, body_text, urgent=False):
-    """การ์ดพาไปหาหมอ — ใช้ danger แบบหม่นตาม design principle ข้อ 3
-    ไม่ทำแถบแดงทั้งใบ เพราะจะทำให้ตกใจเกินเหตุทุกครั้งที่เห็น"""
+    """แถบเตือนพาไปหาหมอ — ใช้ danger แบบหม่นตาม design principle ข้อ 3
+    ไม่ทำแถบแดงทั้งใบ เพราะจะทำให้ตกใจเกินเหตุทุกครั้งที่เห็น
+
+    ไม่มีปุ่มโทร (ตัดออกตามที่ตกลง) จึงไม่ต้องเก็บเบอร์โรงพยาบาลในระบบ
+    """
     bd = BAD if urgent else CR300
     bg = '#FBF0EE' if urgent else CR100
     return ('<div style="background: %s; border: 1px solid %s; border-radius: 12px; padding: 14px; '
-            'display: flex; flex-direction: column; gap: 10px;">'
-            '<div style="display: flex; align-items: flex-start; gap: 8px;">%s'
+            'display: flex; align-items: flex-start; gap: 8px;">%s'
             '<div style="display: flex; flex-direction: column; gap: 4px;">'
             '<span style="font-size: 15px; font-weight: 500; color: %s;">%s</span>'
             '<span style="font-size: 13px; line-height: 1.6; color: %s;">%s</span></div></div>'
-            '<div style="height: 44px; background: %s; border-radius: 12px; display: flex; '
-            'align-items: center; justify-content: center; gap: 8px; color: %s; font-size: 16px; font-weight: 500;">'
-            '%s<span>โทรหาโรงพยาบาล</span></div></div>'
-            ) % (bg, bd, ic('alert', 18, BAD if urgent else WARN, 1.9), IN9, title, IN6, body_text,
-                 BAD if urgent else WHITE, WHITE if urgent else BR7, ic('phone', 18, WHITE if urgent else BR7, 1.9))
+            ) % (bg, bd, ic('alert', 18, BAD if urgent else WARN, 1.9), IN9, title, IN6, body_text)
 
 def trend_bars(items, avg_label='เฉลี่ยของคุณ 28 นาที'):
     """แท่งเวลาที่ใช้ต่อรอบ — ตัวเลขที่มีความหมายทางการแพทย์คือ
@@ -1832,15 +1830,11 @@ write('KickSlow.dc.html', screen(
         stat_pill('foot', 'ได้แล้ว', '6 ครั้ง'), gap=10),
     escalate_card('ผ่านไป 2 ชั่วโมงแล้วยังไม่ครบ 10 ครั้ง',
                   'ตำราแนะนำให้ติดต่อแพทย์เมื่อนับไม่ครบ 10 ครั้งใน 2 ชั่วโมง '
-                  'นับต่อได้ แต่ควรโทรปรึกษาไปพร้อมกัน', urgent=True),
+                  'นับต่อได้ แต่ควรติดต่อโรงพยาบาลไปพร้อมกัน', urgent=True),
     tap_target(6, 'แตะต่อได้ ระบบยังนับอยู่'),
     '<div style="height: 4px;"></div>',
     kick_progress(6),
     '<div style="height: 8px;"></div>',
-    card(row(ic('shield', 17, IN6, 1.9),
-             txt('เบอร์นี้ตั้งไว้ในโปรไฟล์ครอบครัว เปลี่ยนได้ที่ โปรไฟล์ > ครอบครัว',
-                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
-         pad=12, bg=CR100, border=CR200, gap=0),
     gap=12),
   ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s;">%s</div>'
    ) % (WHITE, CR200, btn('หยุดและบันทึก', 'secondary', ic('stop', 17, BR7, 1.9)))), h=1020)
@@ -2273,13 +2267,7 @@ KICK_DECISIONS = """เรื่องที่ต้องตัดสินใ
    แนะนำ: เก็บ เพราะช่วงห่างระหว่างครั้งคือข้อมูลที่หมอถามจริง
    เก็บเป็น JSON ในแถวเดียวกันพอ ไม่ต้องแยกตาราง เพราะไม่เคยต้อง query รายครั้ง
 
-4. เบอร์โรงพยาบาลเก็บที่ไหน
-
-   ปุ่มโทรจะมีประโยชน์ก็ต่อเมื่อมีเบอร์จริง
-   แนะนำ: เพิ่มช่องในหน้าครอบครัว ให้ owner ตั้งไว้ครั้งเดียว ใช้ได้ทั้งครอบครัว
-   ยังไม่มีเบอร์ให้ปุ่มพาไปตั้งค่าแทนการซ่อนปุ่ม จะได้รู้ว่ามีฟีเจอร์นี้อยู่
-
-5. เริ่มให้นับที่สัปดาห์ไหน
+4. เริ่มให้นับที่สัปดาห์ไหน
 
    แนะนำ: 28 ตามที่ตำราส่วนใหญ่ใช้ ก่อนหน้านั้นการดิ้นยังไม่เป็นเวลา
    นับไปก็ตีความไม่ได้ แต่ยังต้องมีข้อความบอกว่าถ้ารู้สึกผิดปกติให้ไปหาหมอ
@@ -2391,7 +2379,7 @@ GROUPS = [
   """นับลูกดิ้น — ยังไม่ได้ลงมือ รอ approve
 ฟีเจอร์นี้ต่างจากทุกอันที่ผ่านมา เพราะ ลูกดิ้นน้อยลง เป็นสัญญาณที่ต้องไปโรงพยาบาล
 ข้อห้ามที่ยึดทุกหน้า: ห้ามบอกว่าปกติ ห้ามให้ความมั่นใจ แอปบันทึกและแสดงรูปแบบ ไม่วินิจฉัย
-ตัวเลขที่ครบ 10 ไม่ได้แปลว่าปลอดภัย ทางติดต่อโรงพยาบาลจึงต้องหาเจอทุกหน้า ไม่ใช่ซ่อนในเมนู
+ตัวเลขที่ครบ 10 ไม่ได้แปลว่าปลอดภัย ตัดปุ่มโทรออกแล้ว เหลือแถบเตือนสีแดง จึงไม่ต้องเก็บเบอร์โรงพยาบาลในระบบ
 ปุ่มแตะทำใหญ่เต็มจอ เพราะใช้ตอนนอนตะแคงด้วยมือเดียว บางทีหลับตาอยู่ด้วย
 ประเด็นที่ต้องตัดสินใจ อยู่ในโน้ตใต้แถว"""),
  ('visit', 'สรุปก่อนพบแพทย์ — เสนอใหม่',
