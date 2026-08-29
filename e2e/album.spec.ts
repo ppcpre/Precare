@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, gotoApp, makePng, pickFiles, signUp, uniqueEmail } from "./helpers";
+import {
+  completeOnboarding,
+  daysAgo,
+  gotoApp,
+  makePng,
+  pickFiles,
+  signUp,
+  uniqueEmail,
+} from "./helpers";
 
 /**
  * Regression — อัปโหลดรูปเข้าอัลบั้ม
@@ -57,7 +65,8 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
   await test.step("อัปโหลดผ่าน — ตัวชี้ขาดว่า bodySizeLimit พอ", async () => {
     await page.getByRole("button", { name: /เพิ่ม 2 รูปเข้าอัลบั้ม/ }).click();
     await page.waitForURL(/\/album$/, { timeout: 45_000 });
-    await expect(page.getByText("2 รูป")).toBeVisible();
+    // นับ 2 รูป โผล่ทั้งหัวเดือนและหัววัน เอาตัวแรกพอ
+    await expect(page.getByText("2 รูป").first()).toBeVisible();
   });
 
   await test.step("รูปโหลดขึ้นจริง ไม่ใช่กรอบว่าง", async () => {
@@ -106,4 +115,79 @@ test("บันทึกสุขภาพต้องลิงก์ไปเ�
   const link = page.getByRole("link", { name: /เพิ่มรูปเข้าบันทึกนี้/ });
   await expect(link).toBeVisible();
   expect(await link.getAttribute("href")).toMatch(/^\/album\/upload\?logId=.+/);
+});
+
+/**
+ * จัดกลุ่มตามเดือน/วัน — บั๊กเดิมคือหัวกลุ่มเอาวันที่ของรูปใบแรกมาแปะทั้งกลุ่ม
+ * ทั้งที่ในกลุ่มมีรูปจากหลายวัน
+ */
+test("รูปหลายวันต้องแยกหัววันจากกัน และสัปดาห์เป็นแท็ก", async ({ page }) => {
+  await signUp(page, uniqueEmail("albumdays"), "แม่หลายวัน");
+  await completeOnboarding(page, "ครอบครัวหลายวัน");
+
+  const upload = async (takenAt: string, caption: string) => {
+    await gotoApp(page, "/album/upload");
+    await pickFiles(page, [
+      { name: `${takenAt}.png`, mimeType: "image/png", buffer: makePng(900, 700, takenAt.length) },
+    ]);
+    await page.getByLabel("วันที่ถ่าย").fill(takenAt);
+    await page.getByLabel("คำบรรยาย").fill(caption);
+    await page.getByRole("button", { name: /เพิ่ม 1 รูปเข้าอัลบั้ม/ }).click();
+    await page.waitForURL(/\/album$/, { timeout: 45_000 });
+  };
+
+  // สามวันในเดือนเดียวกัน + อีกใบคนละเดือน
+  await upload(daysAgo(2), "รูปวันล่าสุด");
+  await upload(daysAgo(4), "รูปอีกวัน");
+  await upload(daysAgo(40), "รูปเดือนก่อน");
+
+  await test.step("หัวเดือน 2 กลุ่ม หัววัน 3 กลุ่ม ไม่ยุบรวมกัน", async () => {
+    // นับจากโครงสร้างหัวข้อ ไม่ใช่จากข้อความ "N รูป" ซึ่งโผล่ทั้งหัวเดือนและหัววัน
+    await expect(page.locator("main h2")).toHaveCount(2);
+    await expect(page.locator("main h3")).toHaveCount(3);
+  });
+
+  await test.step("หัววันบอกวันในสัปดาห์ด้วย", async () => {
+    const text = await page.locator("main h3").first().innerText();
+    expect(text).toMatch(/(อาทิตย์|จันทร์|อังคาร|พุธ|พฤหัสบดี|ศุกร์|เสาร์)/);
+  });
+
+  await test.step("สัปดาห์เป็นแท็ก ไม่ใช่หัวกลุ่ม", async () => {
+    const text = await page.locator("main").innerText();
+    // แบบเดิมขึ้น "สัปดาห์ที่ 24" เป็นหัวกลุ่ม แบบใหม่เป็นแท็ก "สัปดาห์ 24"
+    expect(text).not.toContain("สัปดาห์ที่");
+    expect(text).toMatch(/สัปดาห์ \d+/);
+  });
+});
+
+test("มุมมองที่เลือกต้องจำข้ามการเปิดหน้าใหม่", async ({ page }) => {
+  await signUp(page, uniqueEmail("albumview"), "แม่มุมมอง");
+  await completeOnboarding(page, "ครอบครัวมุมมอง");
+
+  await gotoApp(page, "/album/upload");
+  await pickFiles(page, [
+    { name: "v.png", mimeType: "image/png", buffer: makePng(900, 700, 3) },
+  ]);
+  await page.getByLabel("คำบรรยาย").fill("คำบรรยายทดสอบ");
+  await page.getByRole("button", { name: /เพิ่ม 1 รูปเข้าอัลบั้ม/ }).click();
+  await page.waitForURL(/\/album$/, { timeout: 45_000 });
+
+  await test.step("default คือตาราง จึงยังไม่เห็นคำบรรยาย", async () => {
+    await expect(page.getByRole("button", { name: "ตาราง" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("คำบรรยายทดสอบ")).toHaveCount(0);
+  });
+
+  await test.step("สลับเป็นรายละเอียดแล้วเห็นคำบรรยาย", async () => {
+    await page.getByRole("button", { name: "รายละเอียด" }).click();
+    await expect(page.getByText("คำบรรยายทดสอบ")).toBeVisible();
+  });
+
+  await test.step("เปิดหน้าใหม่ต้องยังเป็นรายละเอียด", async () => {
+    await gotoApp(page, "/album");
+    await expect(page.getByRole("button", { name: "รายละเอียด" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByText("คำบรรยายทดสอบ")).toBeVisible();
+  });
 });

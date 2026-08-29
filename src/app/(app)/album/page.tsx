@@ -3,12 +3,13 @@ import Link from "next/link";
 import { Clock, Image as ImageIcon, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PhotoTile } from "@/components/album/photo-tile";
+import { PhotoGroups } from "@/components/album/photo-groups";
+import { AlbumViewToggle } from "@/components/album/view-toggle";
 import { QuotaBar } from "@/components/album/quota-bar";
 import { listPhotos, requireFamilyContext } from "@/lib/queries";
 import { getStorageUsage } from "@/lib/storage";
 import { can } from "@/lib/authz";
-import { thaiDate } from "@/lib/format";
+
 import { cn } from "@/lib/cn";
 
 export const metadata = { title: "อัลบั้ม · Pre Care" };
@@ -100,26 +101,18 @@ export default async function AlbumPage({
         />
       ) : (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-cream-200 bg-white px-2.5 py-1 text-xs text-ink-600">
               <Clock size={13} strokeWidth={1.9} className="text-ink-400" />
               เรียงจากใหม่ไปเก่า
             </span>
-            <span className="text-xs text-ink-400">{items.length} รูป</span>
+            <AlbumViewToggle />
           </div>
 
-          {[...groups].map(([week, list]) => (
-            <section key={week} className="flex flex-col gap-2.5">
-              <h2 className="sticky top-14 z-10 bg-cream-50 py-1 text-sm text-ink-600">
-                {week} · {thaiDate(list[0].takenAt)}
-              </h2>
-              <div className="grid grid-cols-3 gap-2">
-                {list.map((p) => (
-                  <PhotoTile key={p.id} {...p} />
-                ))}
-              </div>
-            </section>
-          ))}
+          {/* จัดกลุ่มตามวันที่ ไม่ใช่ตามสัปดาห์ครรภ์
+              หน้านี้จะถูกใช้กับบันทึกเรื่องอื่นที่ไม่ใช่การตั้งครรภ์ด้วย
+              วันที่มีเสมอ ส่วนสัปดาห์มีเฉพาะตอนตั้งครรภ์ จึงเป็นแค่แท็ก */}
+          <PhotoGroups items={items} />
         </>
       )}
 
