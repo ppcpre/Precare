@@ -83,7 +83,12 @@ ICONS = {
  'google':'GOOGLE',
   'wallet':'<path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H18a2 2 0 0 1 2 2v1"/><path d="M3 8.5V17a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/><path d="M21 10v5h-4a2.5 2.5 0 0 1 0-5h4"/>',
   'receipt':'<path d="M5 3v18l2.5-1.6L10 21l2-1.6L14 21l2.5-1.6L19 21V3H5Z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/>',
-  'trend':'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'
+  'trend':'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  'foot':'<path d="M9 20.5c-2 0-3.2-1.3-3.2-3.1 0-1.6.9-2.6.9-4.4 0-3.4 1.4-9 4.6-9 2.6 0 3.7 2.6 3.7 5.6 0 4-1.4 5.7-1.4 8 0 1.9-1.4 2.9-4.6 2.9Z"/><circle cx="17.6" cy="5.2" r="1.6"/><circle cx="20.4" cy="8.8" r="1.4"/><circle cx="20.2" cy="12.8" r="1.3"/>',
+  'phone':'<path d="M6.2 3.8h3l1.5 3.7-2 1.4a11 11 0 0 0 5.4 5.4l1.4-2 3.7 1.5v3a1.7 1.7 0 0 1-1.9 1.7C10.6 18 6 13.4 4.5 5.7A1.7 1.7 0 0 1 6.2 3.8Z"/>',
+  'timer':'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.8v3.7l2.4 1.6M9.4 2.6h5.2"/>',
+  'play':'<path d="M7.5 4.8 19 12 7.5 19.2V4.8Z"/>',
+  'stop':'<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>'
 }
 
 def ic(name, size=20, color=IN6, sw=1.75):
@@ -1668,6 +1673,269 @@ write('CostEmpty.dc.html',
   h=820)
 
 
+
+# ============================================================
+#  นับลูกดิ้น — ออกแบบใหม่ (รอ approve ก่อนลงมือ)
+#
+#  ⚠️ ฟีเจอร์นี้ต่างจากทุกอันที่ผ่านมา เพราะ "ลูกดิ้นน้อยลง" เป็นสัญญาณ
+#     ที่ต้องไปโรงพยาบาล การออกแบบจึงมีข้อห้ามชัดเจน
+#     - ห้ามบอกว่าปกติ ห้ามให้ความมั่นใจ แอปบันทึกและแสดงรูปแบบ ไม่วินิจฉัย
+#     - ทางติดต่อโรงพยาบาลต้องหาเจอเสมอ ไม่ใช่ซ่อนอยู่ในเมนู
+#     - ตัวเลขที่ครบ 10 ไม่ได้แปลว่าปลอดภัย ถ้าแม่รู้สึกผิดปกติให้ไปหาหมอ
+# ============================================================
+
+def kick_dot(on=True, size=8):
+    return ('<span style="width: %dpx; height: %dpx; border-radius: 9999px; background: %s; flex: none;"></span>'
+            ) % (size, size, PE7 if on else CR200)
+
+def kick_progress(done, total=10):
+    dots = ''.join(kick_dot(i < done) for i in range(total))
+    return '<div style="display: flex; gap: 6px; justify-content: center;">%s</div>' % dots
+
+def tap_target(count=7, label='แตะเมื่อรู้สึกลูกดิ้น'):
+    """ปุ่มใหญ่เต็มความกว้าง — แตะขณะนอนตะแคงด้วยมือเดียว บางทีหลับตาอยู่ด้วย
+    จึงทำให้ใหญ่ที่สุดเท่าที่หน้าจอให้ได้ ไม่ต้องเล็ง"""
+    return ('<div style="width: 232px; height: 232px; border-radius: 9999px; background: %s; '
+            'border: 3px solid %s; margin: 0 auto; display: flex; flex-direction: column; '
+            'align-items: center; justify-content: center; gap: 4px;">'
+            '<span style="font-size: 68px; font-weight: 600; color: %s; line-height: 1;">%d</span>'
+            '<span style="font-size: 13px; color: %s;">ครั้ง</span></div>'
+            '<div style="text-align: center; font-size: 14px; color: %s; margin-top: 14px;">%s</div>'
+            ) % (PE1, PE3, PE7, count, IN6, IN6, label)
+
+def stat_pill(icon_name, label, value, color=None):
+    return ('<div style="flex: 1; background: %s; border: 1px solid %s; border-radius: 10px; '
+            'padding: 10px 12px; display: flex; flex-direction: column; gap: 3px;">'
+            '<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: %s;">%s%s</span>'
+            '<span style="font-size: 18px; font-weight: 600; color: %s;">%s</span></div>'
+            ) % (WHITE, CR200, IN6, ic(icon_name, 14, IN4, 1.9), label, color or IN9, value)
+
+def escalate_card(title, body_text, urgent=False):
+    """การ์ดพาไปหาหมอ — ใช้ danger แบบหม่นตาม design principle ข้อ 3
+    ไม่ทำแถบแดงทั้งใบ เพราะจะทำให้ตกใจเกินเหตุทุกครั้งที่เห็น"""
+    bd = BAD if urgent else CR300
+    bg = '#FBF0EE' if urgent else CR100
+    return ('<div style="background: %s; border: 1px solid %s; border-radius: 12px; padding: 14px; '
+            'display: flex; flex-direction: column; gap: 10px;">'
+            '<div style="display: flex; align-items: flex-start; gap: 8px;">%s'
+            '<div style="display: flex; flex-direction: column; gap: 4px;">'
+            '<span style="font-size: 15px; font-weight: 500; color: %s;">%s</span>'
+            '<span style="font-size: 13px; line-height: 1.6; color: %s;">%s</span></div></div>'
+            '<div style="height: 44px; background: %s; border-radius: 12px; display: flex; '
+            'align-items: center; justify-content: center; gap: 8px; color: %s; font-size: 16px; font-weight: 500;">'
+            '%s<span>โทรหาโรงพยาบาล</span></div></div>'
+            ) % (bg, bd, ic('alert', 18, BAD if urgent else WARN, 1.9), IN9, title, IN6, body_text,
+                 BAD if urgent else WHITE, WHITE if urgent else BR7, ic('phone', 18, WHITE if urgent else BR7, 1.9))
+
+def trend_bars(items, avg_label='เฉลี่ยของคุณ 28 นาที'):
+    """แท่งเวลาที่ใช้ต่อรอบ — ตัวเลขที่มีความหมายทางการแพทย์คือ
+    เทียบกับ ของตัวเอง ไม่ใช่เทียบกับคนอื่น"""
+    mx = max(v for _, v, _ in items) or 1
+    out = []
+    for lbl, v, flag in items:
+        h = max(4, int(round(v / mx * 60)))
+        c = BAD if flag == 'slow' else PE5
+        out.append('<div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">'
+                   '<div style="height: 64px; display: flex; align-items: flex-end;">'
+                   '<div style="width: 20px; height: %dpx; border-radius: 5px; background: %s;"></div></div>'
+                   '<span style="font-size: 10px; color: %s;">%s</span></div>' % (h, c, IN4, lbl))
+    return card(
+        row(txt('เวลาที่ใช้จนครบ 10 ครั้ง', 14, IN6), txt(avg_label, 11, IN4), justify='space-between'),
+        '<div style="display: flex; gap: 4px; align-items: flex-end;">%s</div>' % ''.join(out),
+        pad=14, gap=12)
+
+def session_row(date_txt, dur, count=10, flag=None):
+    right = col(txt(dur, 15, BAD if flag == 'slow' else IN9, 600),
+                txt('%d ครั้ง' % count, 11, IN4), gap=2, extra='align-items: flex-end;')
+    left = col(txt(date_txt, 14, IN9), 
+               (txt('ช้ากว่าปกติ', 11, BAD) if flag == 'slow' else txt('', 11, IN4)),
+               gap=2)
+    return card(row(left, right, justify='space-between'), pad=12, gap=0)
+
+
+# ---------- 1. การ์ดบนหน้าแรก + ทางเข้า ----------
+write('KickEntry.dc.html', screen(
+  dash_topbar(),
+  body(
+    card(
+      row(row(ic('foot', 20, PE7), txt('นับลูกดิ้น', 15, IN9, 500), gap=8),
+          badge('วันนี้ยังไม่ได้นับ', 'soft'), justify='space-between'),
+      txt('ช่วงนี้แนะนำให้นับวันละครั้ง เวลาเดิมทุกวัน เพราะลูกมีช่วงตื่นเป็นเวลาของตัวเอง',
+          13, IN6, extra='line-height: 1.6;'),
+      row(stat_pill('timer', 'ครั้งล่าสุด', '32 นาที'),
+          stat_pill('trend', 'เฉลี่ยของคุณ', '28 นาที'), gap=10),
+      btn('เริ่มนับ', 'primary', ic('play', 18, WHITE, 2)),
+      gap=12),
+    card(
+      row(ic('alert', 17, WARN, 1.9),
+          txt('ถ้ารู้สึกว่าลูกดิ้นน้อยลงหรือผิดไปจากเดิม ให้ติดต่อโรงพยาบาลทันที ไม่ต้องรอนับให้ครบ',
+              13, IN6, extra='line-height: 1.6;'), gap=8, align='flex-start'),
+      pad=14, bg=CR100, border=CR300, gap=0),
+    gap=14),
+  bottomnav(0)), h=900)
+
+# ---------- 2. กำลังนับ ----------
+write('KickCount.dc.html', screen(
+  topbar('นับลูกดิ้น', left=ic('x', 22, IN6)),
+  body(
+    row(stat_pill('timer', 'ผ่านไปแล้ว', '18:42'),
+        stat_pill('foot', 'เหลืออีก', '3 ครั้ง'), gap=10),
+    '<div style="height: 8px;"></div>',
+    tap_target(7),
+    '<div style="height: 4px;"></div>',
+    kick_progress(7),
+    '<div style="height: 8px;"></div>',
+    # การดิ้นรัวๆ ติดกันนับเป็นครั้งเดียวตามหลักการนับสากล
+    # ถ้าไม่บอก ผู้ใช้จะแตะรัวแล้วได้ตัวเลขที่ไม่มีความหมายทางการแพทย์
+    card(row(ic('alert', 16, IN4, 1.9),
+             txt('ดิ้นรัวๆ ติดกันนับเป็น 1 ครั้ง — แตะอีกทีเมื่อหยุดแล้วดิ้นใหม่',
+                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
+         pad=12, bg=CR100, border=CR200, gap=0),
+    section_head('เวลาที่บันทึกไว้'),
+    row(*[chip('%s' % t) for t in ['20:14', '20:19', '20:23', '20:26']], gap=6, wrap=True),
+    gap=12),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s; '
+   'display: flex; flex-direction: column; gap: 8px;">%s'
+   '<div style="text-align: center; font-size: 12px; color: %s;">ปิดหน้าจอไปก่อนได้ ระบบนับต่อให้</div></div>'
+   ) % (WHITE, CR200, btn('หยุดและบันทึก', 'secondary', ic('stop', 17, BR7, 1.9)), IN4)), h=980)
+
+# ---------- 3. นับครบแล้ว ----------
+write('KickDone.dc.html', screen(
+  topbar('นับลูกดิ้น', left=ic('x', 22, IN6)),
+  body(
+    col(('<div style="width: 88px; height: 88px; border-radius: 9999px; background: %s; display: flex; '
+         'align-items: center; justify-content: center; margin: 0 auto;">%s</div>') % (PE1, ic('foot', 40, PE7, 1.6)),
+        txt('ครบ 10 ครั้งแล้ว', 20, IN9, 600, 'text-align: center;'),
+        txt('ใช้เวลา 26 นาที', 15, IN6, extra='text-align: center;'),
+        gap=10, extra='padding: 20px 0 6px;'),
+    row(stat_pill('timer', 'รอบนี้', '26 นาที'),
+        stat_pill('trend', 'เฉลี่ยของคุณ', '28 นาที'), gap=10),
+    # บอกข้อเท็จจริงว่าเทียบกับตัวเองแล้วเป็นยังไง แต่ไม่สรุปว่า "ปกติ"
+    # การบอกว่าปกติคือการวินิจฉัย ซึ่งแอปทำไม่ได้และไม่ควรทำ
+    card(txt('รอบนี้เร็วกว่าค่าเฉลี่ยของคุณ 2 นาที', 14, IN9),
+         txt('ตัวเลขนี้ใช้เทียบกับรูปแบบของลูกคุณเองเท่านั้น ไม่ใช่การประเมินสุขภาพ '
+             'ถ้ารู้สึกว่าผิดไปจากเดิมให้ปรึกษาแพทย์', 12, IN4, extra='line-height: 1.6;'),
+         pad=14, gap=6),
+    textarea('บันทึกเพิ่มเติม', 'เช่น ดิ้นแรงกว่าปกติ หรือนับหลังอาหารเย็น', 2),
+    btn('บันทึก', 'primary'),
+    gap=14),
+  bottomnav(0)), h=900)
+
+# ---------- 4. ช้ากว่าปกติ / ยังไม่ครบ ----------
+write('KickSlow.dc.html', screen(
+  topbar('นับลูกดิ้น', left=ic('x', 22, IN6)),
+  body(
+    row(stat_pill('timer', 'ผ่านไปแล้ว', '2:04:10', color=BAD),
+        stat_pill('foot', 'ได้แล้ว', '6 ครั้ง'), gap=10),
+    escalate_card('ผ่านไป 2 ชั่วโมงแล้วยังไม่ครบ 10 ครั้ง',
+                  'ตำราแนะนำให้ติดต่อแพทย์เมื่อนับไม่ครบ 10 ครั้งใน 2 ชั่วโมง '
+                  'นับต่อได้ แต่ควรโทรปรึกษาไปพร้อมกัน', urgent=True),
+    tap_target(6, 'แตะต่อได้ ระบบยังนับอยู่'),
+    '<div style="height: 4px;"></div>',
+    kick_progress(6),
+    '<div style="height: 8px;"></div>',
+    card(row(ic('shield', 17, IN6, 1.9),
+             txt('เบอร์นี้ตั้งไว้ในโปรไฟล์ครอบครัว เปลี่ยนได้ที่ โปรไฟล์ > ครอบครัว',
+                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
+         pad=12, bg=CR100, border=CR200, gap=0),
+    gap=12),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s;">%s</div>'
+   ) % (WHITE, CR200, btn('หยุดและบันทึก', 'secondary', ic('stop', 17, BR7, 1.9)))), h=1020)
+
+# ---------- 5. ประวัติ + แนวโน้ม ----------
+write('KickHistory.dc.html', screen(
+  topbar('ประวัติการนับ', left=ic('chev', 22, IN6)),
+  body(
+    trend_bars([('จ.', 24, None), ('อ.', 31, None), ('พ.', 27, None), ('พฤ.', 29, None),
+                ('ศ.', 26, None), ('ส.', 68, 'slow'), ('อา.', 30, None)]),
+    card(row(ic('alert', 16, WARN, 1.9),
+             txt('วันเสาร์ใช้เวลานานกว่าปกติมาก ถ้าเกิดซ้ำอีกควรปรึกษาแพทย์',
+                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
+         pad=12, bg=CR100, border=CR300, gap=0),
+    section_head('รอบที่ผ่านมา'),
+    session_row('อาทิตย์ 30 ส.ค. · 20:10', '30 นาที'),
+    session_row('เสาร์ 29 ส.ค. · 20:05', '1 ชม. 8 นาที', flag='slow'),
+    session_row('ศุกร์ 28 ส.ค. · 20:15', '26 นาที'),
+    session_row('พฤหัส 27 ส.ค. · 20:00', '29 นาที'),
+    gap=12),
+  bottomnav(0)), h=1060)
+
+# ---------- 6. ยังไม่ถึงเวลาเริ่มนับ ----------
+write('KickEarly.dc.html', screen(
+  dash_topbar(),
+  body(
+    card(
+      row(row(ic('foot', 20, BR3), txt('นับลูกดิ้น', 15, IN9, 500), gap=8),
+          badge('เริ่มสัปดาห์ที่ 28', 'past'), justify='space-between'),
+      txt('ตอนนี้อายุครรภ์ 22 สัปดาห์ การดิ้นยังไม่เป็นเวลา จึงยังนับเป็นรูปแบบไม่ได้ '
+          'ระบบจะเปิดให้เริ่มนับเองเมื่อถึงสัปดาห์ที่ 28', 13, IN6, extra='line-height: 1.6;'),
+      row(('<div style="flex: 1; height: 6px; background: %s; border-radius: 9999px; overflow: hidden;">'
+           '<div style="width: 78%%; height: 100%%; background: %s;"></div></div>') % (CR200, BR3),
+          txt('อีก 6 สัปดาห์', 12, IN4), gap=10),
+      gap=12),
+    card(
+      row(ic('alert', 17, WARN, 1.9),
+          txt('ถึงยังไม่ถึงเวลานับ ถ้ารู้สึกว่าลูกดิ้นน้อยลงหรือหยุดดิ้น ให้ติดต่อโรงพยาบาลทันที',
+              13, IN6, extra='line-height: 1.6;'), gap=8, align='flex-start'),
+      pad=14, bg=CR100, border=CR300, gap=0),
+    gap=14),
+  bottomnav(0)), h=820)
+
+KICK_DECISIONS = """เรื่องที่ต้องตัดสินใจก่อนเขียนโค้ด
+
+1. ใช้เกณฑ์ไหน
+
+   แนะนำ: Cardiff count-to-ten นับให้ครบ 10 ครั้ง จับเวลาว่าใช้เวลาเท่าไหร่
+   เป็นวิธีที่โรงพยาบาลไทยสอนกันมากที่สุด และเข้าใจง่ายที่สุดสำหรับผู้ใช้
+   เกณฑ์ส่งต่อคือ ไม่ครบ 10 ครั้งใน 2 ชั่วโมง ให้ติดต่อแพทย์
+
+   อีกวิธีคือ Sadovsky นับ 1 ชั่วโมงหลังอาหาร 3 มื้อ ซึ่งผูกกับมื้ออาหาร
+   ทำให้ต้องเตือนสามเวลาต่อวันและพลาดง่ายกว่า
+
+2. รอบที่กำลังนับอยู่ เก็บที่ไหน
+
+   ต้องเก็บฝั่งเซิร์ฟเวอร์ ไม่ใช่แค่ใน state ของหน้า
+   รอบหนึ่งกินเวลา 20 นาทีถึง 2 ชั่วโมง ผู้ใช้จะปิดจอ สลับแอป หรือรับสาย
+   ถ้าเก็บแต่ในหน้า ข้อมูลหายหมดและต้องเริ่มนับใหม่ ซึ่งยอมรับไม่ได้
+   แนะนำ: บันทึกทุกครั้งที่แตะ รอบหนึ่งมีราว 10 ครั้ง ไม่หนักสำหรับ D1
+
+3. เก็บเวลาที่แตะทีละครั้งไหม
+
+   แนะนำ: เก็บ เพราะช่วงห่างระหว่างครั้งคือข้อมูลที่หมอถามจริง
+   เก็บเป็น JSON ในแถวเดียวกันพอ ไม่ต้องแยกตาราง เพราะไม่เคยต้อง query รายครั้ง
+
+4. เบอร์โรงพยาบาลเก็บที่ไหน
+
+   ปุ่มโทรจะมีประโยชน์ก็ต่อเมื่อมีเบอร์จริง
+   แนะนำ: เพิ่มช่องในหน้าครอบครัว ให้ owner ตั้งไว้ครั้งเดียว ใช้ได้ทั้งครอบครัว
+   ยังไม่มีเบอร์ให้ปุ่มพาไปตั้งค่าแทนการซ่อนปุ่ม จะได้รู้ว่ามีฟีเจอร์นี้อยู่
+
+5. เริ่มให้นับที่สัปดาห์ไหน
+
+   แนะนำ: 28 ตามที่ตำราส่วนใหญ่ใช้ ก่อนหน้านั้นการดิ้นยังไม่เป็นเวลา
+   นับไปก็ตีความไม่ได้ แต่ยังต้องมีข้อความบอกว่าถ้ารู้สึกผิดปกติให้ไปหาหมอ
+   ไม่ใช่ซ่อนทุกอย่างจนเหมือนเรื่องนี้ไม่สำคัญ
+
+
+ข้อห้ามที่ต้องรักษาไว้ทุกหน้า
+
+  ห้ามเขียนว่า ปกติ ปลอดภัย สบายใจได้ หรืออะไรที่เป็นการประเมินสุขภาพ
+  แอปบอกได้แค่ข้อเท็จจริง เช่น ครบ 10 ครั้งใน 26 นาที และ เร็วกว่าค่าเฉลี่ยของคุณ
+
+  การเทียบต้องเทียบกับรูปแบบของลูกคนนั้นเอง ไม่ใช่ค่ามาตรฐานของคนอื่น
+  ทารกแต่ละคนมีจังหวะต่างกันมาก
+
+  ทางติดต่อโรงพยาบาลต้องอยู่ในทุกหน้าของฟีเจอร์นี้ รวมถึงหน้าที่ยังไม่ถึงเวลานับ
+
+  ห้ามใช้ปุ่มแจ้งเตือนหรือ badge สีแดงกับการนับที่ยังไม่เสร็จ
+  ความกังวลเป็นอาการที่พบบ่อยในคนท้อง การทำให้ตกใจซ้ำๆ ทุกวันมีต้นทุนจริง
+
+
+สิทธิ์
+
+  editor ขึ้นไปนับได้ viewer เห็นประวัติอย่างเดียว
+  ครอบครัวเห็นร่วมกันได้ เพราะจุดขายของแอปคือคนในบ้านดูด้วยกัน"""
+
 COST_DECISIONS = """ตัดสินใจครบแล้ว พร้อมเขียนโค้ด
 
   ค่าใช้จ่ายผูกกับนัดหมาย — คอลัมน์ cost_satang ใน appointments
@@ -1748,12 +2016,23 @@ GROUPS = [
 นัดหมายอนาคตกรอกค่าใช้จ่ายได้ แต่แยกกลุ่ม ยังไม่ถึงนัด ให้เห็นว่าไม่ใช่ยอดที่จ่ายไปแล้ว
 ยอดรวมต้องบอกเสมอว่ายังไม่ได้ระบุกี่นัด ไม่งั้นเป็นตัวเลขหลอก
 ประเด็นที่ยังต้องตัดสินใจ อยู่ในโน้ตใต้แถว"""),
+ ('kick', 'นับลูกดิ้น — เสนอใหม่',
+  ['KickEntry.dc.html','KickCount.dc.html','KickDone.dc.html','KickSlow.dc.html',
+   'KickHistory.dc.html','KickEarly.dc.html'],
+  """นับลูกดิ้น — ยังไม่ได้ลงมือ รอ approve
+ฟีเจอร์นี้ต่างจากทุกอันที่ผ่านมา เพราะ ลูกดิ้นน้อยลง เป็นสัญญาณที่ต้องไปโรงพยาบาล
+ข้อห้ามที่ยึดทุกหน้า: ห้ามบอกว่าปกติ ห้ามให้ความมั่นใจ แอปบันทึกและแสดงรูปแบบ ไม่วินิจฉัย
+ตัวเลขที่ครบ 10 ไม่ได้แปลว่าปลอดภัย ทางติดต่อโรงพยาบาลจึงต้องหาเจอทุกหน้า ไม่ใช่ซ่อนในเมนู
+ปุ่มแตะทำใหญ่เต็มจอ เพราะใช้ตอนนอนตะแคงด้วยมือเดียว บางทีหลับตาอยู่ด้วย
+ประเด็นที่ต้องตัดสินใจ อยู่ในโน้ตใต้แถว"""),
  ('album', 'อัลบั้ม — Phase 2',
   ['Album.dc.html','AlbumUpload.dc.html','PhotoDetail.dc.html'],
   "อัลบั้ม + ดูรูป — Phase 2\nรูปจากฟอร์มสุขภาพมารวมที่นี่ จัดกลุ่มตามสัปดาห์\nปุ่มแชร์ social วางโครงไว้แล้วแต่ยังไม่เปิด (Phase 3) จึงเป็น disabled พร้อมป้ายบอก\nรูปทุกใบเป็น placeholder ยังไม่มีภาพจริง"),
 ]
 heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html':1120,
            'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,'CostMonthly.dc.html':1000,'CostMonthEmpty.dc.html':1000,
+           'KickEntry.dc.html':900,'KickCount.dc.html':980,'KickDone.dc.html':900,
+           'KickSlow.dc.html':1020,'KickHistory.dc.html':1060,'KickEarly.dc.html':820,
            'Health.dc.html':980,'HealthForm.dc.html':1300,'Appointments.dc.html':940,
            'AppointmentForm.dc.html':1230,'Family.dc.html':940,'FamilyInvite.dc.html':700,
            'Profile.dc.html':1320,'ProfileEdit.dc.html':680,'Album.dc.html':1020,'AlbumUpload.dc.html':940,'PhotoDetail.dc.html':980,
@@ -1772,6 +2051,9 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'CostGroups.dc.html':'Popup · รายกลุ่ม',
           'CostDesktop.dc.html':'เดสก์ท็อป · ตาราง',
           'CostEmpty.dc.html':'ว่าง + สิทธิ์ viewer',
+          'KickEntry.dc.html':'การ์ดบนหน้าแรก','KickCount.dc.html':'กำลังนับ',
+          'KickDone.dc.html':'ครบ 10 ครั้ง','KickSlow.dc.html':'ช้ากว่าเกณฑ์ · พาไปหาหมอ',
+          'KickHistory.dc.html':'ประวัติ + แนวโน้ม','KickEarly.dc.html':'ยังไม่ถึงสัปดาห์ 28',
           'Album.dc.html':'อัลบั้ม · Phase 2','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
           'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
 
@@ -1784,6 +2066,10 @@ for gid, gname, files, note in GROUPS:
         arts.append({"file": f, "x": x, "y": y, "w": w,
                      "h": heights.get(f, 844), "title": titles[f], "page": "screens"})
         x += w + 80
+    if gid == 'kick':
+        notes.append({"id": "note-kick-decide", "x": 0,
+                      "y": y + max(heights.get(f, 844) for f in files) + 40,
+                      "w": 1400, "page": "screens", "text": KICK_DECISIONS})
     if gid == 'cost':
         # โน้ตตัดสินใจวางใต้แถว วางบนหัวเหมือนกลุ่มอื่นไม่ได้เพราะยาวเกิน
         notes.append({"id": "note-cost-decide", "x": 0,
