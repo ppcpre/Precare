@@ -99,7 +99,36 @@ export function makePng(width: number, height: number, seed = 0): Buffer {
  * ถ้า React เปลี่ยนชื่อ key เทสต์จะ fail ตรงนี้พร้อมข้อความชัดเจน
  */
 export async function waitForHydration(page: Page) {
-  await page
+  const problems = watchTransport(page);
+  if (await hydrated(page)) return;
+
+  // ถ้าเจอ request ที่ตายกลางทาง แปลว่าเป็นปัญหาขนส่ง ไม่ใช่หน้าพัง
+  // (wrangler dev มีบั๊ก ProxyWorker ที่ตัดการเชื่อมต่อเป็นครั้งคราว — docs/tech-notes.md §3.10)
+  // โหลดใหม่หนึ่งครั้งเท่านั้น ถ้ายังไม่ขึ้นอีกก็ปล่อยให้ fail
+  // จงใจไม่ retry เวลาไม่มี request ตาย เพราะนั่นคือหน้าพังจริง ต้องแดงทันที
+  const transportDied = problems.some((p) => p.startsWith("requestfailed"));
+  if (transportDied) {
+    problems.length = 0;
+    await page.reload();
+    if (await hydrated(page)) return;
+  }
+
+  throw new Error(
+    `หน้า ${page.url()} ไม่ hydrate ภายใน ${HYDRATE_TIMEOUT / 1000} วินาที` +
+      (transportDied ? " (โหลดใหม่แล้วหนึ่งครั้ง)" : "") +
+      "\n" +
+      (problems.length
+        ? `สิ่งที่พังระหว่างโหลด:\n  ${problems.slice(0, 8).join("\n  ")}`
+        : "ไม่มี request ไหนพังและไม่มี error ใน console — " +
+          "แปลว่าหน้านี้อาจไม่มี client component เลย หรือ hydrate ช้าผิดปกติ"),
+  );
+}
+
+const HYDRATE_TIMEOUT = 20_000;
+
+/** true ถ้า React ผูก handler เสร็จภายในเวลาที่กำหนด */
+function hydrated(page: Page) {
+  return page
     .waitForFunction(
       () => {
         const el = document.querySelector("button, input");
@@ -110,18 +139,48 @@ export async function waitForHydration(page: Page) {
         return Boolean(props.onClick ?? props.onChange ?? props.onSubmit);
       },
       undefined,
-      { timeout: 20_000 },
+      { timeout: HYDRATE_TIMEOUT },
     )
-    .catch(() => {
-      throw new Error(
-        `หน้า ${page.url()} ไม่ hydrate ภายใน 20 วินาที — client bundle อาจโหลด` +
-          "ไม่สำเร็จ หรือหน้านี้ไม่มี client component เลย",
-      );
-    });
+    .then(
+      () => true,
+      () => false,
+    );
+}
+
+const watched = new WeakMap<Page, string[]>();
+
+/**
+ * เก็บ request ที่ตายและ error ใน console ไว้ใช้ตอน hydrate ไม่ผ่าน
+ *
+ * ข้อความ "ไม่ hydrate ภายใน 20 วินาที" เฉยๆ บอกไม่ได้ว่าโค้ดพัง
+ * หรือ dev server ตัดการเชื่อมต่อ — สองอย่างนี้ต้องแก้คนละทาง
+ * และบน CI เราย้อนไปดูหน้าจอตอนนั้นไม่ได้ จึงต้องเก็บหลักฐานไว้ตั้งแต่แรก
+ */
+function watchTransport(page: Page) {
+  const existing = watched.get(page);
+  if (existing) return existing;
+
+  const problems: string[] = [];
+  watched.set(page, problems);
+  page.on("requestfailed", (r) => {
+    problems.push(`requestfailed ${r.method()} ${r.url()} — ${r.failure()?.errorText}`);
+  });
+  page.on("response", (r) => {
+    if (r.status() >= 400) problems.push(`http ${r.status()} ${r.url()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`pageerror ${e.message}`));
+  page.on("console", (m) => {
+    if (m.type() === "error") problems.push(`console ${m.text().slice(0, 200)}`);
+  });
+  return problems;
 }
 
 /** goto แล้วรอ hydrate — ใช้ตัวนี้แทน page.goto เสมอในเทสต์ */
 export async function gotoApp(page: Page, path: string) {
+  // ต้องดักก่อน goto — chunk ที่ตายจะตายระหว่างโหลดหน้า ถ้าไปดักทีหลัง
+  // จะไม่เห็นอะไรเลยแล้วรายงานผิดว่า "ไม่มี request ไหนพัง"
+  // (เขียนดักทีหลังมาแล้วรอบหนึ่ง เทสต์พิสูจน์จับได้)
+  watchTransport(page).length = 0;
   await page.goto(path);
   await waitForHydration(page);
 }
