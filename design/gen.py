@@ -2043,23 +2043,44 @@ def checkbox(on=False, size=22):
             'justify-content: center;">%s</div>'
             ) % (size, size, BR5 if on else CR300, BR7 if on else WHITE, inner)
 
-def consent_row(title_, desc, on=False, required=True, link=None):
-    """ช่องยินยอมหนึ่งข้อ
+def consent_row(title_, desc=None, on=False, optional=False, link=None, emphasis=False):
+    """ช่องยินยอมหนึ่งข้อ — ใช้ผ่าน consent_block() เท่านั้น
 
     แยกเป็นข้อๆ ไม่รวมเป็นติ๊กเดียว และ**ห้ามติ๊กมาให้ล่วงหน้า**
     ความยินยอมที่ติ๊กมาแล้วไม่ถือเป็นการเลือกโดยสมัครใจ
+
+    ค่าตั้งต้นเป็นบรรทัดเดียว — สามข้อที่ยาวข้อละสี่บรรทัดกลายเป็นกำแพงตัวหนังสือ
+    ที่ไม่มีใครอ่าน ซึ่งแย่กว่าเขียนสั้นทั้งในแง่การใช้งานและในแง่ความยินยอม
+    ที่ควรเป็นการตัดสินใจอย่างเข้าใจ
+    ใส่ desc เฉพาะข้อที่มีผลที่ผู้ใช้ต้องรู้จริงๆ
+
+    emphasis ใช้กับข้อที่เป็นข้อมูลอ่อนไหว ให้ต่างจากข้ออื่นด้วยตา
+    ไม่ใช่ทำให้ทุกข้อดูเท่ากันแล้วข้อสำคัญจมหายไป
     """
-    tag = (txt('จำเป็น', 10, IN4, extra='background: %s; padding: 1px 6px; border-radius: 5px;' % CR200)
-           if required else
-           txt('ไม่บังคับ', 10, IN4, extra='background: %s; padding: 1px 6px; border-radius: 5px;' % CR100))
-    link_el = (row(txt(link, 12, BR7, 500), ic('chev', 12, BR7, 2), gap=2) if link else '')
-    return card(
-        row(checkbox(on),
-            col(row(txt(title_, 14, IN9, 500), tag, gap=6, wrap=True),
-                txt(desc, 12, IN6, extra='line-height: 1.55;'),
-                link_el, gap=5, extra='flex: 1; min-width: 0;'),
-            gap=10, align='flex-start'),
-        pad=13, gap=0)
+    tag = (txt('ไม่บังคับ', 10, IN4,
+               extra='background: %s; padding: 1px 6px; border-radius: 5px; flex: none;' % CR100)
+           if optional else '')
+    lines = [row(txt(title_, 14, IN9, 500 if emphasis else 400,
+                     'line-height: 1.45;'), tag, gap=6, wrap=True)]
+    if desc:
+        lines.append(txt(desc, 12, IN6, extra='line-height: 1.5;'))
+    if link:
+        lines.append(row(txt(link, 12, BR7, 500), ic('chev', 12, BR7, 2), gap=2))
+    return ('<div style="padding: 12px 14px; background: %s;">%s</div>') % (
+        PE1 if emphasis else 'transparent',
+        row(checkbox(on), col(*lines, gap=5, extra='flex: 1; min-width: 0;'),
+            gap=10, align='flex-start' if (desc or link) else 'center'))
+
+def consent_block(*rows_):
+    """รวมทุกข้อไว้ในกรอบเดียว คั่นด้วยเส้นบาง
+
+    แยกเป็นการ์ดละข้อกินพื้นที่เกินความจำเป็นและทำให้หน้าสมัครดูกระจัดกระจาย
+    กรอบเดียวอ่านเป็นชุดเดียว แต่ยังเป็นคนละ checkbox — ไม่ใช่การรวบเป็นติ๊กเดียว
+    ซึ่งเป็นคนละเรื่องกับการรวบหน้าตา
+    """
+    line = '<div style="height: 1px; background: %s;"></div>' % CR200
+    return card(line.join(rows_), pad=0, gap=0,
+                extra='overflow: hidden;')
 
 def data_item(icon_name, title_, detail):
     return row(('<div style="width: 34px; height: 34px; border-radius: 9px; background: %s; flex: none; '
@@ -2161,25 +2182,23 @@ write('ConsentSignup.dc.html', screen(
   field('รหัสผ่าน', value='••••••••••', hint='อย่างน้อย 8 ตัวอักษร',
         icon_right=ic('eye', 18, IN4)),
 
-  section_head('ก่อนสมัคร'),
-  consent_row('ยอมรับเงื่อนไขการใช้งาน',
-              'กติกาการใช้แอปทั่วไป เช่น ห้ามใช้ในทางที่ผิดกฎหมาย',
-              on=True, required=True, link='อ่านเงื่อนไข'),
-  # ข้อนี้คือหัวใจ — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องแยกขอโดยชัดแจ้ง
-  # ใบนี้จงใจวาดสถานะเริ่มต้น: ยังไม่ติ๊กข้อสุขภาพ ปุ่มจึงยังกดไม่ได้
-  # ถ้าวาดติ๊กมาให้หมดจะสื่อผิดว่าเป็นค่าตั้งต้น ซึ่งขัดกับกติกาข้อแรกของหน้านี้
-  consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
-              'น้ำหนัก ความดัน อายุครรภ์ การนับลูกดิ้น รูปอัลตราซาวด์ '
-              'และคนในครอบครัวที่คุณเชิญจะเห็นข้อมูลเหล่านี้',
-              on=False, required=True, link='ดูว่าเก็บอะไรบ้าง'),
-  consent_row('รับอีเมลแจ้งเตือนนัดหมาย',
-              'ยกเลิกได้ทุกเมื่อในหน้าโปรไฟล์ ไม่กระทบการใช้งานอื่น',
-              on=False, required=False),
+  # ไม่ใส่หัวข้อคั่น — สามช่องนี้อยู่เหนือปุ่มสมัครอยู่แล้ว หัวข้อไม่ได้บอกอะไรเพิ่ม
+  # และคำว่า "ก่อนสมัคร" อ่านแล้วเหมือนขั้นตอนที่ต้องทำก่อน มากกว่าเป็นความยินยอม
+  consent_block(
+    consent_row('ยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัว',
+                on=True, link='อ่านทั้งสองฉบับ'),
+    # ข้อนี้คือหัวใจ — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องแยกขอโดยชัดแจ้ง
+    # ให้ต่างจากอีกสองข้อด้วยตา ไม่ใช่ทำให้เท่ากันหมดแล้วข้อสำคัญจมหายไป
+    # ใบนี้จงใจวาดสถานะเริ่มต้น: ยังไม่ติ๊ก ปุ่มจึงยังกดไม่ได้
+    consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
+                'คนในครอบครัวที่คุณเชิญจะเห็นข้อมูลนี้',
+                on=False, link='ดูว่าเก็บอะไรบ้าง', emphasis=True),
+    consent_row('รับอีเมลแจ้งเตือนนัดหมาย', on=False, optional=True)),
 
   btn('สมัครสมาชิก', 'disabled'),
   txt('ต้องยินยอมสองข้อแรกก่อนจึงจะสมัครได้', 12, IN4, extra='text-align: center;'),
   txt('มีบัญชีอยู่แล้ว? เข้าสู่ระบบ', 14, IN6, extra='text-align: center;'),
-  '</div>'), h=1180)
+  '</div>'), h=880)
 
 # ---------- 2. ดูว่าเก็บอะไรบ้าง ----------
 write('ConsentDetail.dc.html', screen(
@@ -2245,9 +2264,10 @@ write('ConsentInvite.dc.html', screen(
                  'ออกแล้วจะไม่เห็นข้อมูลของครอบครัวนี้อีก แต่สิ่งที่คุณเคยบันทึกไว้ยังอยู่'),
        pad=14, gap=13),
 
-  consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
-              'จำเป็นสำหรับการเข้าร่วม เพราะสิ่งที่คุณบันทึกจะถูกเก็บและแชร์ในครอบครัวนี้',
-              on=False, required=True, link='ดูว่าเก็บอะไรบ้าง'),
+  consent_block(
+    consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
+                'สิ่งที่คุณบันทึกจะถูกเก็บและแชร์ในครอบครัวนี้',
+                on=False, link='ดูว่าเก็บอะไรบ้าง', emphasis=True)),
 
   btn('เข้าร่วมครอบครัว', 'disabled'),
   txt('ปฏิเสธคำเชิญ', 14, IN6, extra='text-align: center;'),
@@ -2935,7 +2955,7 @@ heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html
            'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,'CostMonthly.dc.html':1000,'CostMonthEmpty.dc.html':1000,
            'KickEntry.dc.html':900,'KickCount.dc.html':980,'KickDone.dc.html':900,
            'KickSlow.dc.html':1020,'KickHistory.dc.html':1060,'KickEarly.dc.html':820,
-           'ConsentSignup.dc.html':1180,'ConsentDetail.dc.html':1560,'ConsentInvite.dc.html':1100,
+           'ConsentSignup.dc.html':880,'ConsentDetail.dc.html':1560,'ConsentInvite.dc.html':780,
            'ConsentSettings.dc.html':1120,'ConsentWithdraw.dc.html':1340,
            'VisitEntry.dc.html':820,'VisitSummary.dc.html':1240,'VisitQuestions.dc.html':1000,
            'VisitEmpty.dc.html':820,'LaborEntry.dc.html':880,'LaborTiming.dc.html':1120,
