@@ -91,7 +91,10 @@ ICONS = {
   'stop':'<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>',
   'question':'<path d="M9.3 9a2.8 2.8 0 1 1 3.6 2.7c-.6.2-.9.8-.9 1.4v.6"/><path d="M12 17.2v.1"/><circle cx="12" cy="12" r="9"/>',
   'stethoscope':'<path d="M5 3v5a4.2 4.2 0 0 0 8.4 0V3"/><path d="M3.4 3h3M12 3h3"/><path d="M9.2 12.2v2.4a4.6 4.6 0 0 0 9.2 0v-1.2"/><circle cx="18.4" cy="11" r="2.2"/>',
-  'wave':'<path d="M2 15c1.6 0 2-6 3.6-6S7.2 19 8.8 19s2-14 3.6-14 2 14 3.6 14 2-10 3.6-10S21 15 22 15"/>'
+  'wave':'<path d="M2 15c1.6 0 2-6 3.6-6S7.2 19 8.8 19s2-14 3.6-14 2 14 3.6 14 2-10 3.6-10S21 15 22 15"/>',
+  'shieldcheck':'<path d="M12 3.2 5 6v5.4c0 4.3 2.9 8.1 7 9.4 4.1-1.3 7-5.1 7-9.4V6l-7-2.8Z"/><path d="M9.2 12.2l2 2 3.6-3.8"/>',
+  'db':'<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/>',
+  'undo':'<path d="M3.5 8h11a5.5 5.5 0 0 1 0 11H9"/><path d="M7 4 3.2 8 7 12"/>'
 }
 
 def ic(name, size=20, color=IN6, sw=1.75):
@@ -2019,6 +2022,53 @@ write('KickEarly.dc.html', screen(
   bottomnav(0)), h=820)
 
 
+
+# ============================================================
+#  Consent + PDPA ตอนลงทะเบียน — ออกแบบใหม่ (รอ approve)
+#
+#  ⚠️ ข้อมูลที่แอปนี้เก็บเป็น "ข้อมูลสุขภาพ" ซึ่ง PDPA จัดเป็นข้อมูลอ่อนไหว
+#     ตามมาตรา 26 ต้องขอความยินยอมโดยชัดแจ้ง และแยกจากเงื่อนไขการใช้งานทั่วไป
+#     ติ๊กรวมช่องเดียวแบบตอนนี้ใช้ไม่ได้
+#
+#  ⚠️ เรื่องที่แอปนี้มีแต่แอปอื่นไม่มี: คนในครอบครัวเห็นข้อมูลสุขภาพของกันและกัน
+#     ต้องบอกตรงจุดที่ตัดสินใจ ไม่ใช่ซ่อนในหน้านโยบาย
+#
+#  ผมไม่ใช่ที่ปรึกษากฎหมาย — ดีไซน์นี้เป็นโครงให้คนที่รู้เรื่องมาตรวจต่อ
+# ============================================================
+
+def checkbox(on=False, size=22):
+    inner = ic('check', 14, WHITE, 2.6) if on else ''
+    return ('<div style="width: %dpx; height: %dpx; border-radius: 6px; flex: none; '
+            'border: 1.5px solid %s; background: %s; display: flex; align-items: center; '
+            'justify-content: center;">%s</div>'
+            ) % (size, size, BR5 if on else CR300, BR7 if on else WHITE, inner)
+
+def consent_row(title_, desc, on=False, required=True, link=None):
+    """ช่องยินยอมหนึ่งข้อ
+
+    แยกเป็นข้อๆ ไม่รวมเป็นติ๊กเดียว และ**ห้ามติ๊กมาให้ล่วงหน้า**
+    ความยินยอมที่ติ๊กมาแล้วไม่ถือเป็นการเลือกโดยสมัครใจ
+    """
+    tag = (txt('จำเป็น', 10, IN4, extra='background: %s; padding: 1px 6px; border-radius: 5px;' % CR200)
+           if required else
+           txt('ไม่บังคับ', 10, IN4, extra='background: %s; padding: 1px 6px; border-radius: 5px;' % CR100))
+    link_el = (row(txt(link, 12, BR7, 500), ic('chev', 12, BR7, 2), gap=2) if link else '')
+    return card(
+        row(checkbox(on),
+            col(row(txt(title_, 14, IN9, 500), tag, gap=6, wrap=True),
+                txt(desc, 12, IN6, extra='line-height: 1.55;'),
+                link_el, gap=5, extra='flex: 1; min-width: 0;'),
+            gap=10, align='flex-start'),
+        pad=13, gap=0)
+
+def data_item(icon_name, title_, detail):
+    return row(('<div style="width: 34px; height: 34px; border-radius: 9px; background: %s; flex: none; '
+                'display: flex; align-items: center; justify-content: center;">%s</div>'
+                ) % (CR100, ic(icon_name, 17, IN6, 1.8)),
+               col(txt(title_, 14, IN9, 500), txt(detail, 12, IN6, extra='line-height: 1.5;'), gap=3,
+                   extra='flex: 1; min-width: 0;'),
+               gap=10, align='flex-start')
+
 # ============================================================
 #  A. สรุปก่อนพบแพทย์ — ออกแบบใหม่ (รอ approve)
 #
@@ -2099,6 +2149,171 @@ def contraction_row(time_, dur, gap_):
                txt(gap_, 12, IN4, extra='width: 62px; text-align: right; flex: none;'),
                gap=8, extra='padding: 9px 12px; background: %s; border: 1px solid %s; border-radius: 10px;' % (WHITE, CR200))
 
+
+
+# ---------- 1. หน้าสมัคร — แยกความยินยอมเป็นข้อๆ ----------
+write('ConsentSignup.dc.html', screen(
+  '<div style="flex: 1; padding: 40px 24px 24px; display: flex; flex-direction: column; gap: 22px;">',
+  col(logo(44), txt('สมัครสมาชิก', 22, IN9, 600), txt('Health Care', 12, IN4),
+      gap=8, extra='align-items: center; text-align: center;'),
+  field('ชื่อ-นามสกุล', value='ดาริน ช.'),
+  field('อีเมล', value='darin@example.com', hint='ใช้อีเมลเป็นชื่อผู้ใช้'),
+  field('รหัสผ่าน', value='••••••••••', hint='อย่างน้อย 8 ตัวอักษร',
+        icon_right=ic('eye', 18, IN4)),
+
+  section_head('ก่อนสมัคร'),
+  consent_row('ยอมรับเงื่อนไขการใช้งาน',
+              'กติกาการใช้แอปทั่วไป เช่น ห้ามใช้ในทางที่ผิดกฎหมาย',
+              on=True, required=True, link='อ่านเงื่อนไข'),
+  # ข้อนี้คือหัวใจ — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องแยกขอโดยชัดแจ้ง
+  consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
+              'น้ำหนัก ความดัน อายุครรภ์ การนับลูกดิ้น รูปอัลตราซาวด์ '
+              'และคนในครอบครัวที่คุณเชิญจะเห็นข้อมูลเหล่านี้',
+              on=True, required=True, link='ดูว่าเก็บอะไรบ้าง'),
+  consent_row('รับอีเมลแจ้งเตือนนัดหมาย',
+              'ยกเลิกได้ทุกเมื่อในหน้าโปรไฟล์ ไม่กระทบการใช้งานอื่น',
+              on=False, required=False),
+
+  btn('สมัครสมาชิก', 'primary'),
+  txt('มีบัญชีอยู่แล้ว? เข้าสู่ระบบ', 14, IN6, extra='text-align: center;'),
+  '</div>'), h=1180)
+
+# ---------- 2. ดูว่าเก็บอะไรบ้าง ----------
+write('ConsentDetail.dc.html', screen(
+  topbar('ข้อมูลที่เราเก็บ', left=ic('x', 22, IN6)),
+  body(
+    card(row(ic('shieldcheck', 20, SAGE5, 1.9),
+             txt('เขียนแบบอ่านรู้เรื่อง ไม่ใช่ภาษากฎหมาย ฉบับเต็มอยู่ท้ายหน้า',
+                 12, IN6, extra='line-height: 1.55;'), gap=9, align='flex-start'),
+         pad=13, bg=SAGE1, border='#CFDCC9', gap=0),
+
+    section_head('เก็บอะไรบ้าง'),
+    card(data_item('pulse', 'ข้อมูลสุขภาพ',
+                   'น้ำหนัก ความดัน อาการ อายุครรภ์ วันคาดคลอด การนับลูกดิ้น'),
+         data_item('image', 'รูปภาพ', 'อัลตราซาวด์และรูปครอบครัวที่คุณอัปโหลดเอง'),
+         data_item('calendar', 'นัดหมาย', 'วันเวลา สถานที่ ชื่อแพทย์ และค่าใช้จ่ายที่คุณกรอก'),
+         data_item('user', 'บัญชี', 'ชื่อ อีเมล และรูปโปรไฟล์'),
+         pad=14, gap=14),
+
+    section_head('ใครเห็นบ้าง'),
+    # จุดที่คนมักเข้าใจผิด ต้องเขียนให้ชัดที่สุดในหน้านี้
+    card(data_item('users', 'คนในครอบครัวที่คุณเชิญ',
+                   'เห็นข้อมูลสุขภาพและรูปทั้งหมดของครอบครัวนี้ '
+                   'คุณเลือกได้ว่าให้สิทธิ์แก้ไขหรือดูอย่างเดียว และถอดออกได้ทุกเมื่อ'),
+         data_item('lock', 'ทีมงาน',
+                   'ไม่เปิดดูข้อมูลสุขภาพของคุณ ยกเว้นกรณีที่คุณขอความช่วยเหลือและอนุญาต'),
+         data_item('globe', 'บุคคลภายนอก',
+                   'ไม่ขายและไม่แบ่งปันให้ใคร ไม่มีโฆษณาในแอป'),
+         pad=14, gap=14),
+
+    section_head('เก็บนานแค่ไหน'),
+    card(txt('เก็บไว้ตราบที่บัญชียังใช้งานอยู่ ถ้าคุณลบบัญชี ข้อมูลสุขภาพและรูปทั้งหมด '
+             'จะถูกลบภายใน 30 วัน', 13, IN9, extra='line-height: 1.6;'),
+         txt('ยกเว้นบันทึกที่กฎหมายกำหนดให้เก็บ เช่น หลักฐานการให้ความยินยอม '
+             'ซึ่งเก็บเฉพาะเวลาและเวอร์ชันที่ยินยอม ไม่มีข้อมูลสุขภาพอยู่ในนั้น',
+             12, IN4, extra='line-height: 1.6;'),
+         pad=14, gap=8),
+
+    section_head('สิทธิ์ของคุณ'),
+    card(*[row(kick_dot(True, 6), txt(t, 13, IN6), gap=9)
+           for t in ['ขอดูข้อมูลของตัวเองทั้งหมด', 'ขอให้แก้ไขข้อมูลที่ไม่ถูกต้อง',
+                     'ถอนความยินยอมและลบบัญชี', 'ขอให้ส่งออกข้อมูลเป็นไฟล์']],
+         pad=14, gap=9),
+    txt('อ่านนโยบายความเป็นส่วนตัวฉบับเต็ม (เวอร์ชัน 1.0)', 13, BR7, 500,
+        extra='text-align: center; padding: 4px 0;'),
+    gap=12)), h=1560)
+
+# ---------- 3. รับคำเชิญ — บอกทั้งสองทาง ----------
+write('ConsentInvite.dc.html', screen(
+  '<div style="flex: 1; padding: 44px 24px 24px; display: flex; flex-direction: column; gap: 20px;">',
+  col(logo(44), txt('คำเชิญเข้าครอบครัว', 20, IN9, 600), gap=8,
+      extra='align-items: center; text-align: center;'),
+  card(row(avatar('ญ', 44), col(txt('แม่ญาญ่า', 15, IN9, 500),
+                               txt('เชิญคุณเข้า ครอบครัวใจดี', 13, IN6), gap=3), gap=12),
+       pad=14, gap=0),
+
+  # คนถูกเชิญต้องรู้ทั้งสองทาง ไม่ใช่แค่ว่าตัวเองจะเห็นอะไร
+  card(txt('เข้าร่วมแล้วจะเป็นยังไง', 14, IN9, 500),
+       data_item('eye', 'คุณจะเห็นข้อมูลของครอบครัวนี้',
+                 'บันทึกสุขภาพ นัดหมาย รูปอัลตราซาวด์ และการนับลูกดิ้น'),
+       data_item('users', 'คนในครอบครัวจะเห็นว่าคุณเป็นสมาชิก',
+                 'เห็นชื่อ รูปโปรไฟล์ และสิ่งที่คุณบันทึกหรืออัปโหลดเข้าไป'),
+       data_item('undo', 'ออกจากครอบครัวได้ทุกเมื่อ',
+                 'ออกแล้วจะไม่เห็นข้อมูลของครอบครัวนี้อีก แต่สิ่งที่คุณเคยบันทึกไว้ยังอยู่'),
+       pad=14, gap=13),
+
+  consent_row('ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ',
+              'จำเป็นสำหรับการเข้าร่วม เพราะสิ่งที่คุณบันทึกจะถูกเก็บและแชร์ในครอบครัวนี้',
+              on=False, required=True, link='ดูว่าเก็บอะไรบ้าง'),
+
+  btn('เข้าร่วมครอบครัว', 'disabled'),
+  txt('ปฏิเสธคำเชิญ', 14, IN6, extra='text-align: center;'),
+  '</div>'), h=1100)
+
+# ---------- 4. จัดการความยินยอมในโปรไฟล์ ----------
+write('ConsentSettings.dc.html', screen(
+  topbar('ความเป็นส่วนตัว', left=ic('chev', 22, IN6)),
+  body(
+    section_head('ความยินยอมของคุณ'),
+    card(row(col(txt('ข้อมูลสุขภาพ', 14, IN9, 500),
+                 txt('ยินยอมเมื่อ 12 ส.ค. 2569 · เวอร์ชัน 1.0', 12, IN4), gap=3, extra='flex: 1;'),
+             badge('ให้แล้ว', 'owner'), justify='space-between'), pad=14, gap=0),
+    card(row(col(txt('อีเมลแจ้งเตือนนัดหมาย', 14, IN9, 500),
+                 txt('ยังไม่ได้ให้ความยินยอม', 12, IN4), gap=3, extra='flex: 1;'),
+             ('<div style="width: 48px; height: 28px; border-radius: 9999px; background: %s; padding: 3px; '
+              'display: flex; align-items: center; flex: none;">'
+              '<div style="width: 22px; height: 22px; border-radius: 9999px; background: %s;"></div></div>'
+              ) % (CR200, WHITE),
+             justify='space-between', gap=12), pad=14, gap=0),
+
+    section_head('ข้อมูลของคุณ'),
+    card(listrow('download', 'ขอไฟล์ข้อมูลทั้งหมด', 'ส่งให้ทางอีเมล'),
+         '<div style="height: 1px; background: %s;"></div>' % CR200,
+         listrow('shield', 'นโยบายความเป็นส่วนตัว', 'เวอร์ชัน 1.0'),
+         pad=0, gap=0, extra='overflow: hidden;'),
+
+    section_head('ถอนความยินยอม'),
+    card(txt('ถอนความยินยอมเรื่องข้อมูลสุขภาพ = ใช้แอปต่อไม่ได้ '
+             'เพราะทั้งแอปทำงานบนข้อมูลนี้ ระบบจะพาไปหน้าลบบัญชีแทน',
+             12, IN6, extra='line-height: 1.6;'),
+         btn('ถอนความยินยอมและลบบัญชี', 'ghost'),
+         pad=14, gap=10),
+    gap=12),
+  bottomnav(4)), h=1120)
+
+# ---------- 5. ลบบัญชี — บอกให้ครบว่าอะไรหายอะไรอยู่ ----------
+write('ConsentWithdraw.dc.html', screen(
+  topbar('ลบบัญชี', left=ic('chev', 22, IN6)),
+  body(
+    card(row(ic('alert', 18, BAD, 1.9),
+             col(txt('การลบบัญชีย้อนกลับไม่ได้', 15, IN9, 500),
+                 txt('อ่านให้ครบก่อนตัดสินใจ', 12, IN6), gap=3), gap=9, align='flex-start'),
+         pad=14, gap=0, bg='#FBF0EE', border=CR300),
+
+    section_head('สิ่งที่จะถูกลบภายใน 30 วัน'),
+    card(*[row(kick_dot(True, 6), txt(t, 13, IN6), gap=9)
+           for t in ['บันทึกสุขภาพและการนับลูกดิ้นทั้งหมด',
+                     'รูปทั้งหมดที่คุณอัปโหลด',
+                     'นัดหมายและค่าใช้จ่ายที่คุณกรอก',
+                     'ชื่อ อีเมล และรูปโปรไฟล์']],
+         pad=14, gap=9),
+
+    # จุดที่คนไม่ทันคิด — ลบบัญชีตัวเองแล้วครอบครัวจะเป็นยังไง
+    section_head('สิ่งที่ต้องตัดสินใจก่อน'),
+    card(data_item('users', 'คุณเป็นเจ้าของ ครอบครัวใจดี',
+                   'ต้องโอนให้สมาชิกคนอื่นก่อน หรือเลือกลบครอบครัวนี้ทิ้งพร้อมกัน '
+                   'ซึ่งจะลบข้อมูลของสมาชิกคนอื่นด้วย'),
+         btn('โอนสิทธิ์เจ้าของให้คนอื่น', 'secondary'),
+         pad=14, gap=12),
+
+    section_head('สิ่งที่ยังเก็บไว้'),
+    card(txt('หลักฐานการให้ความยินยอม (วันเวลาและเวอร์ชันของนโยบาย) '
+             'ตามที่กฎหมายกำหนด ในนั้นไม่มีข้อมูลสุขภาพหรือรูปของคุณ',
+             12, IN6, extra='line-height: 1.6;'), pad=14, gap=0),
+
+    field('พิมพ์อีเมลของคุณเพื่อยืนยัน', placeholder='darin@example.com'),
+    btn('ลบบัญชีถาวร', 'disabled'),
+    gap=12)), h=1340)
 
 # ---------- A1. ทางเข้าจากการ์ดนัดหมาย ----------
 write('VisitEntry.dc.html', screen(

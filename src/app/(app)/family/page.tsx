@@ -39,7 +39,7 @@ export default async function FamilyPage() {
         <Link
           href="/profile"
           aria-label="ย้อนกลับ"
-          className="flex size-10 items-center justify-center rounded-sm text-ink-600 hover:bg-cream-100"
+          className="flex size-11 items-center justify-center rounded-sm text-ink-600 hover:bg-cream-100"
         >
           <ChevronLeft size={22} strokeWidth={1.8} />
         </Link>

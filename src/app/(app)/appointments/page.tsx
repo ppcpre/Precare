@@ -60,7 +60,7 @@ export default async function AppointmentsPage({
 
   const tabCls = (on: boolean) =>
     cn(
-      "flex h-10 flex-1 items-center justify-center rounded-sm px-2 text-sm transition-colors",
+      "flex h-11 flex-1 items-center justify-center rounded-sm px-2 text-sm transition-colors",
       on ? "bg-white font-medium text-brown-900 shadow-[var(--shadow-card)]" : "text-ink-600",
     );
 

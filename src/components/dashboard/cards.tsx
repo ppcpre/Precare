@@ -31,7 +31,10 @@ export function NextAppointmentCard({ appt, now }: { appt: Appointment | null; n
     return (
       <Card className="flex items-center justify-between gap-3">
         <span className="text-sm text-ink-600">ยังไม่มีนัดหมาย</span>
-        <Link href="/appointments/new" className="text-[13px] font-medium text-brown-700">
+        <Link
+          href="/appointments/new"
+          className="-my-3 flex min-h-11 items-center py-3 text-[13px] font-medium text-brown-700"
+        >
           เพิ่มนัดหมาย
         </Link>
       </Card>
@@ -77,7 +80,7 @@ export function RecentLogsCard({ logs }: { logs: WeeklyLogView[] }) {
         <span className="text-sm text-ink-600">บันทึกล่าสุด</span>
         <Link
           href="/health"
-          className="flex items-center gap-0.5 text-[13px] font-medium text-brown-700"
+          className="-my-3 flex min-h-11 items-center gap-0.5 py-3 text-[13px] font-medium text-brown-700"
         >
           ดูทั้งหมด
           <ChevronRight size={14} strokeWidth={2} />
