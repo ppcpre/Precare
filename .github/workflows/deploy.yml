@@ -70,14 +70,25 @@ jobs:
         if: steps.probe.outputs.app == 'true'
         run: npx playwright test
 
+      # log ของ job อ่านผ่าน API ไม่ได้ถ้าไม่มี token แต่ annotation อ่านได้
+      # จึงยิงบรรทัดที่มีร่องรอย crash ออกมาเป็น annotation ด้วย
+      # ไม่งั้นเวลา worker ตายบน CI จะเห็นแต่ ERR_CONNECTION_REFUSED ยี่สิบอัน
+      # โดยไม่รู้ว่ามันตายเพราะอะไร แล้วต้องไปเดา — เคยเดาผิดมาสามรอบแล้ว
       - name: log ของ wrangler ตอน E2E ล้ม
         if: failure() && steps.probe.outputs.app == 'true'
         run: |
-          for f in ~/.config/.wrangler/logs/*.log; do
+          mkdir -p wrangler-logs
+          cp ~/.config/.wrangler/logs/*.log wrangler-logs/ 2>/dev/null || true
+          for f in wrangler-logs/*.log; do
             [ -f "$f" ] || continue
             echo "===== $f ====="
             tail -200 "$f"
+            grep -hoE '(Error|error).{0,200}' "$f" | sort -u | head -6 | while read -r line; do
+              echo "::error title=wrangler::$line"
+            done
           done
+          free -m || true
+          dmesg 2>/dev/null | grep -i -m5 "killed process\|out of memory" || true
 
       - name: เก็บ report ตอน E2E ล้ม
         if: failure() && steps.probe.outputs.app == 'true'
@@ -87,6 +98,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            wrangler-logs/
           retention-days: 7
 
       # ตรวจ secret ก่อน ไม่งั้น wrangler-action จะพังด้วย error ที่อ่านไม่รู้เรื่อง
