@@ -2066,21 +2066,23 @@ def consent_row(title_, desc=None, on=False, optional=False, link=None, emphasis
         lines.append(txt(desc, 12, IN6, extra='line-height: 1.5;'))
     if link:
         lines.append(row(txt(link, 12, BR7, 500), ic('chev', 12, BR7, 2), gap=2))
-    return ('<div style="padding: 12px 14px; background: %s;">%s</div>') % (
-        PE1 if emphasis else 'transparent',
-        row(checkbox(on), col(*lines, gap=5, extra='flex: 1; min-width: 0;'),
-            gap=10, align='flex-start' if (desc or link) else 'center'))
+    inner = row(checkbox(on), col(*lines, gap=5, extra='flex: 1; min-width: 0;'),
+                gap=10, align='flex-start' if (desc or link) else 'center')
+    if emphasis:
+        # ดันพื้นออกนอกระยะขอบ 12px แล้วชดเชยด้วย padding เท่ากัน
+        # เพื่อให้ช่องติ๊กยังตรงแนวกับข้ออื่น พื้นสีจึงเป็นการเน้น ไม่ใช่การย่อหน้า
+        return ('<div style="margin: 0 -12px; padding: 12px; border-radius: 10px; '
+                'background: %s;">%s</div>') % (PE1, inner)
+    return '<div style="padding: 10px 0;">%s</div>' % inner
 
 def consent_block(*rows_):
-    """รวมทุกข้อไว้ในกรอบเดียว คั่นด้วยเส้นบาง
+    """วางทุกข้อเป็นชุดเดียว ไม่ต้องมีกรอบ
 
-    แยกเป็นการ์ดละข้อกินพื้นที่เกินความจำเป็นและทำให้หน้าสมัครดูกระจัดกระจาย
-    กรอบเดียวอ่านเป็นชุดเดียว แต่ยังเป็นคนละ checkbox — ไม่ใช่การรวบเป็นติ๊กเดียว
-    ซึ่งเป็นคนละเรื่องกับการรวบหน้าตา
+    กรอบไม่ได้ทำให้อ่านง่ายขึ้น มันแค่เพิ่มเส้นในหน้าที่มีกรอบช่องกรอกอยู่แล้ว
+    ระยะห่างกับพื้นสีของข้อที่ต้องเน้นพอจะบอกว่าเป็นชุดเดียวกันแล้ว
+    ยังเป็นคนละ checkbox อยู่ — รวบหน้าตาได้ รวบเป็นติ๊กเดียวไม่ได้
     """
-    line = '<div style="height: 1px; background: %s;"></div>' % CR200
-    return card(line.join(rows_), pad=0, gap=0,
-                extra='overflow: hidden;')
+    return col(*rows_, gap=2, extra='margin: 4px 0;')
 
 def data_item(icon_name, title_, detail):
     return row(('<div style="width: 34px; height: 34px; border-radius: 9px; background: %s; flex: none; '
