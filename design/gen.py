@@ -1031,14 +1031,14 @@ def sort_pill(text):
 #  และรูปแต่ละใบก็ไม่ได้บอกวันของตัวเอง จึงแยกไม่ออกว่าใบไหนวันไหน
 # ============================================================
 
-def month_head(month_txt, count):
+def month_head(month_txt, count, unit='รูป'):
     """หัวเดือน — กลุ่มหลักของอัลบั้ม
 
     จัดตามวันที่ ไม่ใช่ตามสัปดาห์ครรภ์ เพราะหน้านี้จะถูกใช้กับบันทึกเรื่องอื่น
     ที่ไม่ใช่การตั้งครรภ์ด้วย วันที่มีเสมอ ส่วนสัปดาห์มีเฉพาะตอนตั้งครรภ์
     ผลพลอยได้: กลุ่ม "ไม่ระบุสัปดาห์" หายไปเอง เพราะทุกรูปมีวันที่อยู่แล้ว
     """
-    return row(txt(month_txt, 15, IN9, 600), txt('%d รูป' % count, 11, IN4),
+    return row(txt(month_txt, 15, IN9, 600), txt('%d %s' % (count, unit), 11, IN4),
                justify='space-between', extra='padding: 8px 0 2px;')
 
 def week_tag(week):
@@ -1046,7 +1046,7 @@ def week_tag(week):
     return ('<span style="background: %s; color: %s; border-radius: 6px; padding: 1px 7px; '
             'font-size: 10px; white-space: nowrap;">สัปดาห์ %d</span>') % (PE1, PE7, week)
 
-def day_head(day_txt, count, week=None, scrollable=False):
+def day_head(day_txt, count, week=None, scrollable=False, unit='รูป'):
     """หัววัน — วันที่คือแกนหลัก สัปดาห์ห้อยมาเป็นแท็กถ้ามี
 
     รูปที่ถ่ายวันเดียวกันย่อมอยู่สัปดาห์เดียวกันเสมอ (สัปดาห์คำนวณจากวันที่ถ่าย)
@@ -1056,7 +1056,7 @@ def day_head(day_txt, count, week=None, scrollable=False):
     left = row(('<span style="width: 5px; height: 5px; border-radius: 9999px; background: %s; flex: none;"></span>' % BR3),
                txt(day_txt, 12, IN6),
                (week_tag(week) if week is not None else ''),
-               txt('%d รูป' % count, 11, IN4), gap=7)
+               txt('%d %s' % (count, unit), 11, IN4), gap=7)
     return row(left, hint, justify='space-between', extra='padding: 4px 0 0;')
 
 def scroll_row(*tiles, gap=8):
@@ -2922,6 +2922,16 @@ GROUPS = [
 เรื่องที่แอปนี้มีแต่แอปอื่นไม่มี: คนในครอบครัวเห็นข้อมูลสุขภาพของกันและกัน
 ต้องบอกตรงจุดที่ตัดสินใจ ทั้งฝั่งคนเชิญและคนถูกเชิญ ไม่ใช่ซ่อนในหน้านโยบาย
 ผมไม่ใช่ที่ปรึกษากฎหมาย ดีไซน์นี้เป็นโครงให้คนที่รู้เรื่องมาตรวจต่อ"""),
+ ('media', 'วิดีโอ + ไฟล์แนบนัดหมาย — เสนอใหม่',
+  ['MediaAlbum.dc.html','MediaUpload.dc.html','MediaLimit.dc.html',
+   'MediaApptAttach.dc.html','MediaVideoView.dc.html'],
+  """วิดีโอในอัลบั้ม + ไฟล์แนบในนัดหมาย + ปุ่ม + ต่อวัน — ยังไม่ได้ลงมือ
+ข้อจำกัดที่กำหนดทุกอย่าง: R2 ฟรี 5 GB และเป็นก้อนเดียวกันทั้งแอป ไม่ได้แยกรายครอบครัว
+รูปย่อแล้วใบละ ~150 KB วิดีโอ 15 วินาทีจากมือถือ 25-40 MB ต่างกันสองร้อยเท่า
+ดีไซน์จึงต้องทำให้ต้นทุนของวิดีโอมองเห็นได้ ไม่ใช่ซ่อนไว้แล้วค่อยไปเต็มทีหลัง
+ปุ่ม + อยู่หัวแถวของแต่ละวัน กดแล้วได้วันที่ของแถวนั้นมาเลย ไม่ต้องเลือกวันเอง
+วิดีโอย่อไม่ได้และ Worker ไม่มี ffmpeg เพดานจึงต้องเป็นความยาวกับขนาด ไม่ใช่การบีบอัด
+ประเด็นที่ต้องตัดสินใจ อยู่ในโน้ตใต้แถว"""),
  ('visit', 'สรุปก่อนพบแพทย์ — เสนอใหม่',
   ['VisitEntry.dc.html','VisitSummary.dc.html','VisitQuestions.dc.html','VisitEmpty.dc.html'],
   """สรุปก่อนพบแพทย์ — ยังไม่ได้ลงมือ รอเลือก
@@ -2957,6 +2967,8 @@ heights = {'CostEntry.dc.html':900,'CostSheet.dc.html':1180,'CostMonthly.dc.html
            'CostDesktop.dc.html':720,'CostEmpty.dc.html':820,'CostGroups.dc.html':1000,'CostMonthly.dc.html':1000,'CostMonthEmpty.dc.html':1000,
            'KickEntry.dc.html':900,'KickCount.dc.html':980,'KickDone.dc.html':900,
            'KickSlow.dc.html':1020,'KickHistory.dc.html':1060,'KickEarly.dc.html':820,
+           'MediaAlbum.dc.html':960,'MediaUpload.dc.html':900,'MediaLimit.dc.html':820,
+           'MediaApptAttach.dc.html':720,'MediaVideoView.dc.html':700,
            'ConsentSignup.dc.html':880,'ConsentDetail.dc.html':1560,'ConsentInvite.dc.html':780,
            'ConsentSettings.dc.html':1120,'ConsentWithdraw.dc.html':1340,
            'VisitEntry.dc.html':820,'VisitSummary.dc.html':1240,'VisitQuestions.dc.html':1000,
@@ -2992,10 +3004,292 @@ titles = {'Login.dc.html':'เข้าสู่ระบบ','Signup.dc.html':'
           'LaborEntry.dc.html':'ทางเข้า + อาการที่ต้องไปทันที','LaborTiming.dc.html':'กำลังจับเวลา',
           'LaborActive.dc.html':'กำลังบีบอยู่','LaborReady.dc.html':'เข้าเกณฑ์ 5-1-1',
           'LaborHistory.dc.html':'ประวัติ',
+          'MediaAlbum.dc.html':'อัลบั้ม · + ต่อวัน + วิดีโอ',
+          'MediaUpload.dc.html':'เพิ่มไฟล์ · รูป+วิดีโอ',
+          'MediaLimit.dc.html':'ระหว่างอัปโหลด · โดนปฏิเสธ',
+          'MediaApptAttach.dc.html':'นัดหมาย · ไฟล์แนบ',
+          'MediaVideoView.dc.html':'เปิดดูวิดีโอ',
           'Album.dc.html':'ของจริงตอนนี้ · วันที่ผิด',
           'AlbumByDay.dc.html':'แบบ A · ตาราง (default)',
           'AlbumCaption.dc.html':'แบบ B · รายละเอียด','AlbumUpload.dc.html':'เพิ่มรูป · Phase 2',
           'PhotoDetail.dc.html':'ดูรูป + แชร์ · Phase 2–3'}
+
+# ============================================================
+#  วิดีโอในอัลบั้ม + ไฟล์แนบในนัดหมาย + ปุ่ม + ต่อวัน (รอ approve)
+#
+#  ข้อจำกัดที่กำหนดทุกอย่างในกลุ่มนี้: R2 ที่ใช้ฟรีมี 5 GB และเป็น
+#  ก้อนเดียวกันทั้งแอป ไม่ได้แยกรายครอบครัว รูปที่ย่อแล้วใบละ ~150 KB
+#  แต่วิดีโอ 15 วินาทีจากมือถืออยู่ที่ 25–40 MB — ต่างกันสองร้อยเท่า
+#  ดีไซน์จึงต้องทำให้ "ต้นทุนของวิดีโอ" มองเห็นได้ ไม่ใช่ซ่อนไว้
+# ============================================================
+
+def videotile(dur='0:12', size=108, radius=10, badge_txt=None):
+    """ไทล์วิดีโอ — ต้องแยกออกจากรูปได้ตั้งแต่ยังไม่กด
+
+    ป้ายเวลาอยู่มุมขวาล่างเสมอ ไม่ใช่แค่ไอคอนเล่น เพราะสิ่งที่คนอยากรู้
+    ก่อนกดคือ "ยาวแค่ไหน" ไม่ใช่ "นี่เป็นวิดีโอ" ซึ่งไอคอนบอกไปแล้ว
+    """
+    bdg = ''
+    if badge_txt:
+        bdg = ('<div style="position: absolute; left: 6px; top: 6px; background: rgba(43,36,32,0.62); '
+               'color: #FFFFFF; font-size: 10px; padding: 2px 7px; border-radius: 9999px;">%s</div>') % badge_txt
+    return ('<div style="position: relative; width: %dpx; height: %dpx; border-radius: %dpx; '
+            'background: #322A24; border: 1px solid #322A24; display: flex; align-items: center; '
+            'justify-content: center; overflow: hidden; flex: none; box-sizing: border-box;">'
+            '<div style="width: %dpx; height: %dpx; border-radius: 9999px; background: rgba(255,255,255,0.9); '
+            'display: flex; align-items: center; justify-content: center;">%s</div>%s'
+            '%s</div>'
+            ) % (size, size, radius, max(22, min(34, size // 3)), max(22, min(34, size // 3)),
+                 ic('play', 17 if size >= 64 else 12, '#322A24', 2.2), bdg,
+                 ('<div style="position: absolute; right: 6px; bottom: 6px; background: rgba(43,36,32,0.72); '
+                  'color: #FFFFFF; font-size: 10px; padding: 2px 6px; border-radius: 5px;">%s</div>' % dur)
+                 if size >= 64 else '')
+
+def add_tile(size=108, text='เพิ่ม'):
+    """ปุ่ม + ในแถวของวันนั้น — กดแล้วได้วันที่ของแถวนั้นมาให้เลย
+
+    ทำไมต้องมีทั้งที่มี FAB อยู่แล้ว: FAB เพิ่มของ "วันนี้" เสมอ
+    แต่เหตุผลที่คนเปิดอัลบั้มแล้วอยากเพิ่ม มักเป็นการเติมของวันที่ดูอยู่
+    เช่นเพิ่งสแกนวันที่ 26 แล้วนึกได้ว่ายังไม่ได้ลงคลิป การมี + ในแถวนั้น
+    ตัดขั้นตอนเลือกวันที่ทิ้งไปเลย ซึ่งเป็นขั้นที่คนกรอกผิดบ่อยที่สุด
+    """
+    return ('<div style="width: %dpx; height: %dpx; border-radius: 10px; border: 1.5px dashed %s; '
+            'background: %s; display: flex; flex-direction: column; align-items: center; '
+            'justify-content: center; gap: 4px; flex: none; box-sizing: border-box;">%s'
+            '<span style="font-size: 11px; color: %s;">%s</span></div>'
+            ) % (size, size, BR3, CR50, ic('plus', 20, BR5, 2), IN6, text)
+
+def media_quota(pct=62, photo_pct=18, used='3.1 GB', photos='0.6 GB', videos='2.5 GB · 68 คลิป'):
+    """โควตาที่แยกให้เห็นว่าวิดีโอกินไปเท่าไหร่
+
+    แถบเดียวรวมกันบอกไม่ได้ว่าลบอะไรถึงจะได้ที่คืนเยอะที่สุด
+    ซึ่งเป็นคำถามเดียวที่คนถามตอนพื้นที่ใกล้เต็ม
+    """
+    return col(
+      row(txt('พื้นที่เก็บไฟล์', 12, IN6),
+          txt('%s / 5 GB' % used, 12, IN9 if pct < 85 else WARN, 500), justify='space-between'),
+      ('<div style="height: 7px; width: 100%%; background: %s; border-radius: 9999px; overflow: hidden; '
+       'display: flex;"><div style="height: 100%%; width: %d%%; background: %s;"></div>'
+       '<div style="height: 100%%; width: %d%%; background: %s;"></div></div>'
+       ) % (CR200, photo_pct, BR5, pct - photo_pct, '#5F7358'),
+      row(row(('<span style="width: 8px; height: 8px; border-radius: 3px; background: %s;"></span>' % BR5),
+              txt('รูป %s' % photos, 11, IN6), gap=5),
+          row(('<span style="width: 8px; height: 8px; border-radius: 3px; background: #5F7358;"></span>'),
+              txt('วิดีโอ %s' % videos, 11, IN6), gap=5), gap=14),
+      gap=6)
+
+def rule_line(icon_name, t, color=None):
+    return row(ic(icon_name, 15, color or IN4, 1.9),
+               txt(t, 12, color or IN6, extra='line-height: 1.5;'), gap=7, align='flex-start')
+
+def pick_video(name='IMG_4821.mov', dur='0:12', size_txt='31.4 MB', pct=None, err=None):
+    """แถวไฟล์วิดีโอที่เลือกไว้ — ต้องเห็นขนาดเป็นตัวเลขทุกครั้ง
+
+    รูปไม่ต้องบอกขนาดเพราะย่อแล้วเท่ากันหมด แต่วิดีโอย่อไม่ได้
+    ตัวเลขขนาดคือสิ่งเดียวที่ทำให้คนตัดสินใจได้ว่าจะเก็บคลิปไหน
+    """
+    right = txt(size_txt, 11, IN4)
+    if err:
+        right = txt(err, 11, BAD, 500)
+    bar = ''
+    if pct is not None:
+        bar = ('<div style="height: 4px; width: 100%%; background: %s; border-radius: 9999px; '
+               'overflow: hidden; margin-top: 6px;"><div style="height: 100%%; width: %d%%; '
+               'background: %s; border-radius: 9999px;"></div></div>') % (CR200, pct, BR5)
+    return card(
+      row(videotile(dur, 52, 9),
+          col(row(txt(name, 13, IN9, 500, 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'),
+                  right, justify='space-between', gap=8),
+              txt('%s · %s' % (dur, 'อัปโหลดไม่ได้' if err else
+                                ('พร้อมอัปโหลด' if pct is None else 'กำลังอัปโหลด %d%%' % pct)),
+                  11, BAD if err else IN4),
+              bar, gap=3, extra='flex: 1; min-width: 0;'),
+          gap=10, align='flex-start'),
+      pad=10, gap=0, border=BAD if err else CR200, bg='#FDF6F4' if err else WHITE)
+
+def attach_strip(*tiles):
+    return ('<div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px;">%s</div>'
+            ) % ''.join('<div style="flex: none;">%s</div>' % t for t in tiles)
+
+# ---------- 1. อัลบั้ม: + ต่อวัน และวิดีโอปนอยู่ในแถวเดียวกัน ----------
+write('MediaAlbum.dc.html', screen(
+  topbar('อัลบั้ม', right=ic('camera', 22, IN6)),
+  ('<div style="flex: none; padding: 12px 16px; display: flex; gap: 8px; background: %s; '
+   'border-bottom: 1px solid %s; overflow: hidden;">%s</div>') % (CR50, CR200,
+   chip('ทั้งหมด', True) + chip('อัลตราซาวด์') + chip('ครอบครัว') + chip('อื่นๆ')),
+  body(
+    card(media_quota(62, 18), pad=14),
+    # สวิตช์ "วิดีโอ" ไม่ได้อยู่ในแถวชิปด้านบน เพราะแถวนั้นเลือกได้ทีละอย่าง
+    # ส่วนนี่เป็นสวิตช์เปิดปิดที่ต้องใช้ร่วมกับชิปได้ เช่น อัลตราซาวด์ + เฉพาะวิดีโอ
+    # วางไว้ข้างสวิตช์มุมมองเพราะเป็นเรื่อง "กำลังดูอะไรอยู่" เหมือนกัน
+    row(sort_pill('ใหม่ไปเก่า'),
+        row(('<span style="display: inline-flex; align-items: center; gap: 4px; background: %s; '
+             'border: 1px solid %s; border-radius: 9999px; padding: 5px 9px; font-size: 12px; '
+             'color: %s; white-space: nowrap;">%s วิดีโอ</span>') % (WHITE, CR200, IN6, ic('play', 12, IN4, 2)),
+            view_toggle(0), gap=7),
+        justify='space-between'),
+
+    month_head('สิงหาคม 2569', 11, 'ไฟล์'),
+    # + อยู่หัวแถวเสมอ ไม่ใช่ท้ายแถว — ท้ายแถวต้องไถผ่านรูปทั้งวันก่อนถึงจะเจอ
+    day_head('26 ส.ค. · อังคาร', 6, week=24, scrollable=True, unit='ไฟล์'),
+    scroll_row(add_tile(108), videotile('0:12', 108, 10, 'วิดีโอ'),
+               phototile('scan', 108, 108, 10, 'อัลตราซาวด์'),
+               phototile('photo', 108, 108, 10),
+               videotile('0:24', 108, 10, 'วิดีโอ'),
+               phototile('photo', 108, 108, 10)),
+    day_head('22 ส.ค. · ศุกร์', 2, week=24),
+    scroll_row(add_tile(108), phototile('scan', 108, 108, 10, 'อัลตราซาวด์'),
+               phototile('photo', 108, 108, 10)),
+
+    month_head('กรกฎาคม 2569', 2),
+    day_head('12 ก.ค. · เสาร์', 2, unit='ไฟล์'),
+    scroll_row(add_tile(108), videotile('0:08', 108, 10, 'วิดีโอ'),
+               phototile('photo', 108, 108, 10)),
+    pad=16, gap=12),
+  fab(), bottomnav(3)), h=960)
+
+# ---------- 2. เพิ่มไฟล์: รูปกับวิดีโอในสเต็ปเดียวกัน ----------
+write('MediaUpload.dc.html', screen(
+  topbar('เพิ่มลงอัลบั้ม', left=ic('x', 22, IN6)),
+  body(
+    # กติกาต้องอยู่ก่อนเลือกไฟล์ ไม่ใช่โผล่ตอนโดนปฏิเสธ
+    # คนเลือกคลิปยาว 2 นาทีมาแล้วค่อยบอกว่ายาวเกิน คือทำให้เสียเวลาฟรี
+    card(rule_line('image', 'รูป ย่อให้อัตโนมัติ ใบละไม่เกิน 5 MB'),
+         rule_line('play', 'วิดีโอ ยาวไม่เกิน 30 วินาที และไม่เกิน 40 MB ต่อคลิป'),
+         rule_line('alert', 'วิดีโอย่อไม่ได้ กินพื้นที่มากกว่ารูปราวสองร้อยเท่า', BR7),
+         pad=13, gap=8, bg=CR100, border=CR200),
+
+    label('ไฟล์ที่เลือก'),
+    attach_strip(thumb_pick('scan'), thumb_pick('photo'), add_tile(96, 'เพิ่ม')),
+    pick_video('IMG_4821.mov', '0:12', '31.4 MB'),
+
+    field('วันที่ถ่าย', value='26 ส.ค. 2569'),
+    row(chip('อัลตราซาวด์', True), chip('ครอบครัว'), chip('อื่นๆ'), gap=8),
+    textarea('คำบรรยาย (ไม่บังคับ)', 'เช่น ครั้งแรกที่เห็นหน้าชัดๆ', rows=3),
+
+    card(row(txt('รวมที่จะอัปโหลด', 12, IN6), txt('31.7 MB · 3 ไฟล์', 12, IN9, 500),
+             justify='space-between'), pad=12, gap=0, bg=CR100, border=CR200),
+    btn('อัปโหลด'),
+    pad=16, gap=12)), h=900)
+
+# ---------- 3. ระหว่างอัปโหลด และตอนโดนปฏิเสธ ----------
+write('MediaLimit.dc.html', screen(
+  topbar('เพิ่มลงอัลบั้ม', left=ic('x', 22, IN6)),
+  body(
+    # วิดีโอใช้เวลาอัปโหลดจริง ต่างจากรูปที่ย่อแล้วเสร็จแทบทันที
+    # ต้องมีความคืบหน้าเป็นตัวเลข ไม่ใช่แค่หมุนๆ ไม่งั้นคนกดออกกลางคัน
+    label('กำลังอัปโหลด'),
+    pick_video('IMG_4821.mov', '0:12', '31.4 MB', pct=64),
+
+    label('อัปโหลดไม่ได้'),
+    pick_video('IMG_4830.mov', '2:07', '', err='ยาวเกิน 30 วินาที'),
+    pick_video('IMG_4835.mov', '0:22', '', err='ใหญ่เกิน 40 MB'),
+
+    card(row(ic('alert', 18, BR7, 1.9),
+             col(txt('ตัดคลิปให้สั้นลงก่อนได้จากแอปกล้องในเครื่อง', 13, IN9, 500),
+                 txt('แอปย่อวิดีโอให้ไม่ได้ ไฟล์ที่อัปโหลดคือไฟล์เดียวกับที่มือถือถ่ายไว้',
+                     12, IN6, extra='line-height: 1.5;'), gap=3),
+             gap=9, align='flex-start'), pad=13, gap=0, bg=PE1, border=PE3),
+
+    label('พื้นที่ใกล้เต็ม'),
+    card(media_quota(94, 14, '4.7 GB', '0.6 GB', '4.1 GB · 112 คลิป'),
+         txt('เหลืออีก 0.3 GB — ประมาณ 8 คลิป หรือ 2,000 รูป', 12, IN6),
+         pad=14, gap=10, border=WARN),
+    btn('ลบไฟล์เก่าออก', 'secondary'),
+    pad=16, gap=12)), h=820)
+
+# ---------- 4. นัดหมาย: แนบไฟล์ได้ ----------
+write('MediaApptAttach.dc.html', screen(
+  topbar('รายละเอียดนัด', left=ic('chev', 22, IN6), right=ic('edit', 20, IN6)),
+  body(
+    card(row(datebox('ส.ค.', '26'),
+             col(txt('ฝากครรภ์ ครั้งที่ 5', 16, IN9, 600),
+                 txt('09:30 · พญ.สมฤดี', 12, IN6),
+                 txt('รพ.รามาธิบดี', 12, IN4), gap=3), gap=12, align='flex-start'),
+         row(group_tag('ฝากครรภ์', 'preg'), claim_pill('none'), gap=8),
+         pad=14, gap=12),
+
+    # ไฟล์แนบผูกกับนัด ไม่ใช่ลอยอยู่ในอัลบั้มเฉยๆ
+    # ใบสั่งยาหรือคลิปอัลตราซาวด์จากวันนั้น ต้องหาเจอจากนัดของวันนั้น
+    row(txt('ไฟล์แนบ', 14, IN9, 500), txt('3 ไฟล์ · 32.1 MB', 11, IN4), justify='space-between'),
+    attach_strip(add_tile(88, 'เพิ่ม'), videotile('0:12', 88, 10),
+                 phototile('scan', 88, 88, 10), phototile('photo', 88, 88, 10)),
+    card(row(ic('album', 16, IN4, 1.9),
+             txt('ไฟล์ที่แนบกับนัดจะขึ้นในอัลบั้มด้วย ใช้วันที่ของนัดเป็นวันที่ถ่าย',
+                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
+         pad=12, gap=0, bg=CR100, border=CR200),
+
+    label('ค่าใช้จ่าย'),
+    card(row(txt('ค่าตรวจครั้งนี้', 13, IN6), money(1200, 15, IN9, 600), justify='space-between'),
+         pad=13, gap=0),
+    label('บันทึก'),
+    card(txt('ตรวจเลือดครั้งที่สอง อดอาหารก่อน 8 ชั่วโมง', 13, IN6, extra='line-height: 1.6;'),
+         pad=13, gap=0),
+    pad=16, gap=12),
+  bottomnav(2)), h=720)
+
+# ---------- 5. เปิดดูวิดีโอ ----------
+write('MediaVideoView.dc.html', screen(
+  topbar('26 ส.ค. 2569', left=ic('x', 22, IN6), right=ic('dots', 20, IN6), bg=CR50),
+  body(
+    ('<div style="position: relative; width: 100%%; height: 300px; border-radius: 12px; '
+     'background: #322A24; display: flex; align-items: center; justify-content: center;">'
+     '<div style="width: 62px; height: 62px; border-radius: 9999px; background: rgba(255,255,255,0.92); '
+     'display: flex; align-items: center; justify-content: center;">%s</div>'
+     '<div style="position: absolute; left: 12px; right: 12px; bottom: 12px;">'
+     '<div style="height: 3px; background: rgba(255,255,255,0.3); border-radius: 9999px;">'
+     '<div style="height: 100%%; width: 34%%; background: #FFFFFF; border-radius: 9999px;"></div></div>'
+     '<div style="display: flex; justify-content: space-between; margin-top: 6px;">'
+     '<span style="font-size: 11px; color: rgba(255,255,255,0.85);">0:04</span>'
+     '<span style="font-size: 11px; color: rgba(255,255,255,0.85);">0:12</span></div></div></div>'
+     ) % ic('play', 28, '#322A24', 2.2),
+    row(week_tag(24), txt('อัลตราซาวด์', 12, IN6), gap=8),
+    txt('ครั้งแรกที่เห็นหน้าชัดๆ หมอบอกว่าตัวโตตามเกณฑ์', 14, IN9, extra='line-height: 1.6;'),
+    row(avatar('ด', 26, BR3, WHITE, 12), txt('ดาริน ช. · อัปโหลด 26 ส.ค. 09:41', 11, IN4), gap=8),
+    card(row(ic('alert', 16, IN4, 1.9),
+             txt('คลิปนี้มีเสียงจากในห้องตรวจ ก่อนแชร์ให้ฟังก่อนว่ามีเสียงใครอยู่บ้าง',
+                 12, IN6, extra='line-height: 1.5;'), gap=8, align='flex-start'),
+         pad=12, gap=0, bg=CR100, border=CR200),
+    row(btn('แชร์', 'secondary'), btn('ลบ', 'ghost'), gap=10),
+    pad=16, gap=13)), h=700)
+
+MEDIA_DECISIONS = """วิดีโอ + ไฟล์แนบนัดหมาย — เรื่องที่ต้องตัดสินก่อนลงมือ
+
+1) เพดานคลิป — เสนอ 30 วินาที / 40 MB ต่อคลิป
+   R2 ฟรี 5 GB และตอนนี้เป็นก้อนเดียวกันทั้งแอป ไม่ได้แยกรายครอบครัว
+   (getStorageUsage รวมทั้งตาราง ไม่มี where familyId) หนึ่งครอบครัวจึงกินโควตาของทุกคนได้
+   รูปย่อแล้วใบละ ~150 KB วิดีโอ 15 วินาที 25–40 MB ต่างกันสองร้อยเท่า
+   ถ้าไม่ใส่เพดาน โควตาหมดใน ~130 คลิป
+
+2) โควตาต่อครอบครัว — ควรแยกหรือยัง
+   ปัญหานี้มีอยู่แล้วก่อนมีวิดีโอ แต่วิดีโอทำให้แรงขึ้นมาก
+   ถ้ายังไม่แยก ต้องยอมรับว่าครอบครัวเดียวทำให้ทุกครอบครัวอัปโหลดไม่ได้
+
+3) ไฟล์จาก iPhone — .mov/HEVC เล่นไม่ได้ทุกเครื่อง
+   Worker ไม่มี ffmpeg แปลงให้ไม่ได้ ทางเลือกคือ
+   ก) รับเฉพาะ mp4/H.264 แล้วบอกให้ตั้งกล้องเป็น "เข้ากันได้มากที่สุด"
+   ข) รับ .mov ด้วย แล้วยอมรับว่าบางเครื่องเปิดไม่ได้
+   ค) Cloudflare Stream แปลงให้ แต่มีค่าใช้จ่าย ขัดกับที่ตกลงว่าจะอยู่ฟรี
+   เสนอ ก) — ปฏิเสธตั้งแต่ตอนเลือกไฟล์ พร้อมบอกวิธีตั้งกล้อง
+
+4) รูปหน้าปกวิดีโอ — ดึงเฟรมแรกในเบราว์เซอร์ตอนเลือกไฟล์
+   ใช้ <video> + canvas แล้วส่งเป็น webp เหมือน thumb ของรูป
+   ทำฝั่ง server ไม่ได้ ถ้าไม่ทำ กริดอัลบั้มจะเป็นกล่องดำล้วนทั้งแถว
+
+5) ไฟล์แนบนัดหมาย — ตอนนี้ตาราง appointments ยังไม่มีไฟล์แนบเลย
+   ต้องเพิ่มความสัมพันธ์ใหม่ เสนอให้ใช้ตาราง photos เดิม (เพิ่ม appointmentId)
+   แทนการสร้างตารางใหม่ ไฟล์จึงขึ้นทั้งในนัดและในอัลบั้ม ไม่ต้องอัปสองรอบ
+
+6) เสียงในคลิป — คลิปจากห้องตรวจมักติดเสียงหมอและคนอื่น
+   ตอนนี้ใส่เป็นข้อความเตือนตอนจะแชร์ ยังไม่ได้ทำอะไรกับตัวไฟล์
+
+ทางเดินไฟล์ที่เสนอ (ไม่เหมือนของรูป)
+  รูป: ย่อในเบราว์เซอร์ -> Server Action (ลิมิต 20 MB) เหมือนเดิม
+  วิดีโอ: Route Handler แยก สตรีม request.body เข้า R2 ตรงๆ
+  เหตุผล: Server Action ต้องอ่านทั้งก้อนเข้าหน่วยความจำ worker (เพดาน 128 MB)
+  คลิป 40 MB บวก overhead ของ multipart เสี่ยงเกินโดยไม่จำเป็น
+  สตรีมเข้า R2 ใช้หน่วยความจำคงที่ไม่ว่าไฟล์จะใหญ่แค่ไหน"""
+
 
 arts, notes, y = [], [], 0
 for gid, gname, files, note in GROUPS:
@@ -3019,6 +3313,10 @@ for gid, gname, files, note in GROUPS:
                       "y": y + max(heights.get(f, 844) for f in files) + 40,
                       "w": 1400, "page": "screens",
                       "text": VISIT_DECISIONS if gid == 'visit' else LABOR_DECISIONS})
+    if gid == 'media':
+        notes.append({"id": "note-media-decide", "x": 0,
+                      "y": y + max(heights.get(f, 844) for f in files) + 40,
+                      "w": 1400, "page": "screens", "text": MEDIA_DECISIONS})
     if gid == 'kick':
         notes.append({"id": "note-kick-decide", "x": 0,
                       "y": y + max(heights.get(f, 844) for f in files) + 40,
