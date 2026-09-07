@@ -7,19 +7,32 @@
  */
 
 /**
- * รับเฉพาะ mp4
+ * รับ mp4 และ mov
  *
- * iPhone ถ่ายเป็น .mov (video/quicktime) ซึ่ง Android หลายรุ่นเปิดไม่ได้
- * ในแอปนี้คนในครอบครัวดูของกันและกัน ไฟล์ที่คนถ่ายเปิดได้แต่คนอื่นเปิดไม่ได้
- * จึงแย่กว่าการปฏิเสธตั้งแต่แรกพร้อมบอกวิธีตั้งกล้อง
+ * .mov จาก iPhone บางไฟล์เข้ารหัสเป็น HEVC ซึ่งเบราว์เซอร์บนแอนดรอยด์
+ * หลายรุ่นถอดรหัสไม่ได้ — แปลงให้ไม่ได้ด้วย เพราะ Worker ไม่มี ffmpeg
+ * และ ffmpeg.wasm ~30 MB เกินงบ bundle ทั้งโปรเจกต์ (3 MiB)
  *
- * แปลงให้ไม่ได้: Worker ไม่มี ffmpeg และ ffmpeg.wasm ~30 MB
- * เกินงบ bundle ทั้งโปรเจกต์ (3 MiB)
+ * ทางที่เลือก: **รับไว้ก่อน แล้วบอกความจริง** ไฟล์ที่เครื่องนี้อ่านไม่ได้
+ * จะอัปได้อยู่ แต่ไม่มีหน้าปกและไม่รู้ความยาว และอาจเล่นไม่ได้บนบางเครื่อง
+ * ดีกว่าปฏิเสธไปเลยแล้วคนอัปคลิปของตัวเองไม่ได้ทั้งที่ไฟล์ไม่ได้เสีย
  */
-export const VIDEO_MIME = ["video/mp4"];
+export const VIDEO_MIME = ["video/mp4", "video/quicktime"];
+
+/** ตัวเลือกของ input file — แอนดรอยด์บางเครื่องส่ง type ว่างมา ต้องมีนามสกุลด้วย */
+export const VIDEO_ACCEPT = "video/mp4,video/quicktime,.mp4,.mov";
+
+/** เดาชนิดจากนามสกุล ใช้ตอน picker ไม่ส่ง MIME มาให้ */
+export function videoMimeOf(file: File) {
+  if (VIDEO_MIME.includes(file.type)) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".mp4")) return "video/mp4";
+  if (name.endsWith(".mov")) return "video/quicktime";
+  return null;
+}
 
 export const VIDEO_HELP =
-  "ตั้งกล้องเป็นรูปแบบ “เข้ากันได้มากที่สุด” (iPhone: ตั้งค่า → กล้อง → รูปแบบ)";
+  "ถ้าอยากให้เปิดได้ทุกเครื่อง ตั้งกล้องเป็นรูปแบบ “เข้ากันได้มากที่สุด” (iPhone: ตั้งค่า → กล้อง → รูปแบบ)";
 
 export type VideoInfo = { durationMs: number; width: number; height: number };
 

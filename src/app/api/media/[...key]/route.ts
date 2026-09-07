@@ -21,7 +21,10 @@ import { getSessionUser } from "@/lib/session";
  */
 
 /** ชนิดที่ยอมให้เสิร์ฟ — กันไฟล์แปลกปลอมที่หลุดเข้า bucket มาทำงานในเบราว์เซอร์ */
-const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png", "video/mp4"]);
+const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png", "video/mp4", "video/quicktime"]);
+
+/** นามสกุลของไฟล์วิดีโอที่เราตั้งเอง -> content-type ที่ต้องตอบกลับ */
+const VIDEO_EXT: Record<string, string> = { mp4: "video/mp4", mov: "video/quicktime" };
 
 /**
  * อ่านหัว Range แบบที่วิดีโอใช้จริง คือ `bytes=<start>-` และ `bytes=<start>-<end>`
@@ -81,11 +84,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
   /**
    * แยกทางด้วยนามสกุลของ key ไม่ใช่ด้วย content-type จาก R2
    *
-   * เพราะ key เป็นของเราเอง (`.../videos/<uuid>.mp4`) จึงเชื่อได้โดยไม่ต้อง
+   * เพราะ key เป็นของเราเอง (`.../videos/<uuid>.mp4` หรือ `.mov`) จึงเชื่อได้โดยไม่ต้อง
    * ถาม R2 ก่อน — เดิมยิง head() นำทุกครั้งเพื่อดู content-type ซึ่งทำให้
    * รูปทุกใบในอัลบั้มกิน R2 สองครั้งต่อใบ ทั้งที่ 99% ของคำขอเป็นรูป
    */
-  if (!key.endsWith(".mp4")) {
+  const videoType = VIDEO_EXT[key.slice(key.lastIndexOf(".") + 1)];
+  if (!videoType) {
     const obj = await env.PHOTOS_BUCKET.get(key);
     // แถวยังอยู่แต่ไฟล์หาย = ข้อมูลไม่ตรงกัน ไม่ใช่เรื่องปกติ
     if (!obj) return new Response(null, { status: 404 });
@@ -131,7 +135,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
     status: range ? 206 : 200,
     headers: {
       ...common,
-      "content-type": "video/mp4",
+      "content-type": videoType,
       "accept-ranges": "bytes",
       ...(range
         ? {

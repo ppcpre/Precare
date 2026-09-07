@@ -81,12 +81,31 @@ test("อัปโหลดวิดีโอ: ด่านสิทธิ์แ
   await signUp(page, uniqueEmail("videoowner"), "แม่อัปคลิป");
   await completeOnboarding(page, "ครอบครัวอัปคลิป");
 
-  await test.step("ไฟล์ที่ไม่ใช่ mp4 ต้องได้ 415", async () => {
+  await test.step("ชนิดที่ไม่รองรับต้องได้ 415", async () => {
     const res = await page.request.post(VIDEO_URL, {
-      headers: { "content-type": "video/quicktime" },
+      headers: { "content-type": "video/webm" },
       data: fakeClip(1024),
     });
     expect(res.status()).toBe(415);
+  });
+
+  await test.step(".mov ต้องอัปได้ และเสิร์ฟกลับเป็น quicktime", async () => {
+    // นามสกุลบน key ต้องตามชนิดจริง เพราะเส้นทางเสิร์ฟใช้นามสกุลตัดสินว่า
+    // จะตอบแบบวิดีโอ (Range/206) หรือแบบรูป (อ่านทั้งก้อนเข้าหน่วยความจำ)
+    // ถ้าพลาดตรงนี้ คลิป 40 MB จะถูกอ่านทั้งก้อนใน worker ที่มีเพดาน 128 MB
+    const res = await page.request.post(VIDEO_URL, {
+      headers: { "content-type": "video/quicktime" },
+      data: fakeClip(4096),
+    });
+    expect(res.status()).toBe(200);
+    const { key } = (await res.json()) as { key: string };
+    expect(key).toMatch(/\.mov$/);
+
+    const back = await page.request.get(`http://localhost:8788/api/media/${key}`, {
+      headers: { range: "bytes=0-9" },
+    });
+    expect(back.status()).toBe(206);
+    expect(back.headers()["content-type"]).toBe("video/quicktime");
   });
 
   // เพดาน 40 MB ไม่ได้ทดสอบตรงนี้โดยตั้งใจ — ต้องส่งไบต์จริง 41 MB ต่อ project

@@ -54,8 +54,11 @@ export async function POST(req: Request) {
     return json(403, "คุณมีสิทธิ์ดูอย่างเดียวในครอบครัวนี้");
   }
 
-  const type = req.headers.get("content-type") ?? "";
-  if (!type.startsWith("video/mp4")) return json(415, "รองรับเฉพาะไฟล์ mp4");
+  const type = (req.headers.get("content-type") ?? "").split(";")[0].trim();
+  // นามสกุลบน key ต้องตรงกับชนิดจริง เพราะเส้นทางเสิร์ฟไฟล์ใช้นามสกุลตัดสิน
+  // ว่าจะตอบแบบวิดีโอ (Range/206) หรือแบบรูป (อ่านทั้งก้อน)
+  const ext = type === "video/mp4" ? "mp4" : type === "video/quicktime" ? "mov" : null;
+  if (!ext) return json(415, "รองรับเฉพาะไฟล์ mp4 และ mov");
 
   // ต้องรู้ขนาดก่อนเริ่มเขียน ไม่งั้นจะกันโควตาไม่ได้จนกว่าจะเขียนเสร็จ
   const declared = Number(req.headers.get("content-length") ?? 0);
@@ -73,7 +76,7 @@ export async function POST(req: Request) {
   }
 
   const { env } = await getCloudflareContext({ async: true });
-  const key = `family/${familyId}/videos/${crypto.randomUUID()}.mp4`;
+  const key = `family/${familyId}/videos/${crypto.randomUUID()}.${ext}`;
 
   /**
    * ต้องผ่าน FixedLengthStream ไม่ใช่ส่ง req.body ให้ R2 ตรงๆ
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
   try {
     [object] = await Promise.all([
       env.PHOTOS_BUCKET.put(key, fixed.readable, {
-        httpMetadata: { contentType: "video/mp4" },
+        httpMetadata: { contentType: type },
       }),
       pumping,
     ]);

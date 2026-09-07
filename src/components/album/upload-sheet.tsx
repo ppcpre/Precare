@@ -9,7 +9,14 @@ import { Field, Textarea } from "@/components/ui/field";
 import { Chip } from "@/components/ui/chip";
 import { addPhotos, addVideo } from "@/actions/photos";
 import { PHOTO_EDGE, formatBytesShort, resizeToWebp } from "@/lib/image";
-import { VIDEO_HELP, VIDEO_MIME, formatClip, posterFrame, probeVideo } from "@/lib/video";
+import {
+  VIDEO_ACCEPT,
+  VIDEO_HELP,
+  formatClip,
+  posterFrame,
+  probeVideo,
+  videoMimeOf,
+} from "@/lib/video";
 import { cn } from "@/lib/cn";
 
 const TYPES = [
@@ -34,7 +41,16 @@ const MAX_VIDEO_MS = 30_000;
  * ที่เพิ่มคลิปเป็นการตัดสินใจ ไม่ใช่การกวาดเลือกทั้งอัลบั้มในเครื่อง
  */
 type Picked = { blob: Blob; url: string };
-type Video = { file: File; url: string; poster: Blob; posterUrl: string; durationMs: number };
+type Video = {
+  file: File;
+  mime: string;
+  url: string;
+  /** null = เบราว์เซอร์นี้ถอดรหัสไฟล์ไม่ได้ อัปได้อยู่ แต่ไม่มีหน้าปก */
+  poster: Blob | null;
+  posterUrl: string | null;
+  /** null = อ่านความยาวไม่ได้ ด้วยเหตุเดียวกัน */
+  durationMs: number | null;
+};
 
 export function UploadSheet({
   uploaderName,
@@ -82,35 +98,46 @@ export function UploadSheet({
         notes.push("เพิ่มได้ครั้งละหนึ่งคลิป");
         break;
       }
-      if (!VIDEO_MIME.includes(f.type)) {
-        // .mov จาก iPhone เปิดไม่ได้ทุกเครื่อง บอกวิธีตั้งกล้องไปด้วยเลย
-        // ไม่งั้นคนจะลองใหม่ด้วยไฟล์เดิมแล้วเจอข้อความเดิมวนไป
-        notes.push(`${f.name} ไม่ใช่ mp4 — ${VIDEO_HELP}`);
+      // แอนดรอยด์บาง picker ส่ง type ว่างมา จึงเดาจากนามสกุลด้วย
+      const mime = videoMimeOf(f);
+      if (!mime) {
+        notes.push(`${f.name} ไม่ใช่ mp4 หรือ mov`);
         continue;
       }
       if (f.size > MAX_VIDEO_BYTES) {
         notes.push(`${f.name} ใหญ่ ${formatBytesShort(f.size)} เกิน ${formatBytesShort(MAX_VIDEO_BYTES)}`);
         continue;
       }
+
+      /**
+       * อ่านความยาวกับหน้าปกให้ได้ก็ดี ไม่ได้ก็ยังอัปได้
+       *
+       * .mov ที่เข้ารหัส HEVC เบราว์เซอร์บนแอนดรอยด์หลายรุ่นถอดรหัสไม่ได้
+       * ถ้าปฏิเสธไปเลยคนจะอัปคลิปของตัวเองไม่ได้ทั้งที่ไฟล์ไม่ได้เสีย
+       * จึงปล่อยผ่านแล้วบอกความจริงว่าจะไม่มีหน้าปกและอาจเล่นไม่ได้บนบางเครื่อง
+       * เพดานที่ยังบังคับได้จริงในเคสนี้คือขนาดไฟล์ ซึ่งเป็นตัวคุมโควตาอยู่แล้ว
+       */
+      let durationMs: number | null = null;
+      let poster: Blob | null = null;
       try {
-        const info = await probeVideo(f);
-        if (info.durationMs > MAX_VIDEO_MS) {
-          notes.push(
-            `${f.name} ยาว ${formatClip(info.durationMs)} เกิน ${MAX_VIDEO_MS / 1000} วินาที`,
-          );
+        durationMs = (await probeVideo(f)).durationMs;
+        if (durationMs > MAX_VIDEO_MS) {
+          notes.push(`${f.name} ยาว ${formatClip(durationMs)} เกิน ${MAX_VIDEO_MS / 1000} วินาที`);
           continue;
         }
-        const poster = await posterFrame(f);
-        setVideo({
-          file: f,
-          url: URL.createObjectURL(f),
-          poster,
-          posterUrl: URL.createObjectURL(poster),
-          durationMs: info.durationMs,
-        });
-      } catch (e) {
-        notes.push(e instanceof Error ? `${f.name}: ${e.message}` : `เปิด ${f.name} ไม่ได้`);
+        poster = await posterFrame(f);
+      } catch {
+        notes.push(`เครื่องนี้เปิด ${f.name} ไม่ได้ อัปได้แต่จะไม่มีหน้าปก · ${VIDEO_HELP}`);
       }
+
+      setVideo({
+        file: f,
+        mime,
+        url: URL.createObjectURL(f),
+        poster,
+        posterUrl: poster ? URL.createObjectURL(poster) : null,
+        durationMs,
+      });
     }
 
     const room = MAX_BATCH - picked.length;
@@ -140,11 +167,11 @@ export function UploadSheet({
    * คลิป 40 MB บนเน็ตมือถือใช้เวลาเป็นสิบวินาที ถ้าไม่มีตัวเลขให้ดู
    * คนจะคิดว่าค้างแล้วกดออก ซึ่งทำให้ไฟล์ค้างอยู่ใน R2 กินโควตาของทุกคน
    */
-  function uploadVideo(file: File): Promise<string> {
+  function uploadVideo(file: File, mime: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/media/video");
-      xhr.setRequestHeader("content-type", "video/mp4");
+      xhr.setRequestHeader("content-type", mime);
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
       };
@@ -188,14 +215,16 @@ export function UploadSheet({
 
       if (video) {
         setUploadPct(0);
-        const key = await uploadVideo(video.file);
+        const key = await uploadVideo(video.file, video.mime);
         const fd = new FormData();
         fd.set("key", key);
         fd.set("takenAt", takenAt);
         fd.set("type", type);
         fd.set("caption", caption);
-        fd.set("durationMs", String(video.durationMs));
-        fd.append("poster", new File([video.poster], "poster.webp", { type: "image/webp" }));
+        if (video.durationMs != null) fd.set("durationMs", String(video.durationMs));
+        if (video.poster) {
+          fd.append("poster", new File([video.poster], "poster.webp", { type: "image/webp" }));
+        }
         if (logId) fd.set("logId", logId);
         if (appointmentId) fd.set("appointmentId", appointmentId);
         const res = await videoAction.executeAsync(fd);
@@ -205,7 +234,7 @@ export function UploadSheet({
       picked.forEach((p) => URL.revokeObjectURL(p.url));
       if (video) {
         URL.revokeObjectURL(video.url);
-        URL.revokeObjectURL(video.posterUrl);
+        if (video.posterUrl) URL.revokeObjectURL(video.posterUrl);
       }
       router.push(appointmentId ? `/appointments/${appointmentId}/edit` : "/album");
       router.refresh();
@@ -249,7 +278,7 @@ export function UploadSheet({
           </li>
           <li className="flex items-start gap-2">
             <Play size={15} strokeWidth={1.9} className="mt-px shrink-0 text-ink-400" />
-            วิดีโอ mp4 ยาวไม่เกิน {MAX_VIDEO_MS / 1000} วินาที และไม่เกิน{" "}
+            วิดีโอ mp4 หรือ mov ยาวไม่เกิน {MAX_VIDEO_MS / 1000} วินาที และไม่เกิน{" "}
             {formatBytesShort(MAX_VIDEO_BYTES)} · ครั้งละหนึ่งคลิป
           </li>
           <li className="flex items-start gap-2">
@@ -307,8 +336,10 @@ export function UploadSheet({
           {video && (
             <div className="flex items-start gap-2.5 rounded-md border border-cream-200 bg-white p-2.5">
               <span className="relative size-14 shrink-0 overflow-hidden rounded-[9px] bg-ink-900/85">
-                {/* eslint-disable-next-line @next/next/no-img-element -- blob URL ในเครื่อง */}
-                <img src={video.posterUrl} alt="" className="size-full object-cover" />
+                {video.posterUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element -- blob URL ในเครื่อง */
+                  <img src={video.posterUrl} alt="" className="size-full object-cover" />
+                )}
                 <span className="absolute inset-0 flex items-center justify-center">
                   <span className="flex size-6 items-center justify-center rounded-full bg-white/90">
                     <Play size={11} strokeWidth={2.2} className="text-ink-900" />
@@ -325,9 +356,14 @@ export function UploadSheet({
                   </span>
                 </span>
                 <span className="text-[11px] text-ink-400">
-                  {formatClip(video.durationMs)} ·{" "}
+                  {video.durationMs != null ? formatClip(video.durationMs) : "ไม่รู้ความยาว"} ·{" "}
                   {uploadPct == null ? "พร้อมอัปโหลด" : `กำลังอัปโหลด ${uploadPct}%`}
                 </span>
+                {video.durationMs == null && (
+                  <span className="text-[11px] leading-relaxed text-brown-700">
+                    เครื่องนี้เปิดคลิปไม่ได้ จะไม่มีหน้าปก และบางเครื่องอาจเล่นไม่ได้
+                  </span>
+                )}
                 {uploadPct != null && (
                   <span className="block h-1 w-full overflow-hidden rounded-full bg-cream-200">
                     <span
@@ -343,7 +379,7 @@ export function UploadSheet({
                   aria-label="เอาคลิปออก"
                   onClick={() => {
                     URL.revokeObjectURL(video.url);
-                    URL.revokeObjectURL(video.posterUrl);
+                    if (video.posterUrl) URL.revokeObjectURL(video.posterUrl);
                     setVideo(null);
                   }}
                   className="flex size-6 min-h-0 shrink-0 items-center justify-center rounded-full bg-cream-200"
@@ -372,7 +408,7 @@ export function UploadSheet({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,video/mp4"
+          accept={`image/jpeg,image/png,image/webp,${VIDEO_ACCEPT}`}
           multiple
           className="hidden"
           onChange={(e) => {

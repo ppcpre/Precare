@@ -157,7 +157,10 @@ export const addVideo = editorAction
     if (!PHOTO_TYPES.includes(type as (typeof PHOTO_TYPES)[number])) {
       throw new AppError("ประเภทไฟล์ไม่ถูกต้อง");
     }
-    const durationMs = Number(fd.get("durationMs") ?? 0);
+    // null = เบราว์เซอร์ของคนอัปอ่านความยาวไม่ได้ (มักเป็น .mov ที่เข้ารหัส HEVC)
+    // ไม่ใช่ข้อผิดพลาด แค่ไม่รู้ — เพดานที่ยังบังคับได้จริงคือขนาดไฟล์
+    const rawDuration = Number(fd.get("durationMs") ?? 0);
+    const durationMs = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : null;
     const caption = String(fd.get("caption") ?? "").trim().slice(0, 500) || null;
     const logId = (fd.get("logId") as string) || null;
     const appointmentId = await assertAppointment(
@@ -192,34 +195,39 @@ export const addVideo = editorAction
 
     // เพดานความยาวต้องบังคับฝั่งนี้ด้วย ฝั่ง client แก้ได้
     // ถ้าไม่ผ่าน ลบไฟล์ทิ้งเลย ไม่ปล่อยให้ค้างกินโควตาของทุกครอบครัว
-    if (!durationMs || durationMs > MAX_VIDEO_MS) {
+    if (durationMs != null && durationMs > MAX_VIDEO_MS) {
       await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
       throw new AppError(`คลิปยาวเกิน ${MAX_VIDEO_MS / 1000} วินาที`);
     }
 
-    // หน้าปกไม่มีไม่ได้ ไม่งั้นกริดอัลบั้มเป็นกล่องดำล้วนแยกคลิปไม่ออก
-    const poster = fd.get("poster");
-    if (!(poster instanceof File) || poster.type !== "image/webp") {
-      await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
-      throw new AppError("สร้างหน้าปกคลิปไม่สำเร็จ ลองใหม่อีกครั้ง");
-    }
-
     const id = crypto.randomUUID();
-    const thumbKey = `family/${ctx.familyId}/posters/${id}.webp`;
-    try {
-      await putObject(ctx.db, env.PHOTOS_BUCKET, {
-        bucketName: "photos",
-        key: thumbKey,
-        body: await poster.arrayBuffer(),
-        contentType: "image/webp",
-        kind: "photo",
-        familyId: ctx.familyId,
-        uploadedBy: ctx.user.id,
-      });
-    } catch (e) {
-      await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
-      if (e instanceof StorageQuotaError) throw new AppError(e.message);
-      throw e;
+
+    /**
+     * หน้าปกมีก็ต่อเมื่อเบราว์เซอร์ของคนอัปถอดรหัสไฟล์ได้
+     *
+     * เดิมบังคับว่าต้องมี แล้วปฏิเสธถ้าไม่มี ซึ่งแปลว่า .mov ที่เครื่องอ่านไม่ได้
+     * จะอัปไม่ได้เลย — ขัดกับที่ตกลงว่าต้องอัป .mov ได้
+     * ไม่มีหน้าปกก็ยังเป็นไทล์สีเข้มที่บอกได้ว่าเป็นคลิป (photo-tile รองรับแล้ว)
+     */
+    let thumbKey: string | null = null;
+    const poster = fd.get("poster");
+    if (poster instanceof File && poster.type === "image/webp" && poster.size > 0) {
+      thumbKey = `family/${ctx.familyId}/posters/${id}.webp`;
+      try {
+        await putObject(ctx.db, env.PHOTOS_BUCKET, {
+          bucketName: "photos",
+          key: thumbKey,
+          body: await poster.arrayBuffer(),
+          contentType: "image/webp",
+          kind: "photo",
+          familyId: ctx.familyId,
+          uploadedBy: ctx.user.id,
+        });
+      } catch (e) {
+        await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
+        if (e instanceof StorageQuotaError) throw new AppError(e.message);
+        throw e;
+      }
     }
 
     await ctx.db.insert(photos).values({

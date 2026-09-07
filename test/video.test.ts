@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClip } from "@/lib/video";
+import { formatClip, videoMimeOf } from "@/lib/video";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_MS, maxBytesFor, formatBytes } from "@/lib/storage";
 
 describe("formatClip", () => {
@@ -40,5 +40,28 @@ describe("เพดานไฟล์", () => {
 
   it("formatBytes อ่านออกในหน่วยที่คนใช้", () => {
     expect(formatBytes(MAX_VIDEO_BYTES)).toBe("40.0 MB");
+  });
+});
+
+describe("videoMimeOf", () => {
+  const file = (name: string, type: string) => new File([new Uint8Array(1)], name, { type });
+
+  it("ใช้ MIME ที่ picker ให้มาถ้าเป็นชนิดที่รับ", () => {
+    expect(videoMimeOf(file("a.mp4", "video/mp4"))).toBe("video/mp4");
+    expect(videoMimeOf(file("a.mov", "video/quicktime"))).toBe("video/quicktime");
+  });
+
+  /**
+   * picker บนแอนดรอยด์บางเครื่องส่ง type ว่างมา ถ้าเชื่อ MIME อย่างเดียว
+   * คนจะเลือกคลิปของตัวเองแล้วโดนปฏิเสธทั้งที่ไฟล์ไม่ได้มีปัญหา
+   */
+  it("เดาจากนามสกุลเมื่อ picker ไม่ส่ง MIME มา", () => {
+    expect(videoMimeOf(file("IMG_1234.MOV", ""))).toBe("video/quicktime");
+    expect(videoMimeOf(file("clip.mp4", ""))).toBe("video/mp4");
+  });
+
+  it("ชนิดอื่นคืน null", () => {
+    expect(videoMimeOf(file("a.webm", "video/webm"))).toBeNull();
+    expect(videoMimeOf(file("a.avi", ""))).toBeNull();
   });
 });
