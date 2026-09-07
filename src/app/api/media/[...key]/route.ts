@@ -70,6 +70,42 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
 
   const { env } = await getCloudflareContext({ async: true });
 
+  const common = {
+    // ห้ามเป็น public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
+    "cache-control": "private, max-age=3600",
+    // ต่อให้ content-type หลุดมาผิด ก็ยังไม่ถูกเปิดเป็นหน้าเว็บ
+    "content-disposition": "inline",
+    "x-content-type-options": "nosniff",
+  };
+
+  /**
+   * แยกทางด้วยนามสกุลของ key ไม่ใช่ด้วย content-type จาก R2
+   *
+   * เพราะ key เป็นของเราเอง (`.../videos/<uuid>.mp4`) จึงเชื่อได้โดยไม่ต้อง
+   * ถาม R2 ก่อน — เดิมยิง head() นำทุกครั้งเพื่อดู content-type ซึ่งทำให้
+   * รูปทุกใบในอัลบั้มกิน R2 สองครั้งต่อใบ ทั้งที่ 99% ของคำขอเป็นรูป
+   */
+  if (!key.endsWith(".mp4")) {
+    const obj = await env.PHOTOS_BUCKET.get(key);
+    // แถวยังอยู่แต่ไฟล์หาย = ข้อมูลไม่ตรงกัน ไม่ใช่เรื่องปกติ
+    if (!obj) return new Response(null, { status: 404 });
+
+    const declared = obj.httpMetadata?.contentType ?? "";
+    /**
+     * อ่านทั้งก้อนแทนการส่ง obj.body เป็นสตรีม
+     *
+     * ไฟล์ถูกจำกัดไว้ที่ 5 MB ตั้งแต่ตอนอัปโหลด และรูปที่ย่อแล้วอยู่ราว 200–400 KB
+     * การบัฟเฟอร์จึงแทบไม่กินหน่วยความจำ แต่ตัดปัญหาเรื่องอายุของสตรีมทิ้งทั้งหมด
+     * (เบราว์เซอร์ยกเลิกโหลดรูปกลางคันได้ตลอด เช่นตอนเปลี่ยนหน้า)
+     */
+    return new Response(await obj.arrayBuffer(), {
+      headers: {
+        ...common,
+        "content-type": SERVABLE.has(declared) ? declared : "application/octet-stream",
+      },
+    });
+  }
+
   /**
    * วิดีโอเดินคนละทางกับรูป
    *
@@ -81,55 +117,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
    * ที่มีเพดาน 128 MB คือการเสี่ยงโดยไม่ได้อะไรกลับมา
    */
   const head = await env.PHOTOS_BUCKET.head(key);
-  // แถวยังอยู่แต่ไฟล์หาย = ข้อมูลไม่ตรงกัน ไม่ใช่เรื่องปกติ
   if (!head) return new Response(null, { status: 404 });
 
-  const declaredType = head.httpMetadata?.contentType ?? "";
-  const safeType = SERVABLE.has(declaredType) ? declaredType : "application/octet-stream";
-  const common = {
-    // ห้ามเป็น public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
-    "cache-control": "private, max-age=3600",
-    // ต่อให้ content-type หลุดมาผิด ก็ยังไม่ถูกเปิดเป็นหน้าเว็บ
-    "content-disposition": "inline",
-    "x-content-type-options": "nosniff",
-    "content-type": safeType,
-  };
+  const range = parseRange(req.headers.get("range"), head.size);
+  const obj = range
+    ? await env.PHOTOS_BUCKET.get(key, {
+        range: { offset: range.start, length: range.end - range.start + 1 },
+      })
+    : await env.PHOTOS_BUCKET.get(key);
+  if (!obj?.body) return new Response(null, { status: 404 });
 
-  if (declaredType === "video/mp4") {
-    const range = parseRange(req.headers.get("range"), head.size);
-    const obj = range
-      ? await env.PHOTOS_BUCKET.get(key, { range: { offset: range.start, length: range.end - range.start + 1 } })
-      : await env.PHOTOS_BUCKET.get(key);
-    if (!obj?.body) return new Response(null, { status: 404 });
-
-    return new Response(obj.body, {
-      status: range ? 206 : 200,
-      headers: {
-        ...common,
-        "accept-ranges": "bytes",
-        ...(range
-          ? {
-              "content-range": `bytes ${range.start}-${range.end}/${head.size}`,
-              "content-length": String(range.end - range.start + 1),
-            }
-          : { "content-length": String(head.size) }),
-      },
-    });
-  }
-
-  const obj = await env.PHOTOS_BUCKET.get(key);
-  if (!obj) return new Response(null, { status: 404 });
-
-  /**
-   * อ่านทั้งก้อนแทนการส่ง obj.body เป็นสตรีม
-   *
-   * ไฟล์ถูกจำกัดไว้ที่ 5 MB ตั้งแต่ตอนอัปโหลด และรูปที่ย่อแล้วอยู่ราว 200–400 KB
-   * การบัฟเฟอร์จึงแทบไม่กินหน่วยความจำ แต่ตัดปัญหาเรื่องอายุของสตรีมทิ้งทั้งหมด
-   * (เบราว์เซอร์ยกเลิกโหลดรูปกลางคันได้ตลอด เช่นตอนเปลี่ยนหน้า)
-   *
-   * และไม่ตั้ง content-length เอง ปล่อยให้ runtime คำนวณจากตัวไบต์จริง
-   * ค่าที่ตั้งเองมีโอกาสไม่ตรงกับที่ส่งออกไป ซึ่งเป็นความผิดพลาดที่หาสาเหตุยาก
-   */
-  const bytes = await obj.arrayBuffer();
-  return new Response(bytes, { headers: common });
+  return new Response(obj.body, {
+    status: range ? 206 : 200,
+    headers: {
+      ...common,
+      "content-type": "video/mp4",
+      "accept-ranges": "bytes",
+      ...(range
+        ? {
+            "content-range": `bytes ${range.start}-${range.end}/${head.size}`,
+            "content-length": String(range.end - range.start + 1),
+          }
+        : { "content-length": String(head.size) }),
+    },
+  });
 }
+
