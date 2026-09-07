@@ -28,7 +28,13 @@ test("หน้าล็อกอินส่ง security header ครบ", asy
   // regression: CSP รอบแรกลืมโฮสต์รูปโปรไฟล์ของ Google
   // avatar เลยกลายเป็นไอคอนรูปพังบน header ทุกหน้าสำหรับคนที่ล็อกอินด้วย Google
   expect(csp).toContain("googleusercontent.com");
-  expect(csp).toContain("blob:");
+  expect(csp).toMatch(/img-src[^;]*blob:/);
+
+  // regression: ไม่มี media-src -> ตกไปใช้ default-src 'self' ซึ่งไม่รวม blob:
+  // แล้ว <video> ที่ชี้ไป URL.createObjectURL จะยิง error เงียบๆ
+  // ทำให้ mp4 ที่ปกติดีทุกไฟล์ขึ้นว่า "เปิดไฟล์วิดีโอไม่ได้" (เจอบนเครื่องจริง)
+  // อ่านความยาวคลิปกับดึงเฟรมมาทำหน้าปกจึงพังทั้งคู่ = อัปคลิปไม่ได้เลย
+  expect(csp).toMatch(/media-src[^;]*blob:/);
 });
 
 test("nonce ต้องไม่ซ้ำกันระหว่าง request", async ({ page }) => {

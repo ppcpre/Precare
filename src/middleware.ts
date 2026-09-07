@@ -48,6 +48,12 @@ function buildCsp(nonce: string) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://*.googleusercontent.com",
+    // media-src blob:: หน้าเพิ่มไฟล์เปิดคลิปที่เลือกไว้ด้วย URL.createObjectURL
+    // เพื่ออ่านความยาวและดึงเฟรมมาทำหน้าปก — ทั้งสองอย่างทำฝั่ง server ไม่ได้
+    // ถ้าไม่มีบรรทัดนี้ media-src จะตกไปใช้ default-src 'self' ซึ่งไม่รวม blob:
+    // แล้ว <video> จะยิง error โดยไม่บอกว่าโดน CSP บล็อก — โผล่เป็น
+    // "เปิดไฟล์วิดีโอไม่ได้" กับ mp4 ที่ปกติดีทุกไฟล์ (เจอตอนทดสอบบนเครื่องจริง)
+    "media-src 'self' blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",

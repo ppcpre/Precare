@@ -23,6 +23,22 @@ export const VIDEO_HELP =
 
 export type VideoInfo = { durationMs: number; width: number; height: number };
 
+/**
+ * แปล error ของ <video> ให้บอกได้ว่าเกิดอะไรขึ้น
+ *
+ * "เปิดไฟล์วิดีโอไม่ได้" เฉยๆ ทำให้แยกไม่ออกระหว่าง "ไฟล์นี้เข้ารหัสแบบที่
+ * เบราว์เซอร์นี้เล่นไม่ได้" กับ "โดน CSP บล็อกตั้งแต่ยังไม่ทันอ่านไฟล์"
+ * ซึ่งอย่างหลังเคยเกิดจริงและทำให้ mp4 ที่ปกติดีทุกไฟล์ขึ้นข้อความเดียวกันหมด
+ */
+function mediaError(v: HTMLVideoElement) {
+  const code = v.error?.code;
+  if (code === 4) return "ไฟล์นี้เบราว์เซอร์เปิดไม่ได้ — ลองอัดใหม่เป็น mp4 (H.264)";
+  if (code === 3) return "ไฟล์วิดีโอเสียหรือถอดรหัสไม่ได้";
+  if (code === 2) return "อ่านไฟล์วิดีโอไม่สำเร็จ";
+  // ไม่มี MediaError เลย ทั้งที่ error event ยิงออกมา = ถูกบล็อกก่อนถึงตัวถอดรหัส
+  return "เปิดไฟล์วิดีโอไม่ได้ (เบราว์เซอร์บล็อกก่อนอ่านไฟล์)";
+}
+
 /** อ่านความยาวและขนาดภาพ โดยไม่ต้องเล่นไฟล์ */
 export function probeVideo(file: File): Promise<VideoInfo> {
   return new Promise((resolve, reject) => {
@@ -49,7 +65,7 @@ export function probeVideo(file: File): Promise<VideoInfo> {
       }
       done(() => resolve(info));
     };
-    v.onerror = () => done(() => reject(new Error("เปิดไฟล์วิดีโอไม่ได้")));
+    v.onerror = () => done(() => reject(new Error(mediaError(v))));
     v.src = url;
   });
 }
@@ -97,7 +113,7 @@ export function posterFrame(file: File, maxEdge = 640): Promise<Blob> {
         0.8,
       );
     };
-    v.onerror = () => fail("เปิดไฟล์วิดีโอไม่ได้");
+    v.onerror = () => fail(mediaError(v));
     v.src = url;
   });
 }
