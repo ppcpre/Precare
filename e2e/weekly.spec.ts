@@ -67,7 +67,7 @@ test("มือถือเห็น FAB อย่างเดียว เด�
   const pages: { path: string; title: string; label: string; fab: string }[] = [
     { path: "/health", title: "บันทึกสุขภาพ", label: "เพิ่มบันทึก", fab: "เพิ่มบันทึกสุขภาพ" },
     { path: "/appointments", title: "นัดหมายแพทย์", label: "เพิ่มนัดหมาย", fab: "เพิ่มนัดหมาย" },
-    { path: "/album", title: "อัลบั้ม", label: "เพิ่มรูป", fab: "เพิ่มรูป" },
+    { path: "/album", title: "อัลบั้ม", label: "เพิ่มไฟล์", fab: "เพิ่มรูปหรือวิดีโอ" },
   ];
 
   for (const { path, title, label, fab: fabLabel } of pages) {

@@ -17,6 +17,10 @@ export type AlbumPhoto = {
   pinned: boolean;
   caption: string | null;
   r2Key: string;
+  /** วิดีโอใช้ไฟล์นี้เป็นภาพในกริด — r2Key ของมันคือตัวคลิป เอามาโชว์ตรงๆ ไม่ได้ */
+  thumbKey: string | null;
+  mediaKind: string;
+  durationMs: number | null;
   createdAt: string;
   uploaderName: string;
 };

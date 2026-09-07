@@ -1,13 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
+import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
 import { getPhotoById, requireFamilyContext } from "@/lib/queries";
 import { can } from "@/lib/authz";
 import { thaiDateFull, thaiDate } from "@/lib/format";
+import { formatClip } from "@/lib/video";
 
-export const metadata = { title: "ดูรูป · Pre Care" };
+export const metadata = { title: "ดูไฟล์ · Pre Care" };
 
 const TYPE_LABEL: Record<string, string> = {
   ultrasound: "อัลตราซาวด์",
@@ -40,12 +41,26 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
       </header>
 
       <div className="flex flex-1 items-center justify-center px-4 pb-2">
-        {/* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */}
-        <img
-          src={`/api/media/${photo.r2Key}`}
-          alt={photo.caption ?? "รูปในอัลบั้ม"}
-          className="max-h-[60dvh] w-full rounded-md object-contain"
-        />
+        {photo.mediaKind === "video" ? (
+          /* controls ครบและ playsInline — บน iOS ถ้าไม่ใส่ playsInline
+             การกดเล่นจะเด้งเป็นเครื่องเล่นเต็มจอของระบบแทนที่จะเล่นในหน้า
+             poster ทำให้เห็นว่าคลิปนี้คืออะไรก่อนกด ไม่ใช่กล่องดำ */
+          <video
+            src={`/api/media/${photo.r2Key}`}
+            poster={photo.thumbKey ? `/api/media/${photo.thumbKey}` : undefined}
+            controls
+            playsInline
+            preload="metadata"
+            className="max-h-[60dvh] w-full rounded-md bg-black object-contain"
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */
+          <img
+            src={`/api/media/${photo.r2Key}`}
+            alt={photo.caption ?? "รูปในอัลบั้ม"}
+            className="max-h-[60dvh] w-full rounded-md object-contain"
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-3.5 rounded-t-lg bg-cream-50 p-5">
@@ -55,7 +70,19 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
           </h1>
           <Badge className="bg-brown-100 text-brown-900">{TYPE_LABEL[photo.type]}</Badge>
           {photo.pinned && <Badge>รูปเด่น</Badge>}
+          {photo.mediaKind === "video" && photo.durationMs != null && (
+            <Badge>คลิป {formatClip(photo.durationMs)}</Badge>
+          )}
         </div>
+
+        {/* คลิปจากห้องตรวจมักติดเสียงหมอและคนอื่นที่ไม่ได้ยินยอมให้บันทึก
+            เตือนตรงจุดที่จะแชร์ ไม่ใช่ซ่อนไว้ในหน้านโยบาย */}
+        {photo.mediaKind === "video" && (
+          <p className="flex items-start gap-2 rounded-md border border-cream-200 bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
+            <AlertCircle size={15} strokeWidth={1.9} className="mt-px shrink-0 text-ink-400" />
+            คลิปอาจมีเสียงคนอื่นในห้องตรวจติดมาด้วย ก่อนแชร์ให้ฟังก่อน
+          </p>
+        )}
 
         <span className="flex items-center gap-1.5 text-xs text-ink-400">
           <Calendar size={13} strokeWidth={1.9} />

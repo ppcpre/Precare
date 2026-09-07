@@ -1,11 +1,14 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Plus } from "lucide-react";
 import { PhotoCard } from "@/components/album/photo-card";
 import { PhotoTile } from "@/components/album/photo-tile";
 import { useAlbumView } from "@/components/album/view-toggle";
 import { groupByMonthDay, type AlbumPhoto } from "@/lib/album-groups";
 import { monthKeyLabel } from "@/lib/format";
+
+const isVideo = (p: AlbumPhoto) => p.mediaKind === "video";
 
 const DAY_FULL = "อาทิตย์ จันทร์ อังคาร พุธ พฤหัสบดี ศุกร์ เสาร์".split(" ");
 const M_SHORT = "ม.ค. ก.พ. มี.ค. เม.ย. พ.ค. มิ.ย. ก.ค. ส.ค. ก.ย. ต.ค. พ.ย. ธ.ค.".split(" ");
@@ -28,7 +31,7 @@ function dayLabel(key: string) {
  * การหาว่า "วันนั้นถ่ายอะไรไว้" จะช้าลงทุกสัปดาห์
  * แถวเลื่อนทำให้หนึ่งวันสูงเท่ากันเสมอ ไม่ว่าจะมี 2 รูปหรือ 20 รูป
  */
-export function PhotoGroups({ items }: { items: AlbumPhoto[] }) {
+export function PhotoGroups({ items, canWrite }: { items: AlbumPhoto[]; canWrite: boolean }) {
   const [view] = useAlbumView();
   const months = groupByMonthDay(items);
 
@@ -44,7 +47,9 @@ export function PhotoGroups({ items }: { items: AlbumPhoto[] }) {
             <span className="text-[15px] font-semibold text-ink-900">
               {monthKeyLabel(month.key)}
             </span>
-            <span className="text-[11px] text-ink-400">{month.count} รูป</span>
+            <span className="text-[11px] text-ink-400">
+              {month.count} {month.days.some((d) => d.items.some(isVideo)) ? "ไฟล์" : "รูป"}
+            </span>
           </h2>
 
           {month.days.map((day) => (
@@ -59,7 +64,9 @@ export function PhotoGroups({ items }: { items: AlbumPhoto[] }) {
                       สัปดาห์ {day.week}
                     </span>
                   )}
-                  <span className="text-[11px] text-ink-400">{day.items.length} รูป</span>
+                  <span className="text-[11px] text-ink-400">
+                    {day.items.length} {day.items.some(isVideo) ? "ไฟล์" : "รูป"}
+                  </span>
                 </span>
                 {day.items.length > perScreen && (
                   <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-ink-400">
@@ -71,6 +78,20 @@ export function PhotoGroups({ items }: { items: AlbumPhoto[] }) {
 
               {/* snap แบบ proximity ไม่ใช่ mandatory — mandatory จะฝืนมือเวลาไถผ่านเร็วๆ */}
               <div className="-mx-4 flex snap-x snap-proximity gap-2 overflow-x-auto px-4 pb-1">
+                {/* + อยู่หัวแถว ไม่ใช่ท้ายแถว — ท้ายแถวต้องไถผ่านของทั้งวันก่อนถึงจะเจอ
+                    และกดแล้วได้วันที่ของแถวนั้นไปเลย ไม่ต้องมาเลือกวันเอง
+                    ซึ่งเป็นขั้นที่กรอกผิดบ่อยที่สุด (คนเปิดอัลบั้มแล้วอยากเพิ่ม
+                    มักเป็นการเติมของวันที่กำลังดูอยู่ ไม่ใช่ของวันนี้) */}
+                {canWrite && (
+                  <Link
+                    href={`/album/upload?takenAt=${day.key}`}
+                    aria-label={`เพิ่มลงวันที่ ${dayLabel(day.key)}`}
+                    className="flex size-[108px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-[10px] border-[1.5px] border-dashed border-brown-300 bg-cream-50 text-ink-600"
+                  >
+                    <Plus size={20} strokeWidth={2} className="text-brown-500" />
+                    <span className="text-[11px]">เพิ่ม</span>
+                  </Link>
+                )}
                 {day.items.map((p) =>
                   view === "grid" ? (
                     <span key={p.id} className="w-[108px] shrink-0 snap-start">

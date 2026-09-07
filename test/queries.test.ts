@@ -124,6 +124,13 @@ describe("listAppointments", () => {
 
 describe("getDashboard", () => {
   it("รวมข้อมูลครบใน batch เดียว", async () => {
+    // อายุครรภ์นับจาก "วันนี้" เสมอ ถ้าใช้ lmpDate ตายตัวจาก fixture
+    // เทสต์จะผ่านอยู่ช่วงหนึ่งแล้วแดงเองเมื่อเวลาเดินผ่านไป — และมันแดงมาแล้วจริงๆ
+    // (คาด 24 ได้ 25) ตั้งย้อนหลังจากวันนี้แทน ผลลัพธ์จึงคงที่ไม่ว่าจะรันวันไหน
+    // เผื่อ 3 วันกลางสัปดาห์ไว้ด้วย จะได้ไม่พลิกสัปดาห์ตอนเที่ยงคืน
+    const lmp = new Date(Date.now() - (24 * 7 + 3) * 86400_000).toISOString().slice(0, 10);
+    await db.update(schema.pregnancyProfiles).set({ lmpDate: lmp });
+
     await db.insert(schema.appointments).values({
       id: "a1", familyId: FAM, createdBy: "u1", apptDatetime: iso(3), title: "ตรวจครรภ์",
     });

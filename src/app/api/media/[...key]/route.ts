@@ -21,9 +21,23 @@ import { getSessionUser } from "@/lib/session";
  */
 
 /** ชนิดที่ยอมให้เสิร์ฟ — กันไฟล์แปลกปลอมที่หลุดเข้า bucket มาทำงานในเบราว์เซอร์ */
-const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png"]);
+const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png", "video/mp4"]);
 
-export async function GET(_req: Request, { params }: { params: Promise<{ key: string[] }> }) {
+/**
+ * อ่านหัว Range แบบที่วิดีโอใช้จริง คือ `bytes=<start>-` และ `bytes=<start>-<end>`
+ * รูปแบบอื่น (หลายช่วง, suffix range) คืน null แล้วให้ส่งทั้งไฟล์ไป
+ * ซึ่งถูกต้องตามสเปกและง่ายกว่าการรองรับให้ครบโดยไม่มีใครใช้
+ */
+function parseRange(header: string | null, size: number) {
+  const m = /^bytes=(\d+)-(\d*)$/.exec(header?.trim() ?? "");
+  if (!m) return null;
+  const start = Number(m[1]);
+  const end = m[2] === "" ? size - 1 : Number(m[2]);
+  if (start >= size || end < start) return null;
+  return { start, end: Math.min(end, size - 1) };
+}
+
+export async function GET(req: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const user = await getSessionUser();
   if (!user) return new Response(null, { status: 401 });
 
@@ -55,8 +69,55 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   if (row.uploadedBy !== user.id && !row.role) return new Response(null, { status: 404 });
 
   const { env } = await getCloudflareContext({ async: true });
-  const obj = await env.PHOTOS_BUCKET.get(key);
+
+  /**
+   * วิดีโอเดินคนละทางกับรูป
+   *
+   * เบราว์เซอร์ขอวิดีโอเป็นช่วงๆ ด้วยหัว Range เสมอ ถ้าตอบทั้งไฟล์กลับไป
+   * ทุกครั้ง การเลื่อนแถบเวลาจะเท่ากับโหลดใหม่ทั้งคลิป และ Safari จะไม่ยอม
+   * เริ่มเล่นเลยถ้าไม่เห็น 206 กับ accept-ranges
+   *
+   * และห้ามบัฟเฟอร์ทั้งก้อนเหมือนรูป — คลิป 40 MB ในหน่วยความจำของ worker
+   * ที่มีเพดาน 128 MB คือการเสี่ยงโดยไม่ได้อะไรกลับมา
+   */
+  const head = await env.PHOTOS_BUCKET.head(key);
   // แถวยังอยู่แต่ไฟล์หาย = ข้อมูลไม่ตรงกัน ไม่ใช่เรื่องปกติ
+  if (!head) return new Response(null, { status: 404 });
+
+  const declaredType = head.httpMetadata?.contentType ?? "";
+  const safeType = SERVABLE.has(declaredType) ? declaredType : "application/octet-stream";
+  const common = {
+    // ห้ามเป็น public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
+    "cache-control": "private, max-age=3600",
+    // ต่อให้ content-type หลุดมาผิด ก็ยังไม่ถูกเปิดเป็นหน้าเว็บ
+    "content-disposition": "inline",
+    "x-content-type-options": "nosniff",
+    "content-type": safeType,
+  };
+
+  if (declaredType === "video/mp4") {
+    const range = parseRange(req.headers.get("range"), head.size);
+    const obj = range
+      ? await env.PHOTOS_BUCKET.get(key, { range: { offset: range.start, length: range.end - range.start + 1 } })
+      : await env.PHOTOS_BUCKET.get(key);
+    if (!obj?.body) return new Response(null, { status: 404 });
+
+    return new Response(obj.body, {
+      status: range ? 206 : 200,
+      headers: {
+        ...common,
+        "accept-ranges": "bytes",
+        ...(range
+          ? {
+              "content-range": `bytes ${range.start}-${range.end}/${head.size}`,
+              "content-length": String(range.end - range.start + 1),
+            }
+          : { "content-length": String(head.size) }),
+      },
+    });
+  }
+
+  const obj = await env.PHOTOS_BUCKET.get(key);
   if (!obj) return new Response(null, { status: 404 });
 
   /**
@@ -70,16 +131,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
    * ค่าที่ตั้งเองมีโอกาสไม่ตรงกับที่ส่งออกไป ซึ่งเป็นความผิดพลาดที่หาสาเหตุยาก
    */
   const bytes = await obj.arrayBuffer();
-  const declared = obj.httpMetadata?.contentType ?? "";
-
-  return new Response(bytes, {
-    headers: {
-      "content-type": SERVABLE.has(declared) ? declared : "application/octet-stream",
-      // ห้ามเป็น public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
-      "cache-control": "private, max-age=3600",
-      // ต่อให้ content-type หลุดมาผิด ก็ยังไม่ถูกเปิดเป็นหน้าเว็บ
-      "content-disposition": "inline",
-      "x-content-type-options": "nosniff",
-    },
-  });
+  return new Response(bytes, { headers: common });
 }

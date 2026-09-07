@@ -327,6 +327,7 @@ export async function listPhotos(
   db: Db,
   familyId: string,
   type?: "ultrasound" | "family" | "other",
+  onlyVideo = false,
 ) {
   const rows = await db
     .select({
@@ -337,14 +338,41 @@ export async function listPhotos(
       pinned: photos.pinned,
       caption: photos.caption,
       r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
       createdAt: photos.createdAt,
       uploaderName: user.name,
     })
     .from(photos)
     .innerJoin(user, eq(user.id, photos.uploadedBy))
-    .where(type ? and(eq(photos.familyId, familyId), eq(photos.type, type)) : eq(photos.familyId, familyId))
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        ...(type ? [eq(photos.type, type)] : []),
+        // "เฉพาะวิดีโอ" เป็นสวิตช์คนละแกนกับประเภทเนื้อหา ใช้ร่วมกันได้
+        ...(onlyVideo ? [eq(photos.mediaKind, "video")] : []),
+      ),
+    )
     .orderBy(desc(photos.takenAt), desc(photos.createdAt));
   return rows;
+}
+
+/** ไฟล์ที่แนบกับนัดหมายรายการหนึ่ง */
+export async function listAppointmentMedia(db: Db, familyId: string, appointmentId: string) {
+  return db
+    .select({
+      id: photos.id,
+      r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
+      type: photos.type,
+      caption: photos.caption,
+    })
+    .from(photos)
+    .where(and(eq(photos.familyId, familyId), eq(photos.appointmentId, appointmentId)))
+    .orderBy(desc(photos.createdAt));
 }
 
 export async function getPhotoById(db: Db, familyId: string, id: string) {
@@ -357,6 +385,9 @@ export async function getPhotoById(db: Db, familyId: string, id: string) {
       pinned: photos.pinned,
       caption: photos.caption,
       r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
       createdAt: photos.createdAt,
       uploaderName: user.name,
     })

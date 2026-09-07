@@ -50,7 +50,7 @@ test("มือถือ: ไม่มีหน้าไหนล้นออก
   ]);
   await page.getByLabel("วันที่ถ่าย").fill(daysAgo(3));
   await page.getByLabel("คำบรรยาย").fill("รูปทดสอบขนาดจอ");
-  await page.getByRole("button", { name: /เพิ่ม 1 รูปเข้าอัลบั้ม/ }).click();
+  await page.getByRole("button", { name: /เพิ่ม 1 ไฟล์/ }).click();
   await page.waitForURL(/\/album$/, { timeout: 45_000 });
 
   const overflow: string[] = [];

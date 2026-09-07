@@ -156,6 +156,16 @@ export const appointments = sqliteTable(
 
 export const PHOTO_TYPES = ["ultrasound", "family", "other"] as const;
 
+/**
+ * รูปกับวิดีโออยู่ตารางเดียวกัน ไม่แยกตาราง
+ *
+ * ทั้งสองอย่างเป็น "ของที่ถ่ายไว้วันนั้น" เหมือนกันทุกประการในสายตาผู้ใช้
+ * อยู่ในอัลบั้มเดียวกัน จัดกลุ่มตามวันเดียวกัน แนบกับนัดเดียวกัน
+ * แยกตารางแล้วทุก query ที่แสดงอัลบั้มจะกลายเป็น union สองทาง
+ * และ "เรียงตามวันที่" ข้ามสองตารางใน SQLite ก็แพงกว่าที่ควรจะเป็น
+ */
+export const MEDIA_KINDS = ["photo", "video"] as const;
+
 /** Phase 2 — สร้างตารางไว้ตั้งแต่ migration แรก แต่ยังไม่มีโค้ดเรียกใช้จนกว่าจะทำอัลบั้ม */
 export const photos = sqliteTable(
   "photos",
@@ -172,16 +182,29 @@ export const photos = sqliteTable(
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     type: text("type", { enum: PHOTO_TYPES }).notNull().default("other"),
     r2Key: text("r2_key").notNull(),
-    /** เก็บ thumb แยก ไม่ให้กริดอัลบั้มโหลดรูปเต็มทุกใบ */
+    /** เก็บ thumb แยก ไม่ให้กริดอัลบั้มโหลดรูปเต็มทุกใบ
+     *  สำหรับวิดีโอนี่คือ "เฟรมหน้าปก" ที่ดึงมาในเบราว์เซอร์ตอนเลือกไฟล์
+     *  ไม่มีทางสร้างฝั่ง server ได้ Worker ไม่มี ffmpeg */
     thumbKey: text("thumb_key"),
+
+    mediaKind: text("media_kind", { enum: MEDIA_KINDS }).notNull().default("photo"),
+    /** ความยาวคลิป มีเฉพาะวิดีโอ — เก็บไว้เพื่อโชว์ป้ายเวลาโดยไม่ต้องโหลดไฟล์ */
+    durationMs: integer("duration_ms"),
+    /** แนบกับนัดหมาย · ลบนัดแล้วไฟล์ยังอยู่ในอัลบั้ม เหมือน logId */
+    appointmentId: text("appointment_id").references(() => appointments.id, {
+      onDelete: "set null",
+    }),
     caption: text("caption"),
     uploadedBy: text("uploaded_by").notNull().references(() => user.id),
     createdAt: text("created_at").notNull().default(nowIso),
   },
-  (t) => [index("idx_photos_family").on(t.familyId, t.takenAt)],
+  (t) => [
+    index("idx_photos_family").on(t.familyId, t.takenAt),
+    index("idx_photos_appt").on(t.appointmentId),
+  ],
 );
 
-export const STORAGE_KINDS = ["avatar", "photo", "asset"] as const;
+export const STORAGE_KINDS = ["avatar", "photo", "video", "asset"] as const;
 
 /**
  * บัญชีไฟล์ทุกชิ้นที่เขียนลง R2

@@ -34,9 +34,12 @@ const splitIso = (iso?: string) => {
 export function AppointmentForm({
   appt,
   groups = [],
+  media,
 }: {
   appt?: Appointment;
   groups?: CareGroupOption[];
+  /** ไฟล์แนบ — เป็น server component จึงรับมาเป็น slot ไม่ได้ import เข้ามาตรงนี้ */
+  media?: React.ReactNode;
 }) {
   const router = useRouter();
   const init = splitIso(appt?.apptDatetime);
@@ -224,6 +227,7 @@ export function AppointmentForm({
             ลบนัดหมายนี้
           </Button>
         )}
+        {media}
       </div>
 
       <div className="sticky bottom-0 border-t border-cream-200 bg-white p-4">

@@ -67,6 +67,13 @@ export function middleware(req: NextRequest) {
   const hasSession = Boolean(getSessionCookie(req));
 
   if (!hasSession && !isPublic) {
+    // เส้นทาง /api ต้องตอบ 401 ไม่ใช่พาไปหน้า login
+    // การ redirect ทำให้ POST กลายเป็น GET เงียบๆ แล้วฝั่งเรียกได้ HTML
+    // ของหน้า login กลับไปพร้อมสถานะ 200 ซึ่งอ่านยังไงก็ไม่รู้ว่าคือ "ยังไม่ล็อกอิน"
+    // (เจอตอนเขียนเทสต์ให้ /api/media/video — มันได้ 200 ทั้งที่ไม่มี session)
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "ยังไม่ได้เข้าสู่ระบบ" }, { status: 401 });
+    }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     // จำหน้าที่ตั้งใจจะไป เพื่อพากลับมาหลังล็อกอิน

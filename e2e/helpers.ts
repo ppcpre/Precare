@@ -237,7 +237,7 @@ type FilePayload = { name: string; mimeType: string; buffer: Buffer };
 export async function pickFiles(page: Page, files: FilePayload[]) {
   const [chooser] = await Promise.all([
     page.waitForEvent("filechooser"),
-    page.getByRole("button", { name: "เลือกรูป", exact: true }).click(),
+    page.getByRole("button", { name: "เลือกไฟล์", exact: true }).click(),
   ]);
   await chooser.setFiles(files);
 }

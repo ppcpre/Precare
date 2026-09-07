@@ -46,7 +46,7 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
   await test.step("preview ต้องขึ้นครบทุกใบ", async () => {
     // จุดที่บั๊กเดิมพัง — ได้ FileList ว่างจึงไม่มี blob สักใบ
     await expect(page.locator('img[src^="blob:"]')).toHaveCount(2, { timeout: 30_000 });
-    await expect(page.getByText(/2 รูป · รวม/)).toBeVisible();
+    await expect(page.getByText(/2 ไฟล์ · รวม/)).toBeVisible();
   });
 
   await test.step("ย่อรูปแล้วเล็กลงจริง แต่ยังใหญ่พอจะกดดัน body limit", async () => {
@@ -63,7 +63,7 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
   });
 
   await test.step("อัปโหลดผ่าน — ตัวชี้ขาดว่า bodySizeLimit พอ", async () => {
-    await page.getByRole("button", { name: /เพิ่ม 2 รูปเข้าอัลบั้ม/ }).click();
+    await page.getByRole("button", { name: /เพิ่ม 2 ไฟล์/ }).click();
     await page.waitForURL(/\/album$/, { timeout: 45_000 });
     // นับ 2 รูป โผล่ทั้งหัวเดือนและหัววัน เอาตัวแรกพอ
     await expect(page.getByText("2 รูป").first()).toBeVisible();
@@ -132,7 +132,7 @@ test("รูปหลายวันต้องแยกหัววันจ�
     ]);
     await page.getByLabel("วันที่ถ่าย").fill(takenAt);
     await page.getByLabel("คำบรรยาย").fill(caption);
-    await page.getByRole("button", { name: /เพิ่ม 1 รูปเข้าอัลบั้ม/ }).click();
+    await page.getByRole("button", { name: /เพิ่ม 1 ไฟล์/ }).click();
     await page.waitForURL(/\/album$/, { timeout: 45_000 });
   };
 
@@ -169,7 +169,7 @@ test("มุมมองที่เลือกต้องจำข้าม�
     { name: "v.png", mimeType: "image/png", buffer: makePng(900, 700, 3) },
   ]);
   await page.getByLabel("คำบรรยาย").fill("คำบรรยายทดสอบ");
-  await page.getByRole("button", { name: /เพิ่ม 1 รูปเข้าอัลบั้ม/ }).click();
+  await page.getByRole("button", { name: /เพิ่ม 1 ไฟล์/ }).click();
   await page.waitForURL(/\/album$/, { timeout: 45_000 });
 
   await test.step("default คือตาราง จึงยังไม่เห็นคำบรรยาย", async () => {
