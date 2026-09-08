@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, LogOut, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { RoleBadge } from "@/components/ui/badge";
@@ -100,6 +100,34 @@ export default async function AcceptInvitePage({
         </p>
       </Card>
 
+      {/* บอกทั้งสองทางตรงจุดที่ตัดสินใจ
+          แอปทั่วไปบอกแต่ว่า "คุณจะเห็นอะไร" เพราะมองคนถูกเชิญเป็นฝ่ายรับอย่างเดียว
+          แต่การเข้าครอบครัวคือการเปิดข้อมูลของตัวเองให้เขาด้วย
+          ถ้าไม่บอกตรงนี้ ก็ไม่มีจังหวะไหนอีกแล้วที่จะบอกก่อนเขากดรับ */}
+      <Card className="gap-3 rounded-lg p-5">
+        <p className="text-sm font-medium text-ink-900">เข้าร่วมแล้วจะเป็นยังไง</p>
+        <ul className="flex flex-col gap-2.5">
+          <TwoWay
+            icon={Eye}
+            title="คุณจะเห็นข้อมูลของครอบครัวนี้"
+            detail="บันทึกสุขภาพ นัดหมาย รูปและวิดีโอ การนับลูกดิ้น"
+          />
+          <TwoWay
+            icon={Users}
+            title="คนในครอบครัวจะเห็นว่าคุณเป็นสมาชิก"
+            detail="เห็นชื่อ รูปโปรไฟล์ และสิ่งที่คุณบันทึกหรืออัปโหลดเข้าไป"
+          />
+          <TwoWay
+            icon={LogOut}
+            title="ออกจากครอบครัวได้ทุกเมื่อ"
+            detail="ออกแล้วจะไม่เห็นข้อมูลของครอบครัวนี้อีก แต่สิ่งที่คุณเคยบันทึกไว้ยังอยู่"
+          />
+        </ul>
+        <Link href="/legal/data" className="text-[13px] font-medium text-brown-700">
+          ดูว่าเก็บอะไรบ้าง
+        </Link>
+      </Card>
+
       {!me ? (
         <div className="flex flex-col gap-2">
           <ButtonLink href={`/login?next=/invite/${token}`} full>
@@ -134,5 +162,27 @@ export default async function AcceptInvitePage({
         ลิงก์นี้ใช้ได้ถึง {thaiDate(inv.expiresAt)}
       </p>
     </Shell>
+  );
+}
+
+function TwoWay({
+  icon: Icon,
+  title,
+  detail,
+}: {
+  icon: typeof Eye;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <li className="flex items-start gap-2.5 text-left">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-cream-100">
+        <Icon size={15} strokeWidth={1.9} className="text-ink-600" />
+      </span>
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[13px] font-medium text-ink-900">{title}</span>
+        <span className="text-xs leading-relaxed text-ink-600">{detail}</span>
+      </span>
+    </li>
   );
 }

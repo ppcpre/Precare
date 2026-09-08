@@ -81,9 +81,11 @@ test("เจ้าของครอบครัวใช้งานครบ�
 
     await gotoApp(guest, "/signup");
     await guest.getByLabel("ชื่อ-นามสกุล").fill("คุณยาย");
-    await guest.getByLabel("อีเมล").fill(viewerEmail);
+    await guest.getByLabel("อีเมล", { exact: true }).fill(viewerEmail);
     await guest.getByLabel("รหัสผ่าน", { exact: true }).fill("e2e-Passw0rd!");
-    await guest.getByRole("checkbox").check();
+    const gc = guest.getByRole("checkbox");
+    await gc.nth(0).check();
+    await gc.nth(1).check();
     await guest.getByRole("button", { name: "สมัครสมาชิก" }).click();
     await guest.waitForURL(/\/onboarding/, { timeout: 30_000 });
 

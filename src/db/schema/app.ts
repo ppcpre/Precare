@@ -298,3 +298,35 @@ export const visitQuestions = sqliteTable(
   },
   (t) => [index("idx_visit_q_family").on(t.familyId, t.askedAt)],
 );
+
+export const CONSENT_KINDS = ["terms", "health_data", "marketing"] as const;
+
+/**
+ * บันทึกความยินยอม
+ *
+ * ⚠️ **ไม่มี foreign key ไปที่ user โดยตั้งใจ**
+ *
+ * แถวนี้ต้องอยู่ต่อแม้ผู้ใช้ลบบัญชีไปแล้ว เพื่อพิสูจน์ได้ว่าเคยขอความยินยอม
+ * ตอนไหน กับนโยบายเวอร์ชันไหน ถ้าใส่ FK แบบ cascade แถวจะหายไปพร้อมบัญชี
+ * แล้วหลักฐานก็หายไปด้วย
+ *
+ * ที่เก็บได้แค่ userId ซึ่งเป็น UUID สุ่ม — หลังลบบัญชีแล้วมันชี้ไปที่ไม่มีอะไร
+ * จึงพิสูจน์ได้ว่า "มีความยินยอมเกิดขึ้น" โดยไม่ได้ระบุตัวบุคคลอีกต่อไป
+ *
+ * ⚠️ ห้ามเก็บข้อมูลสุขภาพหรือข้อมูลส่วนตัวใดๆ ในตารางนี้เด็ดขาด
+ *    เพราะเป็นตารางเดียวที่รอดจากการลบบัญชี
+ */
+export const consents = sqliteTable(
+  "consents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: CONSENT_KINDS }).notNull(),
+    /** เวอร์ชันของนโยบายที่ยินยอมด้วย — ไม่มีอันนี้ก็พิสูจน์ย้อนหลังไม่ได้ */
+    version: text("version").notNull(),
+    grantedAt: text("granted_at").notNull().default(nowIso),
+    /** ถอนเมื่อไหร่ — null = ยังยินยอมอยู่ */
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("idx_consents_user").on(t.userId, t.kind)],
+);

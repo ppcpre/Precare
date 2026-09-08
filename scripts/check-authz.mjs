@@ -29,7 +29,10 @@ const PAGE_RULES = {
   "album/upload": "editor",
 };
 /** หน้าที่แก้ข้อมูลของตัวเอง ไม่ผูกกับ family จึงใช้แค่ session */
-const SESSION_ONLY_PAGES = new Set(["profile/edit"]);
+// หน้าที่ผูกกับ "ผู้ใช้" ไม่ใช่ "ครอบครัว" — ใช้ getSessionUser พอ
+// profile/privacy ต้องอยู่ในลิสต์นี้ เพราะคนที่ยังไม่มีครอบครัวก็ต้องลบบัญชี
+// และดาวน์โหลดข้อมูลของตัวเองได้ ถ้าใช้ requireFamilyContext จะถูกเด้งไป onboarding
+const SESSION_ONLY_PAGES = new Set(["profile/edit", "profile/privacy"]);
 
 /** action ที่ต้องใช้ client ระดับไหน */
 const ACTION_RULES = {
@@ -45,6 +48,9 @@ const ACTION_RULES = {
   "kicks.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
+  // consent.ts แตะข้อมูลของ "ผู้ใช้" ไม่ใช่ของ family จึงเป็น authAction ถูกแล้ว
+  // การลบบัญชีตรวจสิทธิ์ครอบครัวเองภายใน (ห้ามลบถ้าเป็นเจ้าของที่ยังมีสมาชิกอื่น)
+  "consent.ts": ["authAction"],
 };
 
 function walk(dir) {

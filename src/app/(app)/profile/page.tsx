@@ -153,7 +153,7 @@ export default async function ProfilePage() {
           <span className="h-px bg-cream-200" />
           <Row icon={Globe} label="ภาษา" value="ไทย" />
           <span className="h-px bg-cream-200" />
-          <Row icon={Shield} label="นโยบายความเป็นส่วนตัว" href="/privacy" />
+          <Row icon={Shield} label="ความเป็นส่วนตัวและข้อมูลของฉัน" href="/profile/privacy" />
         </Card>
       </section>
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { photos, storageObjects } from "@/db/schema";
 
@@ -220,6 +220,47 @@ export async function sweepOrphanMedia(db: Db, bucket: R2Bucket, familyId: strin
 
   for (const o of orphans) await deleteObject(db, bucket, o.key);
   return orphans.length;
+}
+
+/**
+ * ลบไฟล์ทั้งหมดของครอบครัวออกจาก R2 จริงๆ
+ *
+ * ⚠️ ต้องเรียกก่อนลบแถว families เสมอ
+ *
+ * FK เป็น ON DELETE CASCADE อยู่แล้ว แถว storage_objects จึงหายไปพร้อมครอบครัว
+ * แต่ **ไฟล์ใน R2 ไม่ได้หายไปด้วย** มันค้างอยู่ตลอดไปโดยไม่มีอะไรอ้างถึง
+ * และยังกินโควตา 5 GB ที่ใช้ร่วมกันทั้งแอป โดยไม่มีทางทวงคืนเพราะไม่รู้แล้วว่า
+ * ไฟล์ไหนเป็นของใคร (บั๊กนี้มีมาตั้งแต่ deleteFamily รอบแรก เพิ่งเจอตอนทำ PDPA)
+ *
+ * และในแง่ PDPA การลบข้อมูลต้องลบของจริง ไม่ใช่ลบแค่ดัชนีที่ชี้ไปหามัน
+ */
+export async function deleteFamilyFiles(db: Db, bucket: R2Bucket, familyId: string) {
+  const rows = await db
+    .select({ key: storageObjects.key })
+    .from(storageObjects)
+    .where(eq(storageObjects.familyId, familyId));
+  if (rows.length === 0) return 0;
+
+  // R2 รับลบทีละไม่เกิน 1000 key ต่อครั้ง
+  const keys = rows.map((r) => r.key);
+  for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
+  await db.delete(storageObjects).where(eq(storageObjects.familyId, familyId));
+  return keys.length;
+}
+
+/** ไฟล์ที่ผู้ใช้อัปโหลดเองและไม่ผูกกับครอบครัวไหน — รูปโปรไฟล์เป็นต้น */
+export async function deleteUserFiles(db: Db, bucket: R2Bucket, userId: string) {
+  const rows = await db
+    .select({ key: storageObjects.key })
+    .from(storageObjects)
+    .where(and(eq(storageObjects.uploadedBy, userId), isNull(storageObjects.familyId)));
+  if (rows.length === 0) return 0;
+  const keys = rows.map((r) => r.key);
+  for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
+  await db
+    .delete(storageObjects)
+    .where(and(eq(storageObjects.uploadedBy, userId), isNull(storageObjects.familyId)));
+  return keys.length;
 }
 
 /** ลบไฟล์ + ตัดยอดออกจากบัญชี */

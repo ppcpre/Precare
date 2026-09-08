@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/auth/password-field";
 import { signUp } from "@/lib/auth-client";
+import { recordConsents } from "@/actions/consent";
+import { POLICY_VERSION, type ConsentKind } from "@/lib/consent";
 import { cn } from "@/lib/cn";
 
 /** วัดความแข็งแรงคร่าวๆ 3 ระดับ ตาม password strength meter ที่ออกแบบไว้ */
@@ -24,12 +26,25 @@ const LABELS = ["สั้นเกินไป", "พอใช้ — เพิ
 export function SignupForm({ next }: { next?: string }) {
   const router = useRouter();
   const [pw, setPw] = useState("");
-  const [accepted, setAccepted] = useState(false);
+  /**
+   * ทุกช่องเริ่มจาก **ว่าง** ห้ามติ๊กมาให้ล่วงหน้า
+   * ความยินยอมที่ติ๊กมาแล้วไม่ถือเป็นการเลือกโดยสมัครใจ
+   */
+  const [granted, setGranted] = useState<Set<ConsentKind>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
 
   const level = strengthOf(pw);
+  const canSubmit = granted.has("terms") && granted.has("health_data");
+
+  const toggle = (kind: ConsentKind, on: boolean) =>
+    setGranted((cur) => {
+      const next = new Set(cur);
+      if (on) next.add(kind);
+      else next.delete(kind);
+      return next;
+    });
 
   return (
     <form
@@ -51,6 +66,18 @@ export function SignupForm({ next }: { next?: string }) {
           setLoading(false);
           return;
         }
+        /**
+         * บันทึกความยินยอมหลังสมัครสำเร็จ ตอนที่มี session แล้ว
+         *
+         * ก่อนหน้านี้ยังไม่มี userId ให้ผูก และความยินยอมของคนที่สมัครไม่สำเร็จ
+         * ก็ไม่มีประโยชน์ที่จะเก็บ
+         *
+         * ถ้าบันทึกไม่สำเร็จก็ยังพาเข้าแอป — บัญชีถูกสร้างไปแล้ว การค้างไว้ที่
+         * หน้าสมัครทำให้ผู้ใช้ติดอยู่กับที่โดยแก้อะไรไม่ได้
+         * action นี้ทำซ้ำได้ จึงเรียกใหม่ทีหลังได้ถ้าต้องการ
+         */
+        await recordConsents({ granted: [...granted], version: POLICY_VERSION }).catch(() => null);
+
         // ยังไม่มี family -> root จะพาไป /onboarding เอง
         router.push(next ?? "/");
         router.refresh();
@@ -96,22 +123,110 @@ export function SignupForm({ next }: { next?: string }) {
         )}
       </div>
 
-      <label className="flex items-start gap-2.5 text-sm text-ink-600">
-        <input
-          type="checkbox"
-          checked={accepted}
-          onChange={(e) => setAccepted(e.target.checked)}
-          className="mt-0.5 size-5 min-h-0 shrink-0 accent-brown-700"
+      {/* แยกความยินยอมเป็นข้อๆ ไม่รวมเป็นติ๊กเดียว
+          ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหวตามมาตรา 26 ต้องขอแยกจากเงื่อนไขทั่วไป
+          ไม่ใส่หัวข้อคั่น — สามช่องนี้อยู่เหนือปุ่มสมัครอยู่แล้ว */}
+      <div className="flex flex-col gap-0.5">
+        <ConsentRow
+          kind="terms"
+          checked={granted.has("terms")}
+          onChange={toggle}
+          label={
+            <>
+              ยอมรับ<Link href="/legal/terms" className="text-brown-700">เงื่อนไข</Link>และ
+              <Link href="/legal/privacy" className="text-brown-700">นโยบายความเป็นส่วนตัว</Link>
+            </>
+          }
         />
-        <span className="leading-relaxed">
-          ยอมรับ<Link href="/terms" className="text-brown-700">เงื่อนไขการใช้งาน</Link> และ
-          <Link href="/privacy" className="text-brown-700">นโยบายความเป็นส่วนตัว</Link>
-        </span>
-      </label>
 
-      <Button type="submit" full loading={loading} disabled={!accepted}>
+        {/* ข้อนี้คือหัวใจ ให้ต่างจากอีกสองข้อด้วยตา
+            ไม่ใช่ทำให้เท่ากันหมดแล้วข้อสำคัญจมหายไป */}
+        <ConsentRow
+          kind="health_data"
+          checked={granted.has("health_data")}
+          onChange={toggle}
+          emphasis
+          label="ยินยอมให้เก็บและใช้ข้อมูลสุขภาพ"
+          detail={
+            <>
+              คนในครอบครัวที่คุณเชิญจะเห็นข้อมูลนี้ ·{" "}
+              <Link href="/legal/data" className="text-brown-700">
+                ดูว่าเก็บอะไรบ้าง
+              </Link>
+            </>
+          }
+        />
+
+        <ConsentRow
+          kind="marketing"
+          checked={granted.has("marketing")}
+          onChange={toggle}
+          label="รับอีเมลแจ้งเตือนนัดหมาย"
+          optional
+        />
+      </div>
+
+      <Button type="submit" full loading={loading} disabled={!canSubmit}>
         สมัครสมาชิก
       </Button>
+      {!canSubmit && (
+        <p className="text-center text-xs text-ink-400">
+          ต้องยินยอมสองข้อแรกก่อนจึงจะสมัครได้
+        </p>
+      )}
     </form>
+  );
+}
+
+/**
+ * ช่องยินยอมหนึ่งข้อ
+ *
+ * พื้นที่แตะคือทั้งแถว (เป็น label) ไม่ใช่แค่กล่องสี่เหลี่ยม 20px
+ * ความยินยอมที่กดยากคือความยินยอมที่คนกดผิด
+ */
+function ConsentRow({
+  kind,
+  checked,
+  onChange,
+  label,
+  detail,
+  optional = false,
+  emphasis = false,
+}: {
+  kind: ConsentKind;
+  checked: boolean;
+  onChange: (kind: ConsentKind, on: boolean) => void;
+  label: React.ReactNode;
+  detail?: React.ReactNode;
+  optional?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex min-h-11 items-start gap-2.5 rounded-[10px] py-3 text-sm",
+        // พื้นสีดันออกนอกระยะขอบแล้วชดเชยด้วย padding เท่ากัน
+        // เพื่อให้ช่องติ๊กยังตรงแนวกับข้ออื่น พื้นสีจึงเป็นการเน้น ไม่ใช่การย่อหน้า
+        emphasis ? "-mx-3 bg-peach-100 px-3" : "",
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(kind, e.target.checked)}
+        className="mt-0.5 size-5 min-h-0 shrink-0 accent-brown-700"
+      />
+      <span className="flex flex-col gap-1">
+        <span className={cn("leading-relaxed", emphasis ? "font-medium text-ink-900" : "text-ink-600")}>
+          {label}
+          {optional && (
+            <span className="ml-1.5 rounded-[5px] bg-cream-100 px-1.5 py-px text-[11px] text-ink-400">
+              ไม่บังคับ
+            </span>
+          )}
+        </span>
+        {detail && <span className="text-xs leading-relaxed text-ink-600">{detail}</span>}
+      </span>
+    </label>
   );
 }

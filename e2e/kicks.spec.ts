@@ -122,7 +122,7 @@ test("เริ่มซ้ำต้องได้รอบเดิม ไม�
   const ctx2 = await browser.newContext();
   const other = await ctx2.newPage();
   await other.goto("/login");
-  await other.getByLabel("อีเมล").fill(email);
+  await other.getByLabel("อีเมล", { exact: true }).fill(email);
   await other.getByLabel("รหัสผ่าน", { exact: true }).fill("e2e-Passw0rd!");
   await other.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
   await other.waitForURL(/\/dashboard/, { timeout: 30_000 });

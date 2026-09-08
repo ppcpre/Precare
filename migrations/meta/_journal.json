@@ -50,6 +50,13 @@
       "when": 1788829005909,
       "tag": "0006_visit_questions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788843962056,
+      "tag": "0007_consents",
+      "breakpoints": true
     }
   ]
 }

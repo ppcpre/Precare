@@ -189,16 +189,21 @@ export async function gotoApp(page: Page, path: string) {
 export async function signUp(page: Page, email: string, name = "แม่ทดสอบ") {
   await gotoApp(page, "/signup");
   await page.getByLabel("ชื่อ-นามสกุล").fill(name);
-  await page.getByLabel("อีเมล").fill(email);
+  await page.getByLabel("อีเมล", { exact: true }).fill(email);
   await page.getByLabel("รหัสผ่าน", { exact: true }).fill(PASSWORD);
-  await page.getByRole("checkbox").check();
+  // หน้าสมัครแยกความยินยอมเป็นสามข้อ ติ๊กเฉพาะสองข้อที่จำเป็น
+  // ข้อที่สาม (อีเมลแจ้งเตือน) จงใจไม่ติ๊ก เพื่อให้เส้นทางปกติของเทสต์
+  // เป็นเส้นทางของคนที่ปฏิเสธสิ่งที่ไม่บังคับ ซึ่งต้องใช้งานได้เหมือนกัน
+  const consent = page.getByRole("checkbox");
+  await consent.nth(0).check();
+  await consent.nth(1).check();
   await page.getByRole("button", { name: "สมัครสมาชิก" }).click();
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 }
 
 export async function logIn(page: Page, email: string) {
   await gotoApp(page, "/login");
-  await page.getByLabel("อีเมล").fill(email);
+  await page.getByLabel("อีเมล", { exact: true }).fill(email);
   await page.getByLabel("รหัสผ่าน", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
 }

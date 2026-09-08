@@ -18,7 +18,10 @@ import { getSessionCookie } from "better-auth/cookies";
  */
 // /api/asset เป็นภาพประกอบของระบบล้วน ไม่มีข้อมูลผู้ใช้ ปล่อยให้ CDN cache ได้
 // (ของผู้ใช้อยู่ที่ /api/media ซึ่งไม่อยู่ในลิสต์นี้และเช็คสิทธิ์เองในตัว route)
-const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/api/auth", "/api/asset"];
+// /legal ต้องเปิดได้โดยไม่ล็อกอิน — คนอ่านคือคนที่ยังไม่ได้สมัครและกำลังตัดสินใจ
+// ถ้าบังคับล็อกอินก่อนอ่าน ก็เท่ากับให้ยินยอมก่อนแล้วค่อยอ่านว่ายินยอมกับอะไร
+// (ก่อนหน้านี้ /terms กับ /privacy ไม่มีหน้าอยู่เลย ลิงก์จากหน้าสมัครจึงพาไป /login)
+const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/legal", "/api/auth", "/api/asset"];
 
 /**
  * T6.5 — CSP แบบมี nonce
@@ -87,8 +90,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // ล็อกอินแล้วแต่ยังวนอยู่หน้า login/signup -> พาเข้าแอป
-  if (hasSession && (pathname === "/login" || pathname === "/signup")) {
+  /**
+   * ล็อกอินแล้วแต่ยังวนอยู่หน้า login/signup -> พาเข้าแอป
+   *
+   * ⚠️ ยกเว้น Server Action ที่ยิงมาจากหน้านั้นเอง
+   *
+   * Server Action ส่ง POST กลับไปที่ URL ปัจจุบัน พอสมัครเสร็จ session เกิดแล้ว
+   * แถวนี้จะ redirect คำขอนั้นไป /dashboard แทนที่จะให้ action ทำงาน
+   * ฝั่ง client จึงได้ "An unexpected response was received from the server"
+   * และ action เงียบหายไปโดยไม่มี error ฝั่ง server ให้เห็นเลย
+   * (เจอตอนบันทึกความยินยอมหลังสมัคร ซึ่งล้มทุกครั้งโดยไม่มีร่องรอย)
+   */
+  const isServerAction = req.method === "POST" && req.headers.has("next-action");
+  if (hasSession && !isServerAction && (pathname === "/login" || pathname === "/signup")) {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

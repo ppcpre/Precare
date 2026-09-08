@@ -3,6 +3,8 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { deleteFamilyFiles } from "@/lib/storage";
 import { families, familyMembers, user } from "@/db/schema";
 import { ownerAction, authAction, memberAction, AppError } from "@/lib/safe-action";
 import { AuthzError } from "@/lib/authz";
@@ -71,6 +73,11 @@ export const deleteFamily = ownerAction
     const fam = await ctx.db.select().from(families).where(eq(families.id, ctx.familyId)).get();
     if (!fam) throw new AppError("ไม่พบครอบครัวนี้");
     if (fam.name !== parsedInput.confirmName) throw new AppError("ชื่อครอบครัวไม่ตรง");
+
+    // ลบไฟล์ใน R2 ก่อนลบแถว — พอลบ family แล้ว storage_objects จะ cascade หายไป
+    // แล้วจะไม่เหลืออะไรบอกว่าไฟล์ไหนเป็นของครอบครัวนี้ ไฟล์จะค้างกินโควตาตลอดไป
+    const { env } = await getCloudflareContext({ async: true });
+    await deleteFamilyFiles(ctx.db, env.PHOTOS_BUCKET, ctx.familyId);
 
     await ctx.db.batch([
       // เคลียร์ activeFamilyId ของสมาชิกทุกคนก่อน แล้วค่อยลบ family

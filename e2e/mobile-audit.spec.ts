@@ -32,6 +32,7 @@ const PAGES = [
   "/visit",
   "/visit/questions",
   "/profile",
+  "/profile/privacy",
   "/family",
 ];
 
