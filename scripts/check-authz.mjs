@@ -43,6 +43,7 @@ const ACTION_RULES = {
   "photos.ts": ["editorAction"],
   "costs.ts": ["editorAction"],
   "kicks.ts": ["editorAction"],
+  "visit.ts": ["editorAction"],
 };
 
 function walk(dir) {

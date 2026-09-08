@@ -11,7 +11,7 @@ import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import {
   appointments, careGroups, families, familyInvites, familyMembers,
-  photos, pregnancyProfiles, trackingSessions, user, weeklyLogs,
+  photos, pregnancyProfiles, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
 import type { CostItem } from "@/lib/costs";
@@ -409,4 +409,67 @@ export async function countPhotosByLog(db: Db, familyId: string) {
 
 export async function getFamily(db: Db, familyId: string) {
   return db.select().from(families).where(eq(families.id, familyId)).get();
+}
+
+/**
+ * ข้อมูลดิบทั้งหมดที่หน้าสรุปก่อนพบแพทย์ต้องใช้ — ยิงพร้อมกันครั้งเดียว
+ *
+ * "ตั้งแต่ครั้งที่แล้ว" นับจาก **นัดที่ผ่านมาแล้วล่าสุด** ไม่ใช่จำนวนวันตายตัว
+ * เพราะรอบการฝากครรภ์ไม่เท่ากันตลอด (เดือนละครั้ง แล้วถี่ขึ้นช่วงท้าย)
+ * ถ้ายังไม่เคยมีนัดที่ผ่านมา คืน null แล้วให้หน้าจอสรุปทั้งหมดที่มี
+ *
+ * ดึง log ทั้งหมดไม่ใช่เฉพาะช่วง เพราะยอด "รวมทั้งครรภ์" ต้องใช้ค่าแรกสุด
+ * และการกรองช่วงทำในหน่วยความจำถูกกว่ายิง D1 สองรอบ
+ */
+export async function getVisitData(db: Db, familyId: string) {
+  const [lastAppt, logs, sessions] = await Promise.all([
+    db
+      .select({ apptDatetime: appointments.apptDatetime })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.familyId, familyId),
+          lt(appointments.apptDatetime, new Date().toISOString()),
+        ),
+      )
+      .orderBy(desc(appointments.apptDatetime))
+      .limit(1)
+      .get(),
+    db
+      .select({
+        logDate: weeklyLogs.logDate,
+        weight: weeklyLogs.weight,
+        bpSystolic: weeklyLogs.bpSystolic,
+        bpDiastolic: weeklyLogs.bpDiastolic,
+        symptoms: weeklyLogs.symptoms,
+      })
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, familyId))
+      .orderBy(asc(weeklyLogs.logDate)),
+    listKickSessions(db, familyId, 60),
+  ]);
+
+  return { since: lastAppt?.apptDatetime ?? null, logs, sessions };
+}
+
+export async function listVisitQuestions(db: Db, familyId: string) {
+  return db
+    .select({
+      id: visitQuestions.id,
+      text: visitQuestions.text,
+      askedAt: visitQuestions.askedAt,
+    })
+    .from(visitQuestions)
+    .where(eq(visitQuestions.familyId, familyId))
+    .orderBy(asc(visitQuestions.askedAt), desc(visitQuestions.createdAt));
+}
+
+/** จำนวนคำถามที่ยังไม่ได้ถาม — ใช้บนการ์ดทางเข้า ไม่ต้องดึงทั้งรายการมานับ */
+export async function countOpenQuestions(db: Db, familyId: string) {
+  const row = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(visitQuestions)
+    .where(and(eq(visitQuestions.familyId, familyId), isNull(visitQuestions.askedAt)))
+    .get();
+  return Number(row?.n ?? 0);
 }

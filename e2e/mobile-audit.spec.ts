@@ -28,6 +28,8 @@ const PAGES = [
   "/appointments/costs",
   "/album",
   "/kicks",
+  "/visit",
+  "/visit/questions",
   "/profile",
   "/family",
 ];

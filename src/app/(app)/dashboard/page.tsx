@@ -5,7 +5,13 @@ import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
 import { WeeklyDevelopmentCard, WeeklySizeCard } from "@/components/dashboard/weekly";
 import { weeklyContent } from "@/data/weekly-content";
-import { getActiveKickSession, getDashboard, listKickSessions, requireFamilyContext } from "@/lib/queries";
+import {
+  countOpenQuestions,
+  getActiveKickSession,
+  getDashboard,
+  listKickSessions,
+  requireFamilyContext,
+} from "@/lib/queries";
 import { KickCard } from "@/components/kicks/dashboard-card";
 import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
@@ -25,10 +31,11 @@ export default async function DashboardPage() {
   }
 
   const { db, familyId, role } = ctx;
-  const [data, activeKick, kickSessions] = await Promise.all([
+  const [data, activeKick, kickSessions, openQuestions] = await Promise.all([
     getDashboard(db, familyId),
     getActiveKickSession(db, familyId),
     listKickSessions(db, familyId, 10),
+    countOpenQuestions(db, familyId),
   ]);
 
   // now มาจาก getDashboard ไม่ใช่เรียก Date.now() ใน render
@@ -72,7 +79,7 @@ export default async function DashboardPage() {
 
         <div className="flex flex-col gap-4">
           {weekly && <WeeklySizeCard content={weekly} />}
-          <NextAppointmentCard appt={data.nextAppointment} now={now} />
+          <NextAppointmentCard appt={data.nextAppointment} now={now} openQuestions={openQuestions} />
           <RecentLogsCard logs={data.recentLogs} />
         </div>
       </div>

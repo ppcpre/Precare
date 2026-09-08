@@ -274,3 +274,27 @@ export const trackingSessions = sqliteTable(
     index("idx_tracking_open").on(t.familyId, t.endedAt),
   ],
 );
+
+/**
+ * คำถามที่อยากถามหมอ
+ *
+ * ผูกกับ "ครอบครัว" ไม่ใช่ "นัดหมาย" — เพราะคำถามเกิดตอนไหนก็ได้
+ * ส่วนใหญ่เกิดตอนอยู่บ้านแล้วนึกได้ ซึ่งเป็นคนละเวลากับตอนมีนัดอยู่ตรงหน้า
+ * ถ้าบังคับให้เลือกนัดก่อนถึงจะจดได้ คนจะไม่จด แล้วก็ลืมถามเหมือนเดิม
+ *
+ * ถามแล้ว = ใส่ askedAt ไม่ใช่ลบทิ้ง จะได้ย้อนดูได้ว่าเคยถามอะไรไปแล้ว
+ * (คำถามที่ถามไปแล้วมักถูกถามซ้ำในนัดถัดไปเพราะจำคำตอบไม่ได้)
+ */
+export const visitQuestions = sqliteTable(
+  "visit_questions",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    text: text("text").notNull(),
+    /** null = ยังไม่ได้ถาม */
+    askedAt: text("asked_at"),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_visit_q_family").on(t.familyId, t.askedAt)],
+);
