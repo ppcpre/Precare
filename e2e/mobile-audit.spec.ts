@@ -28,6 +28,7 @@ const PAGES = [
   "/appointments/costs",
   "/album",
   "/kicks",
+  "/labor",
   "/visit",
   "/visit/questions",
   "/profile",

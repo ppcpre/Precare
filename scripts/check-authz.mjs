@@ -44,6 +44,7 @@ const ACTION_RULES = {
   "costs.ts": ["editorAction"],
   "kicks.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
+  "labor.ts": ["editorAction"],
 };
 
 function walk(dir) {

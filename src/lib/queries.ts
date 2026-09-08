@@ -14,6 +14,7 @@ import {
   photos, pregnancyProfiles, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
+import { toLaborView } from "@/lib/labor";
 import type { CostItem } from "@/lib/costs";
 import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
 import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
@@ -472,4 +473,47 @@ export async function countOpenQuestions(db: Db, familyId: string) {
     .where(and(eq(visitQuestions.familyId, familyId), isNull(visitQuestions.askedAt)))
     .get();
   return Number(row?.n ?? 0);
+}
+
+/** รอบจับเวลาการบีบตัวที่ยังไม่ปิด — ทุกครั้งที่เปิดหน้าต้องรู้ว่ามีรอบค้างไหม */
+export async function getActiveLaborSession(db: Db, familyId: string) {
+  const row = await db
+    .select({
+      id: trackingSessions.id,
+      startedAt: trackingSessions.startedAt,
+      endedAt: trackingSessions.endedAt,
+      events: trackingSessions.events,
+    })
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "contraction"),
+        isNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .get();
+  return row ? toLaborView(row) : null;
+}
+
+export async function listLaborSessions(db: Db, familyId: string, limit = 20) {
+  const rows = await db
+    .select({
+      id: trackingSessions.id,
+      startedAt: trackingSessions.startedAt,
+      endedAt: trackingSessions.endedAt,
+      events: trackingSessions.events,
+    })
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "contraction"),
+        isNotNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .limit(limit);
+  return rows.map(toLaborView);
 }
