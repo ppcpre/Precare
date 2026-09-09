@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import { MAX_VIDEO_BYTES } from "@/lib/media-limits";
 import type { Db } from "@/db";
 import { photos, storageObjects } from "@/db/schema";
 
@@ -16,21 +17,10 @@ export const STORAGE_WARN = 4 * 1024 ** 3; // 4 GB — เริ่มขึ้�
 export const MAX_FILE_BYTES = 5 * 1024 ** 2;
 
 /**
- * วิดีโอมีเพดานของตัวเอง และเพดานรวมยังเป็น 5 GB เท่าเดิม
- *
- * วิดีโอย่อไม่ได้ — Worker ไม่มี ffmpeg และการ transcode ในเบราว์เซอร์
- * ต้องใช้ ffmpeg.wasm ~30 MB ซึ่งเกินงบ bundle ทั้งโปรเจกต์ (3 MiB)
- * ตัวคุมปริมาณจึงเป็น "ความยาว + ขนาด" ต่อคลิป ไม่ใช่การบีบอัด
- *
- * ตัวเลขนี้มาจากของจริง: คลิป 1080p 30fps จากมือถืออยู่ราว 2 MB ต่อวินาที
- * 30 วินาทีจึงประมาณ 60 MB ซึ่งเกิน 40 — เจตนาให้เกินได้ เพื่อบังคับให้
- * คลิปที่ยาวเต็มเพดานต้องมาจากกล้องที่ตั้งคุณภาพต่ำลง ไม่ใช่ 4K
- *
- * ⚠️ 40 MB × 128 คลิป = 5 GB เต็มโควตารวม ตัวเลขนี้จึงไม่ใช่ค่ามั่ว
- *    ถ้าจะขยับ ต้องขยับพร้อมกับคิดว่าโควตารวมจะอยู่ได้กี่ครอบครัว
+ * เพดานของวิดีโออยู่ใน media-limits.ts เพราะฝั่ง client ต้องใช้ตัวเลขเดียวกัน
+ * และ import ไฟล์นี้ไม่ได้ (มี drizzle กับ schema ติดมาด้วย)
  */
-export const MAX_VIDEO_BYTES = 40 * 1024 ** 2;
-export const MAX_VIDEO_MS = 30_000;
+export { MAX_VIDEO_BYTES, MAX_VIDEO_MS, VIDEO_PART_BYTES } from "@/lib/media-limits";
 
 /** เพดานต่อไฟล์ตามชนิด — วิดีโอใหญ่กว่าได้ แต่เพดานรวมยังเท่าเดิม */
 export const maxBytesFor = (kind: StorageKind) =>

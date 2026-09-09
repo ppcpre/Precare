@@ -9,6 +9,7 @@ import { Field, Textarea } from "@/components/ui/field";
 import { Chip } from "@/components/ui/chip";
 import { addPhotos, addVideo } from "@/actions/photos";
 import { PHOTO_EDGE, formatBytesShort, resizeToWebp } from "@/lib/image";
+import { MAX_VIDEO_BYTES, MAX_VIDEO_MS } from "@/lib/media-limits";
 import {
   VIDEO_ACCEPT,
   VIDEO_HELP,
@@ -30,8 +31,6 @@ const MAX_BATCH = 10;
 const MAX_BATCH_BYTES = 16 * 1024 ** 2;
 
 /** ค่าเดียวกับฝั่ง server ใน src/lib/storage.ts — ตรงนี้ไว้ปฏิเสธก่อนเสียเวลาอัปโหลด */
-const MAX_VIDEO_BYTES = 40 * 1024 ** 2;
-const MAX_VIDEO_MS = 30_000;
 
 /**
  * คลิปละหนึ่งต่อครั้ง
@@ -67,6 +66,14 @@ export function UploadSheet({
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * ใช้หยุดการอัปคลิปกลางคัน
+   *
+   * คลิป 500 MB บนเน็ตมือถือใช้เวลาเป็นนาที ต้องมีทางหยุด ไม่ใช่ปล่อยให้
+   * ปิดหน้าไปแล้วชิ้นที่เหลือยังส่งต่อจนจบ — และการหยุดต้องเรียก abort
+   * ไปที่ server ด้วย ไม่งั้นรอบที่ค้างจะกินโควตาโดยไม่มีแถวให้เห็นเลย
+   */
+  const abortRef = useRef<AbortController>(new AbortController());
   const [picked, setPicked] = useState<Picked[]>([]);
   const [video, setVideo] = useState<Video | null>(null);
   const [type, setType] = useState<(typeof TYPES)[number]["value"]>("ultrasound");
@@ -161,32 +168,96 @@ export function UploadSheet({
   }
 
   /**
-   * ส่งคลิปด้วย XHR ไม่ใช่ fetch
+   * ส่งคลิปเป็นชิ้นๆ ด้วย XHR ไม่ใช่ fetch
    *
-   * fetch ยังบอกความคืบหน้าของ "ขาขึ้น" ไม่ได้ในเบราว์เซอร์ทั่วไป
-   * คลิป 40 MB บนเน็ตมือถือใช้เวลาเป็นสิบวินาที ถ้าไม่มีตัวเลขให้ดู
-   * คนจะคิดว่าค้างแล้วกดออก ซึ่งทำให้ไฟล์ค้างอยู่ใน R2 กินโควตาของทุกคน
+   * **ทำไมต้องแบ่งชิ้น** Cloudflare จำกัด body ต่อคำขอไว้ที่ 100 MB บนแพลนฟรี
+   * คลิป 500 MB จึงส่งทีเดียวไม่ได้ ต้องเปิดรอบ multipart แล้วส่งทีละ 25 MB
+   *
+   * **ทำไม XHR** fetch ยังบอกความคืบหน้าของ "ขาขึ้น" ไม่ได้ในเบราว์เซอร์ทั่วไป
+   * คลิป 500 MB บนเน็ตมือถือใช้เวลาเป็นนาที ถ้าไม่มีตัวเลขให้ดู คนจะคิดว่าค้าง
+   * แล้วกดออก ซึ่งทำให้ชิ้นที่อัปไปแล้วค้างกินโควตาของทุกคน
+   *
+   * ส่งทีละชิ้นตามลำดับ ไม่ส่งขนานกัน — บนเน็ตมือถือการยิงหลายเส้นพร้อมกัน
+   * ทำให้แต่ละเส้นช้าลงจนรวมแล้วไม่เร็วขึ้น และทำให้ตัวเลขความคืบหน้ากระตุก
    */
-  function uploadVideo(file: File, mime: string): Promise<string> {
+  function uploadVideo(file: File, mime: string, signal: AbortSignal): Promise<string> {
+    return (async () => {
+      const started = await postJson("start", {
+        "x-video-type": mime,
+        "x-video-size": String(file.size),
+      });
+
+      const key = started.key as string;
+      const uploadId = started.uploadId as string;
+      const partBytes = (started.partBytes as number) || 25 * 1024 ** 2;
+      const headers = { "x-upload-key": key, "x-upload-id": uploadId };
+
+      try {
+        const parts: { partNumber: number; etag: string }[] = [];
+        const total = Math.max(1, Math.ceil(file.size / partBytes));
+
+        for (let i = 0; i < total; i++) {
+          if (signal.aborted) throw new Error("ยกเลิกแล้ว");
+          const chunk = file.slice(i * partBytes, (i + 1) * partBytes);
+          const done = i;
+          const res = await sendPart(chunk, { ...headers, "x-part-number": String(i + 1) }, (p) =>
+            // ความคืบหน้ารวม = ชิ้นที่เสร็จแล้ว + ความคืบหน้าของชิ้นปัจจุบัน
+            setUploadPct(Math.round(((done + p) / total) * 100)),
+          );
+          parts.push(res);
+        }
+
+        const finished = await postJson("complete", headers, JSON.stringify({ parts }));
+        return finished.key as string;
+      } catch (e) {
+        // ปล่อยรอบค้างไว้ = กินโควตาโดยไม่มีแถวใน storage_objects ให้เห็นเลย
+        await postJson("abort", headers).catch(() => null);
+        throw e;
+      }
+    })();
+  }
+
+  /** ขั้นตอนที่คุยกันด้วย JSON — start / complete / abort */
+  async function postJson(phase: string, headers: Record<string, string>, body?: string) {
+    const res = await fetch("/api/media/video", {
+      method: "POST",
+      headers: { ...headers, "x-upload-phase": phase, ...(body ? { "content-type": "application/json" } : {}) },
+      body,
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) throw new Error((data.error as string) ?? "อัปโหลดคลิปไม่สำเร็จ");
+    return data;
+  }
+
+  /** ส่งไบต์หนึ่งชิ้น พร้อมรายงานความคืบหน้าของชิ้นนั้น (0–1) */
+  function sendPart(
+    chunk: Blob,
+    headers: Record<string, string>,
+    onProgress: (fraction: number) => void,
+  ): Promise<{ partNumber: number; etag: string }> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/media/video");
-      xhr.setRequestHeader("content-type", mime);
+      xhr.setRequestHeader("x-upload-phase", "part");
+      for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
       };
       xhr.onload = () => {
-        let body: { key?: string; error?: string } = {};
+        let body: { partNumber?: number; etag?: string; error?: string } = {};
         try {
           body = JSON.parse(xhr.responseText);
         } catch {
           /* ตอบไม่ใช่ JSON = พังนอกเหนือที่เราคุม ใช้ข้อความกลางแทน */
         }
-        if (xhr.status === 200 && body.key) resolve(body.key);
-        else reject(new Error(body.error ?? "อัปโหลดคลิปไม่สำเร็จ"));
+        if (xhr.status === 200 && body.etag && body.partNumber) {
+          resolve({ partNumber: body.partNumber, etag: body.etag });
+        } else {
+          reject(new Error(body.error ?? "อัปโหลดคลิปไม่สำเร็จ"));
+        }
       };
       xhr.onerror = () => reject(new Error("การเชื่อมต่อหลุดระหว่างอัปโหลดคลิป"));
-      xhr.send(file);
+      xhr.send(chunk);
     });
   }
 
@@ -215,7 +286,7 @@ export function UploadSheet({
 
       if (video) {
         setUploadPct(0);
-        const key = await uploadVideo(video.file, video.mime);
+        const key = await uploadVideo(video.file, video.mime, abortRef.current.signal);
         const fd = new FormData();
         fd.set("key", key);
         fd.set("takenAt", takenAt);
@@ -251,7 +322,10 @@ export function UploadSheet({
       <header className="flex h-14 items-center gap-1 border-b border-cream-200 bg-white px-2">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => {
+            abortRef.current.abort();
+            router.back();
+          }}
           aria-label="ปิด"
           className="flex size-11 items-center justify-center rounded-sm text-ink-600 hover:bg-cream-100"
         >
@@ -490,10 +564,23 @@ export function UploadSheet({
 
       <div className="sticky bottom-0 border-t border-cream-200 bg-white p-4">
         <div className="mx-auto max-w-[560px]">
-          <Button full loading={busy} disabled={count === 0 || storageFull || resizing} onClick={submit}>
-            <Plus size={18} strokeWidth={2} />
-            {count ? `เพิ่ม ${count} ไฟล์` : "เลือกไฟล์ก่อน"}
-          </Button>
+          {uploadPct != null ? (
+            <Button
+              full
+              variant="secondary"
+              onClick={() => {
+                abortRef.current.abort();
+                abortRef.current = new AbortController();
+              }}
+            >
+              หยุดอัปโหลด
+            </Button>
+          ) : (
+            <Button full loading={busy} disabled={count === 0 || storageFull || resizing} onClick={submit}>
+              <Plus size={18} strokeWidth={2} />
+              {count ? `เพิ่ม ${count} ไฟล์` : "เลือกไฟล์ก่อน"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

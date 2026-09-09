@@ -67,12 +67,43 @@ test("คนนอกครอบครัวเปิดรูปด้วย U
 const VIDEO_URL = "http://localhost:8788/api/media/video";
 const fakeClip = (bytes: number) => Buffer.alloc(bytes, 7);
 
+/**
+ * อัปคลิปครบวงจร: start -> part -> complete
+ *
+ * ไฟล์ 500 MB ส่งคำขอเดียวไม่ได้ (Cloudflare จำกัด body 100 MB บนแพลนฟรี)
+ * เส้นทางนี้จึงเป็น multipart ทุกครั้ง แม้ไฟล์เล็กก็ยังเดินสามขั้นตอนเดิม
+ */
+async function uploadClip(
+  req: import("@playwright/test").APIRequestContext,
+  bytes: number,
+  type = "video/mp4",
+) {
+  const startRes = await req.post(VIDEO_URL, {
+    headers: { "x-upload-phase": "start", "x-video-type": type, "x-video-size": String(bytes) },
+  });
+  if (startRes.status() !== 200) return { status: startRes.status(), body: await startRes.json() };
+  const { key, uploadId } = (await startRes.json()) as { key: string; uploadId: string };
+  const h = { "x-upload-key": key, "x-upload-id": uploadId };
+
+  const partRes = await req.post(VIDEO_URL, {
+    headers: { ...h, "x-upload-phase": "part", "x-part-number": "1" },
+    data: fakeClip(bytes),
+  });
+  if (partRes.status() !== 200) return { status: partRes.status(), body: await partRes.json() };
+  const uploaded = await partRes.json();
+
+  const done = await req.post(VIDEO_URL, {
+    headers: { ...h, "x-upload-phase": "complete", "content-type": "application/json" },
+    data: { parts: [uploaded] },
+  });
+  return { status: done.status(), body: await done.json(), key, uploadId };
+}
+
 test("อัปโหลดวิดีโอ: ด่านสิทธิ์และลิมิตต้องกันได้ก่อนเขียนไฟล์", async ({ page, browser }) => {
   await test.step("ไม่ได้ล็อกอินต้องได้ 401", async () => {
     const ctx = await browser.newContext();
     const res = await ctx.request.post(VIDEO_URL, {
-      headers: { "content-type": "video/mp4" },
-      data: fakeClip(1024),
+      headers: { "x-upload-phase": "start", "x-video-type": "video/mp4", "x-video-size": "1024" },
     });
     expect(res.status()).toBe(401);
     await ctx.close();
@@ -82,23 +113,17 @@ test("อัปโหลดวิดีโอ: ด่านสิทธิ์แ
   await completeOnboarding(page, "ครอบครัวอัปคลิป");
 
   await test.step("ชนิดที่ไม่รองรับต้องได้ 415", async () => {
-    const res = await page.request.post(VIDEO_URL, {
-      headers: { "content-type": "video/webm" },
-      data: fakeClip(1024),
-    });
-    expect(res.status()).toBe(415);
+    const res = await uploadClip(page.request, 1024, "video/webm");
+    expect(res.status).toBe(415);
   });
 
   await test.step(".mov ต้องอัปได้ และเสิร์ฟกลับเป็น quicktime", async () => {
     // นามสกุลบน key ต้องตามชนิดจริง เพราะเส้นทางเสิร์ฟใช้นามสกุลตัดสินว่า
     // จะตอบแบบวิดีโอ (Range/206) หรือแบบรูป (อ่านทั้งก้อนเข้าหน่วยความจำ)
     // ถ้าพลาดตรงนี้ คลิป 40 MB จะถูกอ่านทั้งก้อนใน worker ที่มีเพดาน 128 MB
-    const res = await page.request.post(VIDEO_URL, {
-      headers: { "content-type": "video/quicktime" },
-      data: fakeClip(4096),
-    });
-    expect(res.status()).toBe(200);
-    const { key } = (await res.json()) as { key: string };
+    const res = await uploadClip(page.request, 4096, "video/quicktime");
+    expect(res.status).toBe(200);
+    const key = (res.body as { key: string }).key;
     expect(key).toMatch(/\.mov$/);
 
     const back = await page.request.get(`http://localhost:8788/api/media/${key}`, {
@@ -108,19 +133,108 @@ test("อัปโหลดวิดีโอ: ด่านสิทธิ์แ
     expect(back.headers()["content-type"]).toBe("video/quicktime");
   });
 
-  // เพดาน 40 MB ไม่ได้ทดสอบตรงนี้โดยตั้งใจ — ต้องส่งไบต์จริง 41 MB ต่อ project
+  await test.step("หลายชิ้นต้องประกอบกลับเป็นไฟล์เดียวที่ไบต์ถูกต้อง", async () => {
+    /**
+     * นี่คือใจกลางของการรองรับ 500 MB — ชิ้นเดียวไม่ได้พิสูจน์อะไรเลย
+     * ต้องเห็นว่าลำดับชิ้น การเก็บ etag และการประกอบกลับทำงานจริง
+     *
+     * R2 บังคับว่าทุกชิ้นยกเว้นชิ้นสุดท้ายต้องไม่ต่ำกว่า 5 MiB และเท่ากันหมด
+     * จึงใช้ 5 MiB + ชิ้นท้าย 1 MiB
+     */
+    const big = 5 * 1024 ** 2;
+    const tail = 1024 ** 2;
+    const startRes = await page.request.post(VIDEO_URL, {
+      headers: {
+        "x-upload-phase": "start",
+        "x-video-type": "video/mp4",
+        "x-video-size": String(big + tail),
+      },
+    });
+    const { key, uploadId } = (await startRes.json()) as { key: string; uploadId: string };
+    const h = { "x-upload-key": key, "x-upload-id": uploadId };
+
+    const parts = [];
+    for (const [i, bytes] of [big, tail].entries()) {
+      const res = await page.request.post(VIDEO_URL, {
+        headers: { ...h, "x-upload-phase": "part", "x-part-number": String(i + 1) },
+        // ไบต์ต่างกันต่อชิ้น จะได้จับได้ถ้าชิ้นสลับที่กัน
+        data: Buffer.alloc(bytes, i + 1),
+      });
+      expect(res.status()).toBe(200);
+      parts.push(await res.json());
+    }
+
+    const done = await page.request.post(VIDEO_URL, {
+      headers: { ...h, "x-upload-phase": "complete", "content-type": "application/json" },
+      data: { parts },
+    });
+    expect(done.status()).toBe(200);
+    expect(((await done.json()) as { size: number }).size).toBe(big + tail);
+
+    // ไบต์แรกต้องมาจากชิ้นแรก และไบต์หลังรอยต่อต้องมาจากชิ้นที่สอง
+    const head = await page.request.get(`http://localhost:8788/api/media/${key}`, {
+      headers: { range: "bytes=0-0" },
+    });
+    expect((await head.body())[0]).toBe(1);
+    const after = await page.request.get(`http://localhost:8788/api/media/${key}`, {
+      headers: { range: `bytes=${big}-${big}` },
+    });
+    expect((await after.body())[0]).toBe(2);
+  });
+
+  await test.step("แจ้งขนาดเกินเพดานต้องถูกปฏิเสธตั้งแต่ start ก่อนส่งไบต์สักตัว", async () => {
+    // ด่านนี้สำคัญเพราะไฟล์ 500 MB ที่ปล่อยให้ส่งจนจบแล้วค่อยปฏิเสธ
+    // คือการเผาเน็ตของผู้ใช้ทิ้งทั้งก้อน
+    const res = await page.request.post(VIDEO_URL, {
+      headers: {
+        "x-upload-phase": "start",
+        "x-video-type": "video/mp4",
+        "x-video-size": String(600 * 1024 ** 2),
+      },
+    });
+    expect(res.status()).toBe(413);
+  });
+
+  await test.step("รอบอัปโหลดของครอบครัวอื่นต้องแตะไม่ได้", async () => {
+    const mine = await page.request.post(VIDEO_URL, {
+      headers: { "x-upload-phase": "start", "x-video-type": "video/mp4", "x-video-size": "2048" },
+    });
+    const { key, uploadId } = (await mine.json()) as { key: string; uploadId: string };
+
+    const ctx = await browser.newContext();
+    const other = await ctx.newPage();
+    await signUp(other, uniqueEmail("videoidor"), "คนอื่นคลิป");
+    await completeOnboarding(other, "ครอบครัวคนอื่นคลิป");
+
+    // key เดาได้ (family/<id>/videos/<uuid>.mp4) ถ้าไม่ผูกกับ familyId ใน session
+    // สมาชิกครอบครัวหนึ่งจะเขียนทับรอบอัปโหลดของอีกครอบครัวได้
+    const steal = await other.request.post(VIDEO_URL, {
+      headers: {
+        "x-upload-key": key,
+        "x-upload-id": uploadId,
+        "x-upload-phase": "part",
+        "x-part-number": "1",
+      },
+      data: fakeClip(1024),
+    });
+    expect(steal.status()).toBe(404);
+    await ctx.close();
+
+    await page.request.post(VIDEO_URL, {
+      headers: { "x-upload-key": key, "x-upload-id": uploadId, "x-upload-phase": "abort" },
+    });
+  });
+
+  // เพดาน 500 MB ไม่ได้ทดสอบด้วยไบต์จริงตรงนี้โดยตั้งใจ — ต้องส่งไบต์จริง 41 MB ต่อ project
   // ต่อรัน ซึ่งนอกจากช้าแล้วยังทำให้ worker ปิดการเชื่อมต่อกลางคัน
   // (route ตอบ 413 ตั้งแต่อ่านหัว โดยไม่อ่าน body) แล้วโยน
   // "Network connection lost" ลง log ปนกับอาการไม่เสถียรของ wrangler ที่มีอยู่แล้ว
   // ตัวเลขเพดานคุมด้วย test/video.test.ts แทน
 
   await test.step("ของจริงต้องได้ key ที่อยู่ใต้ครอบครัวตัวเอง", async () => {
-    const res = await page.request.post(VIDEO_URL, {
-      headers: { "content-type": "video/mp4" },
-      data: fakeClip(2048),
-    });
-    expect(res.status()).toBe(200);
-    const body = (await res.json()) as { key: string; size: number };
+    const res = await uploadClip(page.request, 2048);
+    expect(res.status).toBe(200);
+    const body = res.body as { key: string; size: number };
     expect(body.size).toBe(2048);
     // key ต้องมาจาก session เสมอ ห้ามให้ client กำหนดปลายทางเองได้
     expect(body.key).toMatch(/^family\/[^/]+\/videos\/[0-9a-f-]+\.mp4$/);

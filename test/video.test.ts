@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatClip, videoMimeOf } from "@/lib/video";
-import { MAX_VIDEO_BYTES, MAX_VIDEO_MS, maxBytesFor, formatBytes } from "@/lib/storage";
+import { MAX_VIDEO_BYTES, MAX_VIDEO_MS, VIDEO_PART_BYTES, maxBytesFor, formatBytes } from "@/lib/storage";
 
 describe("formatClip", () => {
   it("ต่ำกว่านาทีขึ้น 0:ss", () => {
@@ -26,12 +26,28 @@ describe("เพดานไฟล์", () => {
   });
 
   /**
-   * ตัวเลขสองตัวนี้ผูกกันอยู่ ถ้าใครขยับเพดานต่อคลิปโดยไม่คิดถึงโควตารวม
-   * จำนวนคลิปที่ทั้งแอปเก็บได้จะร่วงลงทันที เทสต์นี้บังคับให้คิดพร้อมกัน
+   * ตัวเลขสองตัวนี้ผูกกันอยู่ — เทสต์นี้มีไว้ให้ **แดงเมื่อมีคนขยับเพดาน**
+   * จะได้ไม่ขยับโดยไม่รู้ว่าโควตารวมรับได้กี่คลิป
+   *
+   * ⚠️ ที่ 500 MB เหลือแค่ **10 คลิปเต็มเพดานก็เต็มทั้งแอป**
+   *    (เดิม 40 MB ได้ 128 คลิป) แปลว่าครอบครัวเดียวกินพื้นที่ของทุกคนได้
+   *    โควตารายครอบครัวจึงเปลี่ยนจาก "ควรมี" เป็น "ต้องมีก่อนเปิดให้คนนอกใช้"
    */
-  it("โควตารวม 5 GB เก็บคลิปเต็มเพดานได้อย่างน้อย 100 คลิป", () => {
-    const clips = Math.floor(5 * 1024 ** 3 / MAX_VIDEO_BYTES);
-    expect(clips).toBeGreaterThanOrEqual(100);
+  it("โควตารวม 5 GB ที่เพดาน 500 MB เก็บได้ 10 คลิป", () => {
+    expect(Math.floor((5 * 1024 ** 3) / MAX_VIDEO_BYTES)).toBe(10);
+  });
+
+  /**
+   * ขนาดชิ้นต้องอยู่ระหว่างเพดานของ Cloudflare กับขั้นต่ำของ R2
+   * ทั้งสองฝั่งเป็นข้อจำกัดของแพลตฟอร์ม แก้ที่โค้ดเราไม่ได้
+   */
+  it("ขนาดชิ้นอยู่ในกรอบที่แพลตฟอร์มยอม", () => {
+    // Cloudflare ตอบ 413 ที่ขอบถ้า body ต่อคำขอเกิน 100 MB (แพลนฟรี/Pro)
+    expect(VIDEO_PART_BYTES).toBeLessThanOrEqual(100 * 1024 ** 2);
+    // R2 บังคับให้ทุกชิ้นยกเว้นชิ้นสุดท้ายไม่ต่ำกว่า 5 MiB
+    expect(VIDEO_PART_BYTES).toBeGreaterThanOrEqual(5 * 1024 ** 2);
+    // และจำนวนชิ้นต้องไม่เกิน 10,000 ต่อหนึ่งไฟล์
+    expect(Math.ceil(MAX_VIDEO_BYTES / VIDEO_PART_BYTES)).toBeLessThanOrEqual(10_000);
   });
 
   it("เพดานความยาวอยู่ที่ 30 วินาที", () => {
@@ -39,7 +55,7 @@ describe("เพดานไฟล์", () => {
   });
 
   it("formatBytes อ่านออกในหน่วยที่คนใช้", () => {
-    expect(formatBytes(MAX_VIDEO_BYTES)).toBe("40.0 MB");
+    expect(formatBytes(MAX_VIDEO_BYTES)).toBe("500.0 MB");
   });
 });
 
