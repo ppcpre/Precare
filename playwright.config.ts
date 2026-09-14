@@ -53,7 +53,9 @@ export default defineConfig({
     command:
       `npx wrangler d1 migrations apply precare-db --local && ` +
       `npx opennextjs-cloudflare build && ` +
-      `npx wrangler dev --port ${PORT} ` +
+      // --local ปิด remote binding (AI) — CI ไม่ต้องมี token ตอนเทสต์
+      // และทุกเทสต์ได้ทางถอยตอน "อ่านใบเสร็จอัตโนมัติไม่ได้" ซึ่งเป็นเส้นทางจริงของ production ด้วย
+      `npx wrangler dev --local --port ${PORT} ` +
       `--var BETTER_AUTH_URL:http://localhost:${PORT} ` +
       `--var BETTER_AUTH_SECRET:e2e-only-not-a-real-secret-000000000000 ` +
       `--var AUTH_RATE_LIMIT_MAX:500`,

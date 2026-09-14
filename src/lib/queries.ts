@@ -4,7 +4,7 @@
  * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
-import { and, asc, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
@@ -350,6 +350,8 @@ export async function listPhotos(
     .where(
       and(
         eq(photos.familyId, familyId),
+        // ใบเสร็จเป็นเอกสารของนัด ไม่ใช่ความทรงจำ — ไม่ขึ้นในอัลบั้ม
+        ne(photos.type, "receipt"),
         ...(type ? [eq(photos.type, type)] : []),
         // "เฉพาะวิดีโอ" เป็นสวิตช์คนละแกนกับประเภทเนื้อหา ใช้ร่วมกันได้
         ...(onlyVideo ? [eq(photos.mediaKind, "video")] : []),
@@ -372,8 +374,34 @@ export async function listAppointmentMedia(db: Db, familyId: string, appointment
       caption: photos.caption,
     })
     .from(photos)
-    .where(and(eq(photos.familyId, familyId), eq(photos.appointmentId, appointmentId)))
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        eq(photos.appointmentId, appointmentId),
+        ne(photos.type, "receipt"),
+      ),
+    )
     .orderBy(desc(photos.createdAt));
+}
+
+/** ใบเสร็จของนัด พร้อมยอดที่อ่านได้ (ถ้าอ่านได้) */
+export async function listAppointmentReceipts(db: Db, familyId: string, appointmentId: string) {
+  return db
+    .select({
+      id: photos.id,
+      r2Key: photos.r2Key,
+      receiptTotalSatang: photos.receiptTotalSatang,
+      createdAt: photos.createdAt,
+    })
+    .from(photos)
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        eq(photos.appointmentId, appointmentId),
+        eq(photos.type, "receipt"),
+      ),
+    )
+    .orderBy(asc(photos.createdAt));
 }
 
 export async function getPhotoById(db: Db, familyId: string, id: string) {

@@ -154,7 +154,17 @@ export const appointments = sqliteTable(
   ],
 );
 
-export const PHOTO_TYPES = ["ultrasound", "family", "other"] as const;
+/**
+ * receipt = ใบเสร็จของนัดหมาย **ไม่ขึ้นในอัลบั้ม** และมีได้เฉพาะตอนผูกกับนัด
+ *
+ * ใบเสร็จอยู่ตารางเดียวกับรูปเพราะเก็บ เสิร์ฟ และคิดโควตาเหมือนรูปทุกอย่าง
+ * แต่ในสายตาผู้ใช้มันเป็นเอกสารของนัด ไม่ใช่ความทรงจำ ใบเสร็จค่ายา
+ * ไปโผล่ข้างรูปอัลตราซาวด์ในอัลบั้มลูกคือสิ่งที่ไม่มีใครอยากเห็น
+ */
+export const PHOTO_TYPES = ["ultrasound", "family", "other", "receipt"] as const;
+
+/** ประเภทที่อัปผ่านอัลบั้มได้ — ใบเสร็จเข้าได้ทางเดียวคือแนบกับนัด */
+export const ALBUM_PHOTO_TYPES = ["ultrasound", "family", "other"] as const;
 
 /**
  * รูปกับวิดีโออยู่ตารางเดียวกัน ไม่แยกตาราง
@@ -195,6 +205,17 @@ export const photos = sqliteTable(
       onDelete: "set null",
     }),
     caption: text("caption"),
+    /**
+     * ยอดรวมที่ AI อ่านได้จากใบเสร็จ (สตางค์) — มีเฉพาะ type = receipt
+     *
+     * เป็นแค่ "ค่าที่อ่านได้" ไม่ใช่ค่าใช้จ่ายจริง ค่าใช้จ่ายจริงอยู่ที่
+     * appointments.cost_satang ซึ่งผู้ใช้เป็นคนยืนยัน เก็บแยกไว้เพื่อ
+     * - นัดที่มีหลายใบเสร็จ (ค่าตรวจ + ค่ายา) รวมยอดเสนอให้ได้โดยไม่ต้องอ่านซ้ำ
+     * - ไม่เรียก AI ซ้ำทุกครั้งที่เปิดหน้า ซึ่งกินโควตาฟรีรายวัน
+     *
+     * เก็บแค่ตัวเลข ไม่เก็บข้อความที่โมเดลตอบ — ดู src/lib/receipt.ts
+     */
+    receiptTotalSatang: integer("receipt_total_satang"),
     uploadedBy: text("uploaded_by").notNull().references(() => user.id),
     createdAt: text("created_at").notNull().default(nowIso),
   },

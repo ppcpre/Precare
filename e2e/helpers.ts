@@ -163,7 +163,13 @@ function watchTransport(page: Page) {
   const problems: string[] = [];
   watched.set(page, problems);
   page.on("requestfailed", (r) => {
-    problems.push(`requestfailed ${r.method()} ${r.url()} — ${r.failure()?.errorText}`);
+    const why = r.failure()?.errorText ?? "";
+    // ERR_ABORTED คือคำขอที่เบราว์เซอร์ยกเลิกเอง เช่น Next prefetch ลิงก์ (?_rsc=)
+    // ตอนเปลี่ยนหน้า ไม่ใช่การเชื่อมต่อหลุด ถ้านับด้วย ข้อความจะบอกผิดว่า
+    // "request ตายกลางทาง" แล้วไปโหลดหน้าใหม่ทั้งที่ปัญหาจริงอยู่ที่อื่น
+    // (เจอตอนเขียนเทสต์ใบเสร็จ: หน้าไม่มีปุ่มเลย แต่ข้อความชี้ไปที่ prefetch)
+    if (why.includes("ERR_ABORTED")) return;
+    problems.push(`requestfailed ${r.method()} ${r.url()} — ${why}`);
   });
   page.on("response", (r) => {
     if (r.status() >= 400) problems.push(`http ${r.status()} ${r.url()}`);

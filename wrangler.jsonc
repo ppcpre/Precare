@@ -47,6 +47,12 @@
     { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
   ],
 
+  // อ่านยอดรวมจากรูปใบเสร็จ — ดู src/lib/receipt.ts
+  // remote: true เพราะ AI binding ไม่มีแบบ local อยู่แล้ว ใส่ไว้ให้ชัดว่าเรียกออกไปจริง
+  // E2E รัน wrangler dev ด้วย --local ซึ่งปิด remote binding ทั้งหมด
+  // CI จึงไม่ต้องมี token ตอนเทสต์ และเทสต์ได้ทางถอยตอนอ่านไม่ได้แทน
+  "ai": { "binding": "AI", "remote": true },
+
   // ---------------------------------------------------------------
   // environment `dev` — worker + D1 คนละตัวกับ production
   //   deploy จาก branch `dev` และ PR preview (`versions upload --env dev`)
@@ -72,6 +78,8 @@
         { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
         { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
       ],
+      // binding ไม่สืบทอดจากชั้นบนใน env ของ wrangler ต้องประกาศซ้ำ
+      "ai": { "binding": "AI", "remote": true },
       "d1_databases": [
         {
           "binding": "DB",

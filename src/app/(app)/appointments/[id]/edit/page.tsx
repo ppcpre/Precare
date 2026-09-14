@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { AppointmentForm } from "@/components/appointments/form";
 import { AppointmentMedia } from "@/components/appointments/media-strip";
+import { AppointmentReceipts } from "@/components/appointments/receipts";
 import {
   getAppointmentById,
   listAppointmentMedia,
+  listAppointmentReceipts,
   listCareGroups,
   requireFamilyContext,
 } from "@/lib/queries";
@@ -28,10 +30,11 @@ export default async function EditAppointmentPage({
     redirect("/appointments");
   }
 
-  const [appt, groups, media] = await Promise.all([
+  const [appt, groups, media, receipts] = await Promise.all([
     getAppointmentById(ctx.db, ctx.familyId, id),
     listCareGroups(ctx.db, ctx.familyId),
     listAppointmentMedia(ctx.db, ctx.familyId, id),
+    listAppointmentReceipts(ctx.db, ctx.familyId, id),
   ]);
   if (!appt) notFound();
 
@@ -39,6 +42,15 @@ export default async function EditAppointmentPage({
     <AppointmentForm
       appt={appt}
       groups={groups}
+      receipts={
+        <AppointmentReceipts
+          appointmentId={id}
+          items={receipts}
+          costSatang={appt.costSatang}
+          claimStatus={appt.claimStatus}
+          canWrite={can.writeRecords(ctx.role)}
+        />
+      }
       media={
         <AppointmentMedia
           appointmentId={id}

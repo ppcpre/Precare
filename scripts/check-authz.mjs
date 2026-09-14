@@ -48,6 +48,7 @@ const ACTION_RULES = {
   "kicks.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
+  "receipts.ts": ["editorAction"],
   // consent.ts แตะข้อมูลของ "ผู้ใช้" ไม่ใช่ของ family จึงเป็น authAction ถูกแล้ว
   // การลบบัญชีตรวจสิทธิ์ครอบครัวเองภายใน (ห้ามลบถ้าเป็นเจ้าของที่ยังมีสมาชิกอื่น)
   "consent.ts": ["authAction"],

@@ -57,6 +57,13 @@
       "when": 1788843962056,
       "tag": "0007_consents",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789353563603,
+      "tag": "0008_receipt_total",
+      "breakpoints": true
     }
   ]
 }

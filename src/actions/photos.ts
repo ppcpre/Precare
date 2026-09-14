@@ -5,7 +5,7 @@ import type { Db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
-import { appointments, photos, pregnancyProfiles, storageObjects, PHOTO_TYPES } from "@/db/schema";
+import { appointments, photos, pregnancyProfiles, storageObjects, ALBUM_PHOTO_TYPES } from "@/db/schema";
 import { editorAction, AppError } from "@/lib/safe-action";
 import {
   MAX_FILE_BYTES,
@@ -67,7 +67,9 @@ export const addPhotos = editorAction
     if (!/^\d{4}-\d{2}-\d{2}$/.test(takenAt)) throw new AppError("วันที่ถ่ายไม่ถูกต้อง");
 
     const type = String(fd.get("type") ?? "other");
-    if (!PHOTO_TYPES.includes(type as (typeof PHOTO_TYPES)[number])) {
+    // ใบเสร็จห้ามเข้าทางนี้ — ถ้าเข้าได้จะเป็นไฟล์ที่ไม่ขึ้นในอัลบั้มและไม่ผูกกับนัด
+    // คือหายไปจากทุกหน้าแต่ยังกินโควตา
+    if (!ALBUM_PHOTO_TYPES.includes(type as (typeof ALBUM_PHOTO_TYPES)[number])) {
       throw new AppError("ประเภทรูปไม่ถูกต้อง");
     }
     const caption = String(fd.get("caption") ?? "").trim().slice(0, 500) || null;
@@ -121,7 +123,7 @@ export const addPhotos = editorAction
         takenAt,
         // ปักหมุดเฉพาะรูปแรกของชุด ไม่งั้นทั้งชุดจะเป็นรูปเด่นหมด
         pinned: pinned && i === 0,
-        type: type as (typeof PHOTO_TYPES)[number],
+        type: type as (typeof ALBUM_PHOTO_TYPES)[number],
         r2Key: key,
         caption,
         appointmentId,
@@ -154,7 +156,9 @@ export const addVideo = editorAction
     if (!/^\d{4}-\d{2}-\d{2}$/.test(takenAt)) throw new AppError("วันที่ถ่ายไม่ถูกต้อง");
 
     const type = String(fd.get("type") ?? "other");
-    if (!PHOTO_TYPES.includes(type as (typeof PHOTO_TYPES)[number])) {
+    // ใบเสร็จห้ามเข้าทางนี้ — ถ้าเข้าได้จะเป็นไฟล์ที่ไม่ขึ้นในอัลบั้มและไม่ผูกกับนัด
+    // คือหายไปจากทุกหน้าแต่ยังกินโควตา
+    if (!ALBUM_PHOTO_TYPES.includes(type as (typeof ALBUM_PHOTO_TYPES)[number])) {
       throw new AppError("ประเภทไฟล์ไม่ถูกต้อง");
     }
     // null = เบราว์เซอร์ของคนอัปอ่านความยาวไม่ได้ (มักเป็น .mov ที่เข้ารหัส HEVC)
@@ -236,7 +240,7 @@ export const addVideo = editorAction
       logId,
       week: await weekOfTakenAt(ctx.db, ctx.familyId, takenAt),
       takenAt,
-      type: type as (typeof PHOTO_TYPES)[number],
+      type: type as (typeof ALBUM_PHOTO_TYPES)[number],
       mediaKind: "video",
       durationMs,
       r2Key: key,

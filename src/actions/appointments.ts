@@ -3,7 +3,9 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { appointments, careGroups } from "@/db/schema";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { appointments, careGroups, photos } from "@/db/schema";
+import { deleteObject } from "@/lib/storage";
 import { editorAction, AppError } from "@/lib/safe-action";
 import type { Db } from "@/db";
 import { appointmentInput, idInput } from "@/lib/validation";
@@ -64,6 +66,38 @@ export const deleteAppointment = editorAction
   .metadata({ name: "deleteAppointment" })
   .inputSchema(idInput)
   .action(async ({ parsedInput, ctx }) => {
+    /**
+     * ลบใบเสร็จของนัดก่อนลบนัด
+     *
+     * รูปทั่วไปที่แนบกับนัดยังอยู่ในอัลบั้มหลังลบนัด (FK เป็น set null) ซึ่งถูกแล้ว
+     * แต่ใบเสร็จไม่ขึ้นในอัลบั้ม ถ้าปล่อยตามกฎเดียวกัน มันจะกลายเป็นไฟล์ที่
+     * ไม่มีหน้าไหนแสดงเลยแต่ยังกินโควตา — และในแง่ข้อมูลส่วนตัว
+     * เอกสารที่มีชื่อคนไข้ไม่ควรค้างอยู่หลังเจ้าของลบสิ่งที่มันผูกอยู่ไปแล้ว
+     */
+    const receipts = await ctx.db
+      .select({ id: photos.id, r2Key: photos.r2Key })
+      .from(photos)
+      .where(
+        and(
+          eq(photos.familyId, ctx.familyId),
+          eq(photos.appointmentId, parsedInput.id),
+          eq(photos.type, "receipt"),
+        ),
+      );
+    if (receipts.length) {
+      const { env } = await getCloudflareContext({ async: true });
+      for (const r of receipts) await deleteObject(ctx.db, env.PHOTOS_BUCKET, r.r2Key);
+      await ctx.db
+        .delete(photos)
+        .where(
+          and(
+            eq(photos.familyId, ctx.familyId),
+            eq(photos.appointmentId, parsedInput.id),
+            eq(photos.type, "receipt"),
+          ),
+        );
+    }
+
     const res = await ctx.db
       .delete(appointments)
       .where(and(eq(appointments.id, parsedInput.id), eq(appointments.familyId, ctx.familyId)));

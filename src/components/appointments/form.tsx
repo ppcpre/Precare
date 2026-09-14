@@ -35,11 +35,17 @@ export function AppointmentForm({
   appt,
   groups = [],
   media,
+  receipts,
 }: {
   appt?: Appointment;
   groups?: CareGroupOption[];
   /** ไฟล์แนบ — เป็น server component จึงรับมาเป็น slot ไม่ได้ import เข้ามาตรงนี้ */
   media?: React.ReactNode;
+  /**
+   * ใบเสร็จและค่าใช้จ่าย — แยก slot จาก media เพื่อวางไว้ **เหนือปุ่มลบนัด**
+   * ค่าใช้จ่ายสำคัญกว่าและไม่ควรต้องเลื่อนผ่านปุ่มลบก่อนจะเจอ
+   */
+  receipts?: React.ReactNode;
 }) {
   const router = useRouter();
   const init = splitIso(appt?.apptDatetime);
@@ -213,6 +219,8 @@ export function AppointmentForm({
           onChange={(e) => setNote(e.target.value)}
           maxLength={2000}
         />
+
+        {receipts}
 
         {appt && (
           <Button
