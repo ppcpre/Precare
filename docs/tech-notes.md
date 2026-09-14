@@ -910,3 +910,21 @@ Llama 3.2 Vision ไม่ได้ลองเพราะต้องส่ง
 `watchTransport` นับ `net::ERR_ABORTED` เป็น "request ตายกลางทาง" ด้วย
 แต่นั่นคือ Next ยกเลิก prefetch ลิงก์ (`?_rsc=`) เองตอนเปลี่ยนหน้า ไม่ใช่เน็ตหลุด
 ข้อความจึงชี้ไปที่ prefetch ทั้งที่ปัญหาจริงคือหน้านั้นไม่มีปุ่มให้รอ hydrate — ตัดทิ้งแล้ว
+
+### CI run 60 แดงที่ Build — ผ่านบนเครื่องเพราะเครื่องล็อกอิน wrangler อยู่
+
+`next.config.ts` เรียก `initOpenNextCloudflareForDev()` ซึ่ง**ถูกโหลดตอน `next build` ด้วย**
+ไม่ใช่แค่ตอน `next dev` พอเพิ่ม AI binding (remote) มันพยายามต่อไป Cloudflare
+ตั้งแต่ตอน build — เครื่องพัฒนาล็อกอินอยู่เลยผ่าน แต่ CI ไม่มี token ในขั้น Build:
+
+    Failed to start the remote proxy session ... In a non-interactive environment,
+    it's necessary to set a CLOUDFLARE_API_TOKEN environment variable
+
+แก้: `initOpenNextCloudflareForDev({ remoteBindings: false })`
+
+**จำลอง CI บนเครื่องได้ด้วย `HOME=<โฟลเดอร์ว่าง>`** — wrangler หา credential ไม่เจอ
+ทำให้เห็นอาการเดียวกับ CI ใช้พิสูจน์ทั้งอาการเดิมและว่าแก้หายแล้ว
+(build ผ่าน exit 0 และ `wrangler dev --local` เปิดได้ ตอบ /login 200)
+
+**บทเรียน:** ทุกครั้งที่เพิ่ม binding แบบ remote ต้องลอง build และเปิดเซิร์ฟเวอร์ E2E
+แบบไม่ล็อกอินก่อน push — "ผ่านบนเครื่อง" ไม่ได้แปลว่าผ่านใน CI ถ้าเครื่องมี credential ที่ CI ไม่มี

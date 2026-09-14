@@ -62,5 +62,13 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 
 // ทำให้ `next dev` เข้าถึง binding ของ Cloudflare (D1/R2) ได้เหมือนตอน deploy จริง
+//
+// remoteBindings: false — ต้องปิด เพราะไฟล์นี้ถูกโหลดตอน `next build` ด้วย
+// ไม่ใช่แค่ตอน `next dev` พอมี AI binding (remote) มันจะพยายามต่อไป Cloudflare
+// ตั้งแต่ตอน build ซึ่งใน CI ไม่มี token ในขั้นนั้น build จึงล้มด้วย
+// "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN"
+// (เครื่องที่ล็อกอิน wrangler อยู่จะไม่เจอ — เจอครั้งแรกบน CI run 60)
+// ผลคือ `next dev` อ่านใบเสร็จอัตโนมัติไม่ได้ ซึ่งตกไปทางกรอกเองตามปกติ
+// ถ้าจะลองอ่านใบเสร็จจริงบนเครื่อง ให้รันผ่าน `wrangler dev` (ไม่ใส่ --local)
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-void initOpenNextCloudflareForDev();
+void initOpenNextCloudflareForDev({ remoteBindings: false });
