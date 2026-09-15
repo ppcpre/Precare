@@ -117,7 +117,11 @@ export function AppointmentReceipts({
     attach.result.serverError ?? reread.result.serverError ?? save.result.serverError ?? remove.result.serverError;
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-3.5 shadow-[var(--shadow-card)]">
+    <section
+      // เป้าของลิงก์ "ใบเสร็จ" บนการ์ดนัด — scroll-mt กันหัวข้อจมใต้แถบบนที่ติดขอบจอ
+      id="receipts"
+      className="flex scroll-mt-20 flex-col gap-3 rounded-md border border-cream-200 bg-white p-3.5 shadow-[var(--shadow-card)]"
+    >
       <h2 className="flex items-center gap-1.5 text-sm font-medium text-ink-900">
         <Receipt size={17} strokeWidth={1.9} className="text-peach-700" />
         ใบเสร็จและค่าใช้จ่าย

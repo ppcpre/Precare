@@ -25,12 +25,19 @@ test("แนบใบเสร็จ: อ่านอัตโนมัติไ
     await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
   });
 
-  await test.step("เข้าหน้าแก้นัด", async () => {
+  await test.step("ปุ่มใบเสร็จต้องเห็นบนการ์ดนัดเลย ไม่ใช่ซ่อนอยู่ในหน้าแก้ไข", async () => {
+    // เดิมทางเข้ามีแค่ไอคอนดินสอ แล้วต้องเลื่อนผ่านฟอร์มทั้งหน้า
+    // ผู้ใช้ทดสอบบน dev แล้วหาไม่เจอทั้งที่ deploy ขึ้นไปแล้ว
     // goto ธรรมดา — หน้ารายการนัดมีแต่ลิงก์ ไม่มีปุ่มให้รอ hydrate
     await page.goto("/appointments?tab=past");
-    await page.getByRole("link", { name: "แก้ไขนัดหมาย" }).first().click();
-    await page.waitForURL(/\/appointments\/[^/]+\/edit/, { timeout: 30_000 });
+    const entry = page.getByRole("link", { name: /แนบใบเสร็จ \/ ค่าใช้จ่าย/ });
+    await expect(entry).toBeVisible();
+    await expect(entry).toContainText("ยังไม่ระบุ");
+    await entry.click();
+    await page.waitForURL(/\/appointments\/[^/]+\/edit#receipts/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "ใบเสร็จและค่าใช้จ่าย" })).toBeVisible();
+    // ต้องพาเลื่อนลงมาถึงส่วนใบเสร็จเลย ไม่ใช่วางไว้บนสุดของฟอร์ม
+    await expect(page.getByRole("button", { name: "แนบใบเสร็จ" })).toBeInViewport();
   });
 
   await test.step("แนบรูปใบเสร็จ — อ่านไม่ได้ต้องบอกตรงๆ ไม่ใช่ค้างเงียบ", async () => {
@@ -52,6 +59,11 @@ test("แนบใบเสร็จ: อ่านอัตโนมัติไ
     await expect(page.getByText(/อ่านจากใบเสร็จอัตโนมัติ/)).toHaveCount(0);
     await page.getByRole("button", { name: "บันทึกค่าใช้จ่าย" }).click();
     await expect(page.getByRole("button", { name: "บันทึกค่าใช้จ่าย" })).toBeDisabled({ timeout: 30_000 });
+  });
+
+  await test.step("การ์ดนัดโชว์ยอดที่บันทึกแล้ว", async () => {
+    await page.goto("/appointments?tab=past");
+    await expect(page.getByRole("link", { name: /ใบเสร็จ \/ ค่าใช้จ่าย/ })).toContainText("฿2,550.50");
   });
 
   await test.step("ค่าใช้จ่ายไปถึงหน้าสรุปจริง — ใช้ทางเขียนเดียวกับหน้าค่าใช้จ่าย", async () => {
