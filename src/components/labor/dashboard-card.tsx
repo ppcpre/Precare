@@ -17,6 +17,7 @@ export function LaborCard({ week, active }: { week: number | null; active: boole
 
   return (
     <Link
+      prefetch={false}
       href="/labor"
       className="flex items-center justify-between gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]"
     >

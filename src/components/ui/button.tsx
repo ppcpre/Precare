@@ -54,11 +54,23 @@ export function Button({
   );
 }
 
+/**
+ * ปุ่มที่เป็นลิงก์ — ปิด prefetch เป็นค่าตั้งต้น
+ *
+ * ปุ่มพวกนี้คือ "ไปทำอะไรสักอย่าง" (เพิ่มนัด บันทึกสุขภาพ ดูค่าใช้จ่าย)
+ * ซึ่งปลายทางเป็นฟอร์มที่ต้อง render ใหม่อยู่ดี การ prefetch จึงได้ประโยชน์น้อย
+ * แต่ราคาแพง: บนแพลนฟรี CPU จำกัด 10 ms ต่อคำขอ ทุกคำขอคือโอกาสเจอ Error 1102
+ * และปุ่มหลายอันถูกเรนเดอร์สองชุด (มือถือ + เดสก์ท็อป ซ่อนอีกอันด้วย CSS)
+ * จึง prefetch ซ้ำสองรอบโดยที่ผู้ใช้เห็นปุ่มเดียว
+ *
+ * ส่งค่า prefetch มาเองได้ถ้าหน้าไหนอยากได้จริงๆ
+ */
 export function ButtonLink({
   variant = "primary",
   full,
   className,
+  prefetch = false,
   ...props
 }: React.ComponentProps<typeof Link> & { variant?: Variant; full?: boolean }) {
-  return <Link {...props} className={buttonClass(variant, full, className)} />;
+  return <Link {...props} prefetch={prefetch} className={buttonClass(variant, full, className)} />;
 }

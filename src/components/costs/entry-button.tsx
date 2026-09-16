@@ -22,6 +22,8 @@ export function CostEntryButton({ items }: { items: CostItem[] }) {
 
   return (
     <Link
+      // ปิด prefetch — ปุ่มนี้อยู่บนหัวหน้านัดหมายทุกครั้งที่เปิดหน้า
+      prefetch={false}
       href="/appointments/costs"
       aria-label={label}
       className="relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-cream-200 bg-white pl-3 pr-2 hover:bg-cream-50"

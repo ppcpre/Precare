@@ -86,10 +86,11 @@ export default async function AppointmentsPage({
       </header>
 
       <div className="flex gap-1 rounded-[10px] bg-cream-100 p-1">
-        <Link href="/appointments" className={tabCls(!past)}>
+        {/* แท็บสองอันนี้อยู่ในจอเสมอ จึงถูก prefetch ทุกครั้งที่เปิดหน้า */}
+        <Link href="/appointments" prefetch={false} className={tabCls(!past)}>
           กำลังจะถึง
         </Link>
-        <Link href="/appointments?tab=past" className={tabCls(past)}>
+        <Link href="/appointments?tab=past" prefetch={false} className={tabCls(past)}>
           ผ่านมาแล้ว
         </Link>
       </div>
@@ -122,6 +123,7 @@ export default async function AppointmentsPage({
 
       {canWrite && (
         <Link
+          prefetch={false}
           href="/appointments/new"
           aria-label="เพิ่มนัดหมาย"
           className="fixed bottom-20 right-4 flex size-14 items-center justify-center rounded-full bg-brown-700 text-white shadow-[0_4px_12px_rgba(43,36,32,0.18)] md:hidden"

@@ -26,6 +26,7 @@ export function KickCard({
 
   return (
     <Link
+      prefetch={false}
       href="/kicks"
       className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]"
     >

@@ -44,7 +44,7 @@ export function NextAppointmentCard({
             <span className="text-sm text-ink-600">นัดหมายถัดไป</span>
             <TimeBadge days={daysFromNow(appt.apptDatetime, now)} />
           </div>
-          <Link href="/appointments" className="flex items-start gap-3">
+          <Link href="/appointments" prefetch={false} className="flex items-start gap-3">
             <DateBlock iso={appt.apptDatetime} />
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="font-medium text-ink-900">
@@ -87,7 +87,7 @@ export function NextAppointmentCard({
           ลงนัดเข้าหน้าสรุปไม่ได้เลย ทั้งที่เป็นกลุ่มที่ควรได้จดคำถามไว้ล่วงหน้ามากที่สุด
           (เทสต์จับได้ตอนรันจริง) */}
       <span className="h-px bg-cream-200" />
-      <Link href="/visit" className="-my-1 flex min-h-11 items-center justify-between gap-3 py-1">
+      <Link href="/visit" prefetch={false} className="-my-1 flex min-h-11 items-center justify-between gap-3 py-1">
         <span className="flex items-center gap-2.5">
           <Stethoscope size={18} strokeWidth={1.9} className="text-peach-700" />
           <span className="flex flex-col">
@@ -110,6 +110,7 @@ export function RecentLogsCard({ logs }: { logs: WeeklyLogView[] }) {
       <div className="flex items-center justify-between">
         <span className="text-sm text-ink-600">บันทึกล่าสุด</span>
         <Link
+          prefetch={false}
           href="/health"
           className="-my-3 flex min-h-11 items-center gap-0.5 py-3 text-[13px] font-medium text-brown-700"
         >
