@@ -67,9 +67,29 @@ jobs:
         if: steps.probe.outputs.app == 'true'
         run: npx playwright install --with-deps chromium
 
+      # ลองใหม่หนึ่งรอบด้วย "เซิร์ฟเวอร์ใหม่" ก่อนตัดสินว่าแดง
+      #
+      # playwright retry ระดับเทสต์ (retries: 1) ช่วยไม่ได้ตอน wrangler dev
+      # ป่วยทั้งตัว เพราะ retry ใช้เซิร์ฟเวอร์เดิมที่กำลังพัง — เห็นมาแล้วใน run 64
+      # ที่เทสต์แดงทั้งรอบแรกและ retry พร้อม log ครบชุดของอาการใน §3.10
+      # (Unable to enqueue / Network connection lost / code had hung)
+      # ส่วนรอบใหม่ทั้งรอบจะปิดเซิร์ฟเวอร์เดิมแล้วเปิดใหม่ทั้งหมด
+      #
+      # ของที่พังจริงจะแดงทั้งสองรอบ จึงไม่ได้กลบบั๊ก — แต่ขึ้น warning ไว้ทุกครั้ง
+      # ที่รอบแรกล้ม เพื่อให้เห็นว่าอาการนี้ถี่แค่ไหน ไม่ใช่เงียบหายไป
       - name: E2E
         if: steps.probe.outputs.app == 'true'
-        run: npx playwright test
+        run: |
+          for attempt in 1 2; do
+            if npx playwright test; then
+              if [ "$attempt" = 2 ]; then
+                echo "::warning title=E2E ผ่านในรอบที่สอง::รอบแรกล้ม แล้วผ่านตอนเปิดเซิร์ฟเวอร์ใหม่ — อาการไม่เสถียรของ wrangler dev (docs/tech-notes.md §3.10)"
+              fi
+              exit 0
+            fi
+            echo "::warning title=E2E รอบที่ $attempt ล้ม::กำลังลองใหม่ด้วยเซิร์ฟเวอร์ใหม่"
+          done
+          exit 1
 
       # wrangler เขียน log ของตัวเองไว้อีกที่ ซึ่งมีรายละเอียดที่ stdout ไม่มี
       # ตอน worker ตาย stdout พ่นแค่ ✘ [ERROR] เปล่าๆ ไล่สาเหตุไม่ได้เลย
