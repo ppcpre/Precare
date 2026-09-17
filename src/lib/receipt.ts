@@ -32,15 +32,42 @@ import { MAX_COST_SATANG, parseBaht } from "@/lib/money";
  */
 export const RECEIPT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 
+/**
+ * ขอ "รายการย่อย" มาด้วย ไม่ใช่ขอแต่ยอดรวม
+ *
+ * ไม่ใช่เพื่อเอาไปแสดง แต่เพราะมันทำให้**อ่านแม่นขึ้นจริง** และได้ตัวตรวจสอบมาฟรี
+ *
+ * วัดแล้วด้วยใบเสร็จปลอม 6 ใบที่ทำให้ใกล้ภาพถ่ายจริง (เบลอ เอียงมีมิติ ตัวเล็ก
+ * ความละเอียดต่ำ เงาทับ) — prompt เดิมที่ขอแต่ยอดรวม อ่านผิด 2 ใบ
+ * และ **ผิดซ้ำเดิมทั้งสามรอบ** โดยตอบเลขมาอย่างมั่นใจ ไม่ได้บอกว่าอ่านไม่ออก
+ *   4,441.14 -> 4,755.14   ·   1,141.41 -> 1,027.41
+ * พอเปลี่ยนมาขอรายการย่อยด้วย ทั้งหกใบอ่านถูกหมด
+ *
+ * เดาว่าเพราะการไล่อ่านทีละบรรทัดบังคับให้มันดูตัวเลขจริงในตาราง
+ * แทนที่จะเดาก้อนเดียวจากบรรทัดล่างสุด
+ */
 const PROMPT =
   "อ่านใบเสร็จนี้ แล้วตอบเป็น JSON อย่างเดียว ไม่มีข้อความอื่น รูปแบบ " +
-  '{"total": number|null} ' +
+  '{"items": number[], "total": number|null} ' +
+  "items คือจำนวนเงินของรายการย่อยทุกบรรทัดก่อนบรรทัดยอดรวม " +
+  "(ไม่รวมส่วนลด ไม่รวมเงินที่รับมา ไม่รวมเงินทอน) " +
   "total คือยอดรวมสุทธิที่ต้องชำระจริงเป็นบาท หลังหักส่วนลดแล้ว " +
-  "ไม่ใช่จำนวนเงินที่รับมา ไม่ใช่เงินทอน ไม่ใช่ราคารายการใดรายการหนึ่ง " +
+  "ไม่ใช่จำนวนเงินที่รับมา ไม่ใช่เงินทอน " +
   "ถ้ารูปนี้ไม่ใช่ใบเสร็จ หรืออ่านยอดรวมไม่ออก ให้ total เป็น null";
 
 export type ReceiptRead =
-  | { status: "read"; totalSatang: number }
+  | {
+      status: "read";
+      totalSatang: number;
+      /**
+       * รายการย่อยที่อ่านได้บวกกันแล้วเท่ากับยอดรวมไหม
+       *
+       * false = อ่านได้แต่ตัวเลขขัดกันเอง ซึ่งเป็นสัญญาณว่าน่าจะอ่านผิดสักตัว
+       * ยังเอาไปเติมในช่องให้ตรวจได้ แต่ต้องเตือนให้หนักกว่าปกติ
+       * null = ไม่มีรายการย่อยให้เทียบ (ใบที่มีบรรทัดเดียว หรือโมเดลไม่ได้ให้มา)
+       */
+      verified: boolean | null;
+    }
   /** โมเดลตอบมาแล้ว แต่หายอดรวมไม่เจอหรือตัวเลขใช้ไม่ได้ */
   | { status: "not_found" }
   /** เรียกโมเดลไม่ได้เลย — ไม่มี binding (E2E), โควตาฟรีหมด, หรือ error */
@@ -55,29 +82,46 @@ export type ReceiptRead =
  * ตัวเลขผ่าน parseBaht ตัวเดียวกับที่ช่องกรอกใช้ ไม่คูณ float เอง
  * (Number("0.07") * 100 ได้ 7.000000000000001)
  */
-export function parseReceiptTotal(text: string | null | undefined): number | null {
+export function parseReceiptTotal(text: string | null | undefined): {
+  totalSatang: number;
+  verified: boolean | null;
+} | null {
   if (!text) return null;
   const match = text.match(/\{[\s\S]*?\}/);
   if (!match) return null;
 
-  let raw: unknown;
+  let parsed: { total?: unknown; items?: unknown };
   try {
-    raw = (JSON.parse(match[0]) as { total?: unknown }).total;
+    parsed = JSON.parse(match[0]) as { total?: unknown; items?: unknown };
   } catch {
     return null;
   }
 
+  const totalSatang = toSatang(parsed.total);
+  if (totalSatang == null) return null;
+
+  // รายการย่อยต้องอ่านได้ครบทุกบรรทัดถึงจะเอามาเทียบได้
+  // ถ้ามีบรรทัดไหนแปลงไม่ได้ ก็สรุปไม่ได้ว่าขัดกันหรือเราแค่อ่านไม่ครบ
+  const items = Array.isArray(parsed.items) ? parsed.items.map(toSatang) : null;
+  if (!items || items.length === 0 || items.some((x) => x == null)) {
+    return { totalSatang, verified: null };
+  }
+  const sum = (items as number[]).reduce((a, b) => a + b, 0);
+  return { totalSatang, verified: sum === totalSatang };
+}
+
+/** ตัวเลขหนึ่งตัวจากคำตอบของโมเดล -> สตางค์ (null ถ้าใช้ไม่ได้) */
+function toSatang(raw: unknown): number | null {
   let asText: string;
   if (typeof raw === "number") {
     if (!Number.isFinite(raw) || raw <= 0) return null;
-    // toFixed(2) ตัดทศนิยมเกินที่โมเดลบางทีตอบมา เช่น 2550.499999
+    // toFixed(2) ตัดทศนิยมเกินที่โมเดลบางทีตอบมา เช่น 1141.4099999999999
     asText = raw.toFixed(2);
   } else if (typeof raw === "string") {
     asText = raw;
   } else {
     return null;
   }
-
   const satang = parseBaht(asText);
   // 0 บาทจากใบเสร็จแทบแน่นอนว่าอ่านผิด ไม่ใช่ไปมาแล้วไม่เสียเงิน
   if (typeof satang !== "number" || satang <= 0 || satang > MAX_COST_SATANG) return null;
@@ -126,14 +170,16 @@ export async function readReceiptTotal(
           ],
         },
       ],
-      max_tokens: 120,
+      // ขอรายการย่อยด้วย คำตอบจึงยาวกว่าเดิม
+      max_tokens: 250,
     } as never)) as {
       response?: string;
       choices?: { message?: { content?: string } }[];
     };
     const text = res?.choices?.[0]?.message?.content ?? res?.response ?? null;
-    const totalSatang = parseReceiptTotal(text);
-    return totalSatang == null ? { status: "not_found" } : { status: "read", totalSatang };
+    const parsed = parseReceiptTotal(text);
+    if (parsed == null) return { status: "not_found" };
+    return { status: "read", totalSatang: parsed.totalSatang, verified: parsed.verified };
   } catch {
     // ไม่ log: error จาก AI อาจพ่วงเนื้อหาคำขอมาด้วย
     // โควตาฟรีรายวันหมดก็มาทางนี้ — ผู้ใช้กรอกเองได้ ไม่ใช่เรื่องที่ต้องล้ม

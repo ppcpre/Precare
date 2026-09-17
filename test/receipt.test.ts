@@ -3,25 +3,25 @@ import { RECEIPT_MODEL, parseReceiptTotal, readReceiptTotal, toBase64 } from "@/
 
 describe("parseReceiptTotal — แปลงคำตอบของโมเดลเป็นสตางค์", () => {
   it("คำตอบจริงที่ได้จาก Llama 4 Scout ตอนทดสอบ", () => {
-    expect(parseReceiptTotal('{"total": 2550.5}')).toBe(255050);
+    expect(parseReceiptTotal('{"total": 2550.5}')?.totalSatang).toBe(255050);
   });
 
   it("คำตอบจริงที่ได้จาก Qwen ตอนทดสอบ — มีบรรทัดว่างนำหน้า", () => {
-    expect(parseReceiptTotal('\n\n{"total": 2550.50}')).toBe(255050);
+    expect(parseReceiptTotal('\n\n{"total": 2550.50}')?.totalSatang).toBe(255050);
   });
 
   it("โมเดลห่อด้วย code fence", () => {
-    expect(parseReceiptTotal('```json\n{"total": 1200}\n```')).toBe(120000);
+    expect(parseReceiptTotal('```json\n{"total": 1200}\n```')?.totalSatang).toBe(120000);
   });
 
   it("ตัวเลขเป็นข้อความที่มีจุลภาค", () => {
-    expect(parseReceiptTotal('{"total": "2,550.50"}')).toBe(255050);
+    expect(parseReceiptTotal('{"total": "2,550.50"}')?.totalSatang).toBe(255050);
   });
 
   /** ทศนิยมลอยของ float — ต้องไม่ได้ 255049 หรือ 255050.00000001 */
   it("ทศนิยมเพี้ยนจาก float ต้องปัดเป็นสตางค์ที่ถูก", () => {
-    expect(parseReceiptTotal('{"total": 2550.4999999}')).toBe(255050);
-    expect(parseReceiptTotal('{"total": 0.07}')).toBe(7);
+    expect(parseReceiptTotal('{"total": 2550.4999999}')?.totalSatang).toBe(255050);
+    expect(parseReceiptTotal('{"total": 0.07}')?.totalSatang).toBe(7);
   });
 
   it("อ่านไม่ออก = null ไม่ใช่ 0", () => {
@@ -89,7 +89,7 @@ describe("readReceiptTotal — ห้ามทำให้การแนบใ�
       },
     };
     const res = await readReceiptTotal(ai as never, img, "image/webp");
-    expect(res).toEqual({ status: "read", totalSatang: 35050 });
+    expect(res).toEqual({ status: "read", totalSatang: 35050, verified: null });
     expect(captured.model).toBe(RECEIPT_MODEL);
 
     // การใส่ไบต์ใน field `image` ทำให้โมเดลมองไม่เห็นรูปเลยทั้งที่ไม่ error
@@ -108,11 +108,47 @@ describe("readReceiptTotal — ห้ามทำให้การแนบใ�
 
   it("รองรับคำตอบรูปแบบเก่าที่อยู่ใน field response", async () => {
     const ai = { run: async () => ({ response: '{"total": 800}' }) };
-    expect(await readReceiptTotal(ai as never, img, "image/webp")).toEqual({ status: "read", totalSatang: 80000 });
+    expect(await readReceiptTotal(ai as never, img, "image/webp")).toEqual({
+      status: "read", totalSatang: 80000, verified: null,
+    });
   });
 
   it("ไม่ใช้โมเดลที่ตอบกลับมาในชื่อ external", () => {
     expect(RECEIPT_MODEL).not.toContain("gemma-4");
     expect(RECEIPT_MODEL.startsWith("@cf/")).toBe(true);
+  });
+});
+
+describe("ตัวตรวจสอบ: รายการย่อยต้องบวกกันได้เท่ายอดรวม", () => {
+  /**
+   * มีเพราะวัดมาแล้วว่าโมเดลตอบเลขผิดอย่างมั่นใจได้ และผิดซ้ำเดิมทุกรอบ
+   * ตัวเลขที่ขัดกันเองคือสัญญาณเดียวที่เรามีว่าน่าจะอ่านพลาด
+   */
+  it("บวกกันได้เท่ายอดรวม = ผ่าน", () => {
+    expect(parseReceiptTotal('{"items":[4000,441.14],"total":4441.14}')).toEqual({
+      totalSatang: 444114, verified: true,
+    });
+  });
+
+  it("บวกกันไม่เท่า = ยังอ่านได้ แต่ติดธงว่าไม่สอดคล้อง", () => {
+    // เคสจริงที่เจอ: total อ่านเป็น 4,755.14 ทั้งที่รายการย่อยรวมได้ 4,441.14
+    expect(parseReceiptTotal('{"items":[4000,441.14],"total":4755.14}')).toEqual({
+      totalSatang: 475514, verified: false,
+    });
+  });
+
+  it("ไม่มีรายการย่อยให้เทียบ = ไม่สรุปว่าผิด", () => {
+    expect(parseReceiptTotal('{"items":[],"total":411.41}')?.verified).toBeNull();
+    expect(parseReceiptTotal('{"total":411.41}')?.verified).toBeNull();
+  });
+
+  it("รายการย่อยมีบรรทัดที่อ่านไม่ได้ = สรุปไม่ได้ ไม่ใช่ตัดสินว่าผิด", () => {
+    expect(parseReceiptTotal('{"items":[4000,"?"],"total":4441.14}')?.verified).toBeNull();
+  });
+
+  /** ทศนิยมลอยของ float — 341.10 + 100 ต้องได้ 441.10 พอดี ไม่ใช่ 441.09999 */
+  it("บวกบนสตางค์ ไม่ใช่บน float", () => {
+    expect(parseReceiptTotal('{"items":[341.10,100],"total":441.10}')?.verified).toBe(true);
+    expect(parseReceiptTotal('{"items":[941.41,200],"total":1141.41}')?.verified).toBe(true);
   });
 });
