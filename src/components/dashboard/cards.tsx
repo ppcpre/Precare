@@ -85,20 +85,25 @@ export function NextAppointmentCard({
 
           ต้องอยู่ทั้งสองกรณี — ตอนแรกใส่ไว้เฉพาะกรณีมีนัด ผลคือคนที่ยังไม่ได้
           ลงนัดเข้าหน้าสรุปไม่ได้เลย ทั้งที่เป็นกลุ่มที่ควรได้จดคำถามไว้ล่วงหน้ามากที่สุด
-          (เทสต์จับได้ตอนรันจริง) */}
-      <span className="h-px bg-cream-200" />
-      <Link href="/visit" prefetch={false} className="-my-1 flex min-h-11 items-center justify-between gap-3 py-1">
-        <span className="flex items-center gap-2.5">
-          <Stethoscope size={18} strokeWidth={1.9} className="text-peach-700" />
-          <span className="flex flex-col">
-            <span className="text-[15px] font-medium text-ink-900">สรุปให้หมอดู</span>
-            <span className="text-xs text-ink-400">
-              รวมข้อมูลตั้งแต่ครั้งที่แล้ว
-              {openQuestions > 0 ? ` · มีคำถาม ${openQuestions} ข้อ` : ""}
-            </span>
+          (เทสต์จับได้ตอนรันจริง)
+
+          บีบเหลือบรรทัดเดียว: ตัดคำอธิบายกับเส้นคั่นออก เหลือไอคอนเล็กกับชื่อ
+          สูงจาก 2 บรรทัด + เส้นคั่น เหลือแถวเดียว — คงข้อความไว้เพราะไอคอนล้วน
+          หาไม่เจอ (บทเรียนจากไอคอนดินสอบนการ์ดนัด) จำนวนคำถามที่ค้างย้ายมาเป็น
+          ตัวเลขท้ายชื่อแทนบรรทัดที่สอง */}
+      <Link
+        href="/visit"
+        prefetch={false}
+        className="-mb-1 -mt-0.5 flex min-h-11 items-center gap-2 text-[13px] font-medium text-brown-700"
+      >
+        <Stethoscope size={16} strokeWidth={1.9} />
+        สรุปให้หมอดู
+        {openQuestions > 0 && (
+          <span className="rounded-full bg-cream-100 px-1.5 py-px text-[11px] tabular-nums text-ink-600">
+            {openQuestions}
           </span>
-        </span>
-        <ChevronRight size={18} strokeWidth={2} className="shrink-0 text-ink-400" />
+        )}
+        <ChevronRight size={14} strokeWidth={2} className="text-ink-400" />
       </Link>
     </Card>
   );
