@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { HeartPulse, Plus } from "lucide-react";
+import { Footprints, HeartPulse, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LogCard } from "@/components/health/log-card";
@@ -38,20 +38,36 @@ export default async function HealthPage() {
 
   return (
     <div className="flex flex-col gap-4 pb-20">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-ink-900">บันทึกสุขภาพ</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* ทางเข้านับลูกดิ้น
+              เดิมมีทางเดียวคือการ์ดบนหน้าแรก ซึ่งโผล่ตั้งแต่สัปดาห์ 28 เท่านั้น
+              ใครที่ไม่ได้เลื่อนหน้าแรกจึงไม่รู้ว่ามีฟีเจอร์นี้อยู่
+
+              แสดงตลอด ไม่รอสัปดาห์ 28 — หน้า /kicks อธิบายเองอยู่แล้วว่าทำไม
+              ยังนับไม่ได้ และบอกทางไปหาหมอถ้าลูกดิ้นน้อยลง การซ่อนปุ่มไว้
+              ทำให้คนไม่รู้ว่ามีของนี้ ซึ่งแย่กว่าเห็นแล้วกดไปเจอคำอธิบาย */}
+          <Link
+            href="/kicks"
+            className="flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
+          >
+            <Footprints size={17} strokeWidth={1.9} />
+            นับลูกดิ้น
+          </Link>
         {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join
             ไม่ได้ merge class ที่ชนกัน ตัวปุ่มมี inline-flex เป็น base อยู่แล้ว
             พอเติม hidden เข้าไปทั้งคู่จะอยู่ใน class list แล้วลำดับใน CSS
             เป็นตัวตัดสิน ซึ่ง inline-flex ชนะ ปุ่มเลยโผล่บนมือถือคู่กับ FAB */}
-        {canWrite && (
-          <span className="hidden md:block">
-            <ButtonLink href="/health/new" variant="secondary">
-              <Plus size={18} strokeWidth={2} />
-              เพิ่มบันทึก
-            </ButtonLink>
-          </span>
-        )}
+          {canWrite && (
+            <span className="hidden md:block">
+              <ButtonLink href="/health/new" variant="secondary">
+                <Plus size={18} strokeWidth={2} />
+                เพิ่มบันทึก
+              </ButtonLink>
+            </span>
+          )}
+        </div>
       </header>
 
       {logs.length === 0 ? (

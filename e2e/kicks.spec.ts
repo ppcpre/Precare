@@ -34,6 +34,16 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
     await expectNoReassurance(page);
   });
 
+  await test.step("เข้าถึงได้จากปุ่มมุมขวาบนของหน้าสุขภาพ ไม่ใช่มีแต่การ์ดหน้าแรก", async () => {
+    // การ์ดบนหน้าแรกโผล่ตั้งแต่สัปดาห์ 28 เท่านั้น ตอนนี้ยัง 24 สัปดาห์
+    // ปุ่มนี้จึงต้องเห็นอยู่ เพื่อให้รู้ว่ามีฟีเจอร์นี้อยู่ก่อนถึงเวลานับ
+    // goto ธรรมดา — หน้าสุขภาพมีแต่ลิงก์ ไม่มีปุ่มให้รอ hydrate
+    await page.goto("/health");
+    await page.getByRole("link", { name: "นับลูกดิ้น" }).click();
+    await page.waitForURL(/\/kicks$/, { timeout: 30_000 });
+    await expect(page.getByText("ยังไม่ถึงช่วงที่นับได้")).toBeVisible();
+  });
+
   await test.step("เลื่อน LMP ให้ถึงสัปดาห์ 30 แล้วเริ่มนับได้", async () => {
     await gotoApp(page, "/profile/pregnancy");
     const lmp = new Date();
