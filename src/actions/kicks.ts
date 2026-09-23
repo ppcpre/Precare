@@ -197,3 +197,33 @@ export const discardKickSession = editorAction
     revalidatePath("/dashboard");
     return { ok: true };
   });
+
+/**
+ * ลบรอบที่นับจบไปแล้ว
+ *
+ * ต่างจาก discardKickSession ที่ลบได้เฉพาะรอบที่**ยังนับอยู่** (กดเริ่มผิด แล้วทิ้ง)
+ * ตัวนี้ลบของที่บันทึกไว้แล้ว เช่น กดเริ่มค้างไว้ข้ามคืนจนเวลาเพี้ยน
+ * หรือให้คนอื่นลองเล่นแล้วติดอยู่ในประวัติ
+ *
+ * ลบจริง ไม่ใช่ซ่อน — ค่าเฉลี่ยของตัวเองคำนวณจากรอบที่เหลือ
+ * ถ้าเก็บรอบขยะไว้ ค่าเฉลี่ยจะเพี้ยนและ "ช้ากว่าปกติของคุณ" จะเตือนผิด
+ */
+export const deleteKickSession = editorAction
+  .metadata({ name: "deleteKickSession" })
+  .inputSchema(idInput)
+  .action(async ({ parsedInput, ctx }) => {
+    const res = await ctx.db
+      .delete(trackingSessions)
+      .where(
+        and(
+          eq(trackingSessions.id, parsedInput.sessionId),
+          eq(trackingSessions.familyId, ctx.familyId),
+          eq(trackingSessions.kind, "kick"),
+        ),
+      );
+    if (!res.meta.changes) throw new AppError("ไม่พบรอบการนับนี้");
+    revalidatePath("/kicks");
+    revalidatePath("/dashboard");
+    revalidatePath("/visit");
+    return { ok: true };
+  });

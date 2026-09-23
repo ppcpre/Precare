@@ -13,6 +13,7 @@ import {
 } from "@/lib/kicks";
 import { KickCounter } from "@/components/kicks/counter";
 import { StartKickButton } from "@/components/kicks/start-button";
+import { DeleteKickSession } from "@/components/kicks/delete-session";
 
 export const metadata = { title: "นับลูกดิ้น · Pre Care" };
 
@@ -59,7 +60,7 @@ export default async function KicksPage() {
         ถ้ารู้สึกว่าลูกดิ้นน้อยลงหรือผิดไปจากเดิม ให้ติดต่อโรงพยาบาลทันที ไม่ต้องรอนับให้ครบ
       </p>
 
-      {sessions.length > 0 && <History sessions={sessions} avg={avg} />}
+      {sessions.length > 0 && <History sessions={sessions} avg={avg} canEdit={canEdit} />}
     </div>
   );
 }
@@ -76,36 +77,35 @@ function StartPanel({
   canEdit: boolean;
 }) {
   // ก่อนสัปดาห์ที่กำหนด การดิ้นยังไม่เป็นเวลา นับไปก็ตีความไม่ได้
-  if (week != null && week < START_WEEK) {
-    const left = START_WEEK - week;
-    return (
-      <div className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[15px] font-medium text-ink-900">ยังไม่ถึงช่วงที่นับได้</span>
-          <span className="rounded-full bg-cream-100 px-3 py-1 text-xs text-ink-600">
-            เริ่มสัปดาห์ที่ {START_WEEK}
-          </span>
-        </div>
-        <p className="text-[13px] leading-relaxed text-ink-600">
-          ตอนนี้อายุครรภ์ {week} สัปดาห์ การดิ้นยังไม่เป็นเวลา จึงยังนับเป็นรูปแบบไม่ได้
-          ระบบจะเปิดให้เริ่มนับเองเมื่อถึงสัปดาห์ที่ {START_WEEK}
-        </p>
-        <div className="flex items-center gap-2.5">
-          <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-cream-200">
-            <span
-              className="block h-full rounded-full bg-brown-300"
-              style={{ width: `${Math.round((week / START_WEEK) * 100)}%` }}
-            />
-          </span>
-          <span className="text-xs text-ink-400">อีก {left} สัปดาห์</span>
-        </div>
-      </div>
-    );
-  }
+  /**
+   * ก่อนถึงสัปดาห์ที่กำหนด — **บอกไว้ แต่ไม่ห้าม**
+   *
+   * เดิมซ่อนปุ่มเริ่มนับทั้งหมด ผลคือคนที่อยากลองใช้ดูก่อนทำอะไรไม่ได้เลย
+   * ตอนนี้เหลือเป็นป้ายบอกว่าช่วงนี้ตัวเลขยังตีความไม่ได้ แล้วปล่อยให้กดนับได้
+   *
+   * ⚠️ ข้อความต้องไม่แปลว่า "ไม่เป็นไร" หรือ "ปกติ" — บอกแค่ว่าการดิ้นช่วงนี้
+   *    ยังไม่เป็นเวลา ตัวเลขจึงเทียบอะไรไม่ได้ ส่วนคำเตือนให้ติดต่อโรงพยาบาล
+   *    เมื่อลูกดิ้นน้อยลง อยู่ท้ายหน้าทุกสถานะอยู่แล้ว
+   */
+  const tooEarly = week != null && week < START_WEEK;
 
   const last = sessions[0];
   return (
     <div className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
+      {tooEarly && (
+        <div className="flex flex-col gap-2 rounded-sm bg-cream-100 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-medium text-ink-900">ยังไม่ถึงช่วงที่นับได้</span>
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] text-ink-600">
+              เริ่มสัปดาห์ที่ {START_WEEK}
+            </span>
+          </div>
+          <p className="text-xs leading-relaxed text-ink-600">
+            ตอนนี้อายุครรภ์ {week} สัปดาห์ การดิ้นยังไม่เป็นเวลา ตัวเลขที่นับได้จึงยังเทียบอะไรไม่ได้
+            — ลองใช้ดูก่อนได้ และลบรอบที่ไม่ต้องการทิ้งได้
+          </p>
+        </div>
+      )}
       <p className="text-[13px] leading-relaxed text-ink-600">
         แนะนำให้นับวันละครั้ง เวลาเดิมทุกวัน เพราะลูกมีช่วงตื่นเป็นเวลาของตัวเอง
       </p>
@@ -137,7 +137,15 @@ function Cell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function History({ sessions, avg }: { sessions: SessionView[]; avg: number | null }) {
+function History({
+  sessions,
+  avg,
+  canEdit,
+}: {
+  sessions: SessionView[];
+  avg: number | null;
+  canEdit: boolean;
+}) {
   // แท่งเทียบกันเองในชุดที่แสดง เห็นได้ทันทีว่าวันไหนต่างจากวันอื่น
   const recent = sessions.slice(0, 7).reverse();
   const max = Math.max(...recent.map((s) => s.durationMs ?? 0), 1);
@@ -189,16 +197,21 @@ function History({ sessions, avg }: { sessions: SessionView[]; avg: number | nul
                 {slow && <span className="text-[11px] text-danger">ช้ากว่าปกติของคุณ</span>}
                 {s.note && <span className="truncate text-[11px] text-ink-400">{s.note}</span>}
               </span>
-              <span className="flex shrink-0 flex-col items-end gap-0.5">
-                <span
-                  className={cn(
-                    "text-[15px] font-semibold tabular-nums",
-                    slow ? "text-danger" : "text-ink-900",
-                  )}
-                >
-                  {s.durationMs != null ? formatMinutes(s.durationMs) : "—"}
+              <span className="flex shrink-0 items-center gap-3">
+                <span className="flex flex-col items-end gap-0.5">
+                  <span
+                    className={cn(
+                      "text-[15px] font-semibold tabular-nums",
+                      slow ? "text-danger" : "text-ink-900",
+                    )}
+                  >
+                    {s.durationMs != null ? formatMinutes(s.durationMs) : "—"}
+                  </span>
+                  <span className="text-[11px] text-ink-400">{s.count} ครั้ง</span>
                 </span>
-                <span className="text-[11px] text-ink-400">{s.count} ครั้ง</span>
+                {canEdit && (
+                  <DeleteKickSession id={s.id} label={`${thaiDate(s.startedAt)} ${s.startedAt.slice(11, 16)}`} />
+                )}
               </span>
             </div>
           );

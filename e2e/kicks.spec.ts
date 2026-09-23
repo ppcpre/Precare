@@ -28,9 +28,10 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
   await test.step("อายุครรภ์ 24 สัปดาห์ ยังนับไม่ได้ แต่ยังบอกทางไปหาหมอ", async () => {
     // goto ธรรมดา หน้านี้ยังไม่มีปุ่มอะไรให้กด จึงไม่มี client component ให้รอ hydrate
     await page.goto("/kicks");
+    // เป็นป้ายบอก ไม่ใช่ประตูปิด — ต้องกดนับได้ถ้าอยากลอง
     await expect(page.getByText("ยังไม่ถึงช่วงที่นับได้")).toBeVisible();
     await expect(page.getByText(/ให้ติดต่อโรงพยาบาลทันที/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "เริ่มนับ" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "เริ่มนับ" })).toBeVisible();
     await expectNoReassurance(page);
   });
 
@@ -139,4 +140,28 @@ test("เริ่มซ้ำต้องได้รอบเดิม ไม�
   await other.goto("/kicks");
   await expect(other.getByText("9 ครั้ง", { exact: true })).toBeVisible();
   await ctx2.close();
+});
+
+test("ลบรอบที่นับไปแล้วได้ และค่าเฉลี่ยคิดใหม่จากรอบที่เหลือ", async ({ page }) => {
+  await signUp(page, uniqueEmail("kickdel"), "แม่ลบรอบ");
+  await completeOnboarding(page, "ครอบครัวลบรอบ");
+
+  await test.step("นับหนึ่งรอบจนจบ ตั้งแต่ก่อนสัปดาห์ 28", async () => {
+    // ไม่ต้องเลื่อน LMP — ตอนนี้กดนับได้เลยแม้ยังไม่ถึงสัปดาห์ที่กำหนด
+    await page.goto("/kicks");
+    await page.getByRole("button", { name: "เริ่มนับ" }).click();
+    const tap = page.getByRole("button", { name: /บันทึกการดิ้น/ });
+    await expect(tap).toBeVisible({ timeout: 30_000 });
+    for (let i = 0; i < 10; i++) await tap.click();
+    await expect(page.getByText("ครบ 10 ครั้งแล้ว")).toBeVisible();
+
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+    await expect(page.getByText("รอบที่ผ่านมา")).toBeVisible({ timeout: 30_000 });
+  });
+
+  await test.step("ลบแล้วหายจากประวัติจริง", async () => {
+    page.on("dialog", (d) => void d.accept());
+    await page.getByRole("button", { name: /^ลบรอบ / }).first().click();
+    await expect(page.getByText("รอบที่ผ่านมา")).toHaveCount(0, { timeout: 30_000 });
+  });
 });
