@@ -161,11 +161,22 @@ export const undoKick = editorAction
 
 export const finishKickSession = editorAction
   .metadata({ name: "finishKickSession" })
-  .inputSchema(idInput.extend({ at: localTime, note: z.string().max(500).nullable().optional() }))
+  .inputSchema(
+    idInput.extend({
+      at: localTime,
+      note: z.string().max(500).nullable().optional(),
+      /** 1-5 ตามวิธีของ Count the Kicks — ไม่บังคับ เผื่อรอบที่ปิดก่อนครบเป้า */
+      strength: z.number().int().min(1).max(5).nullable().optional(),
+    }),
+  )
   .action(async ({ parsedInput, ctx }) => {
     const res = await ctx.db
       .update(trackingSessions)
-      .set({ endedAt: parsedInput.at, note: parsedInput.note?.trim() || null })
+      .set({
+        endedAt: parsedInput.at,
+        note: parsedInput.note?.trim() || null,
+        strength: parsedInput.strength ?? null,
+      })
       .where(
         and(
           eq(trackingSessions.id, parsedInput.sessionId),

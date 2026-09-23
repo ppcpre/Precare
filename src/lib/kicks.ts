@@ -87,7 +87,11 @@ export type SessionRow = {
   targetCount: number;
   events: string;
   note: string | null;
+  strength: number | null;
 };
+
+/** 1-5 ตามวิธีของ Count the Kicks — ถามหลังครบเป้า */
+export const STRENGTH_LABELS = ["แผ่วมาก", "ค่อนข้างแผ่ว", "ปกติ", "ค่อนข้างแรง", "แรงมาก"] as const;
 
 export type SessionView = {
   id: string;
@@ -99,7 +103,28 @@ export type SessionView = {
   /** null เมื่อยังนับอยู่ — ต้องคำนวณจากเวลาปัจจุบันฝั่ง client แทน */
   durationMs: number | null;
   note: string | null;
+  /** ความแรงที่แม่ให้ไว้ตอนจบรอบ 1-5 — null ถ้ารอบเก่าที่ยังไม่มีฟิลด์นี้ */
+  strength: number | null;
 };
+
+/**
+ * เวลาที่ใช้ "จนถึงครั้งที่ครบเป้า" ไม่ใช่จนถึงตอนกดบันทึก
+ *
+ * เดิมคิดจาก endedAt - startedAt ซึ่ง endedAt คือตอนกดปุ่มบันทึก
+ * ถ้าครบ 10 แล้วมัวพิมพ์โน้ตอีกสามนาทีค่อยกด เวลาที่เก็บจะเกินจริงไปสามนาที
+ * แล้วค่าเฉลี่ยกับป้าย "ช้ากว่าปกติของคุณ" ก็เพี้ยนตาม
+ *
+ * รอบที่ปิดก่อนครบเป้า (กดหยุดเอง หรือถูกปิดเพราะลืมทิ้งไว้)
+ * ยังใช้ endedAt เพราะไม่มีครั้งที่ครบเป้าให้อ้างอิง
+ */
+export function durationOf(row: SessionRow, events: KickEvent[]): number | null {
+  const start = new Date(row.startedAt).getTime();
+  if (events.length >= row.targetCount) {
+    const at = events[row.targetCount - 1].at;
+    return Math.max(0, new Date(at).getTime() - start);
+  }
+  return row.endedAt ? Math.max(0, new Date(row.endedAt).getTime() - start) : null;
+}
 
 export function toView(row: SessionRow): SessionView {
   const events = parseEvents(row.events);
@@ -110,19 +135,12 @@ export function toView(row: SessionRow): SessionView {
     count: events.length,
     target: row.targetCount,
     events,
-    durationMs: row.endedAt
-      ? Math.max(0, new Date(row.endedAt).getTime() - new Date(row.startedAt).getTime())
-      : null,
+    durationMs: row.endedAt ? durationOf(row, events) : null,
     note: row.note,
+    strength: row.strength,
   };
 }
 
-/**
- * เกินเวลาที่ตำราใช้เป็นเกณฑ์แล้วหรือยัง
- *
- * คืนแค่ true/false ไม่ได้แปลว่าผิดปกติ — เป็นแค่ข้อเท็จจริงว่าเลยเกณฑ์เวลาแล้ว
- * หน้าที่เรียกใช้ต้องเขียนข้อความเอง และห้ามเขียนในทางกลับกันว่า "ยังไม่เกิน = ปกติ"
- */
 export const isOverTimeLimit = (elapsed: number) => elapsed >= SLOW_MINUTES * 60_000;
 
 /**

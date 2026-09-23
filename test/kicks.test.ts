@@ -23,6 +23,7 @@ const session = (p: Partial<SessionView> = {}): SessionView => ({
   count: 10,
   target: 10,
   events: [],
+  strength: null,
   durationMs: 26 * 60_000,
   note: null,
   ...p,
@@ -138,6 +139,7 @@ describe("toView()", () => {
       targetCount: 10,
       events: '[{"at":"2026-08-28T20:05:00"},{"at":"2026-08-28T20:09:00"}]',
       note: null,
+      strength: null,
     });
     expect(v.count).toBe(2);
     expect(v.durationMs).toBe(26 * 60_000);
@@ -151,7 +153,62 @@ describe("toView()", () => {
       targetCount: 10,
       events: "[]",
       note: null,
+      strength: null,
     });
     expect(v.durationMs).toBeNull();
+  });
+});
+
+describe("เวลาที่ใช้ ต้องนับถึงครั้งที่ครบเป้า ไม่ใช่ถึงตอนกดบันทึก", () => {
+  /**
+   * เดิมคิดจาก endedAt - startedAt ซึ่ง endedAt คือตอนกดปุ่มบันทึก
+   * ครบ 10 ตอนนาทีที่ 20 แล้วมัวพิมพ์โน้ตถึงนาทีที่ 24 ค่าที่เก็บจะเกินจริง 4 นาที
+   * แล้วค่าเฉลี่ยกับป้าย "ช้ากว่าปกติของคุณ" ก็เพี้ยนตาม
+   */
+  const events = (n: number) =>
+    JSON.stringify(
+      Array.from({ length: n }, (_, i) => ({
+        at: `2026-08-28T20:${String(2 * (i + 1)).padStart(2, "0")}:00`,
+      })),
+    );
+
+  it("ครบเป้าแล้ว ใช้เวลาถึงครั้งที่ 10 (นาทีที่ 20) ไม่ใช่ถึงตอนกดบันทึก (นาทีที่ 24)", () => {
+    const v = toView({
+      id: "s1",
+      startedAt: "2026-08-28T20:00:00",
+      endedAt: "2026-08-28T20:24:00",
+      targetCount: 10,
+      events: events(10),
+      note: null,
+      strength: 3,
+    });
+    expect(v.durationMs).toBe(20 * 60_000);
+    expect(v.strength).toBe(3);
+  });
+
+  it("แตะเกินเป้าก็ยังคิดถึงครั้งที่ 10 เท่านั้น", () => {
+    const v = toView({
+      id: "s1",
+      startedAt: "2026-08-28T20:00:00",
+      endedAt: "2026-08-28T20:40:00",
+      targetCount: 10,
+      events: events(15),
+      note: null,
+      strength: null,
+    });
+    expect(v.durationMs).toBe(20 * 60_000);
+  });
+
+  it("ปิดก่อนครบเป้า ยังใช้เวลาถึงตอนปิด เพราะไม่มีครั้งที่ครบเป้าให้อ้างอิง", () => {
+    const v = toView({
+      id: "s1",
+      startedAt: "2026-08-28T20:00:00",
+      endedAt: "2026-08-28T20:15:00",
+      targetCount: 10,
+      events: events(4),
+      note: null,
+      strength: null,
+    });
+    expect(v.durationMs).toBe(15 * 60_000);
   });
 });

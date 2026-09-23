@@ -64,6 +64,13 @@
       "when": 1789353563603,
       "tag": "0008_receipt_total",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790179002768,
+      "tag": "0009_kick_strength",
+      "breakpoints": true
     }
   ]
 }

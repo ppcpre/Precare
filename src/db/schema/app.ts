@@ -288,6 +288,14 @@ export const trackingSessions = sqliteTable(
     /** JSON: [{ "at": "2026-08-28T20:14:00" }] — เวลาท้องถิ่นแบบไม่มี timezone */
     events: text("events").notNull().default("[]"),
     note: text("note"),
+    /**
+     * ความแรงของการดิ้นในรอบนั้น 1-5 (1 = แผ่วๆ, 5 = แรงมาก)
+     *
+     * มีเฉพาะการนับลูกดิ้น และบันทึกตอนจบรอบ ตามวิธีของ Count the Kicks
+     * ซึ่งบอกให้ติดต่อแพทย์เมื่อ **ความแรงเปลี่ยน** ไม่ใช่แค่เวลาที่ใช้เปลี่ยน
+     * เวลาที่ใช้จับได้จากตัวเลข แต่ความแรงมีแต่แม่เท่านั้นที่รู้
+     */
+    strength: integer("strength"),
   },
   (t) => [
     index("idx_tracking_family").on(t.familyId, t.kind, t.startedAt),

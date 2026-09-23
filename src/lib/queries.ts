@@ -154,6 +154,7 @@ const KICK_COLS = {
   targetCount: trackingSessions.targetCount,
   events: trackingSessions.events,
   note: trackingSessions.note,
+  strength: trackingSessions.strength,
 };
 
 /**

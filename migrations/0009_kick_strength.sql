@@ -1,0 +1,1 @@
+ALTER TABLE `tracking_sessions` ADD `strength` integer;

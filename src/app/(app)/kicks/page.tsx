@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { thaiDate } from "@/lib/format";
 import {
   START_WEEK,
+  STRENGTH_LABELS,
   averageMs,
   formatMinutes,
   isSlowVsAverage,
@@ -195,6 +196,11 @@ function History({
                   {thaiDate(s.startedAt)} · {s.startedAt.slice(11, 16)}
                 </span>
                 {slow && <span className="text-[11px] text-danger">ช้ากว่าปกติของคุณ</span>}
+                {s.strength != null && (
+                  <span className="text-[11px] text-ink-400">
+                    แรง {s.strength}/5 · {STRENGTH_LABELS[s.strength - 1]}
+                  </span>
+                )}
                 {s.note && <span className="truncate text-[11px] text-ink-400">{s.note}</span>}
               </span>
               <span className="flex shrink-0 items-center gap-3">

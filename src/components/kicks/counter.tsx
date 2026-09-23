@@ -10,6 +10,7 @@ import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/cn";
 import {
   SLOW_MINUTES,
+  STRENGTH_LABELS,
   elapsedMs,
   formatDuration,
   isOverTimeLimit,
@@ -33,6 +34,7 @@ export function KickCounter({ session, canEdit }: { session: SessionView; canEdi
   // ถ้ารอ server ตอบก่อนค่อยขยับเลข จะรู้สึกหน่วงทุกครั้งบนเน็ตช้า
   const [times, setTimes] = useState<string[]>(session.events.map((e) => e.at));
   const [note, setNote] = useState("");
+  const [strength, setStrength] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
 
   const record = useAction(recordKick, { onError: () => setFailed(true) });
@@ -93,11 +95,13 @@ export function KickCounter({ session, canEdit }: { session: SessionView; canEdi
         <FinishPanel
           session={session}
           elapsed={elapsed}
+          strength={strength}
+          setStrength={setStrength}
           note={note}
           setNote={setNote}
           canEdit={canEdit}
           pending={finish.isPending}
-          onFinish={() => finish.execute({ sessionId: session.id, at: localIso(), note })}
+          onFinish={() => finish.execute({ sessionId: session.id, at: localIso(), note, strength })}
         />
       ) : (
         <>
@@ -134,10 +138,22 @@ export function KickCounter({ session, canEdit }: { session: SessionView; canEdi
 
           {/* การดิ้นรัวๆ ติดกันนับเป็นครั้งเดียวตามหลักการนับสากล
               ถ้าไม่บอก ผู้ใช้จะแตะรัวแล้วได้ตัวเลขที่ไม่มีความหมายทางการแพทย์ */}
-          <p className="flex items-start gap-2 rounded-sm bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
+          <div className="flex items-start gap-2 rounded-sm bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
             <AlertCircle size={15} strokeWidth={1.9} className="mt-0.5 shrink-0 text-ink-400" />
-            ดิ้นรัวๆ ติดกันนับเป็น 1 ครั้ง — แตะอีกทีเมื่อหยุดแล้วดิ้นใหม่
-          </p>
+            <span className="flex flex-col gap-1">
+              <span>
+                <span className="font-medium text-ink-900">นับเป็น 1 ครั้ง:</span> เตะ ต่อย ถีบ
+                พลิกตัว หรือไถตัวไปมา
+              </span>
+              <span>ดิ้นรัวๆ ติดกันชุดเดียวนับเป็น 1 ครั้ง — แตะอีกทีเมื่อหยุดแล้วดิ้นใหม่</span>
+              {/* สะอึกเป็นจังหวะสม่ำเสมอและไม่ใช่การเคลื่อนไหวที่ลูกตั้งใจ
+                  ถ้านับรวมเข้าไปจะได้ตัวเลขที่ดูดีกว่าความจริง ซึ่งอันตรายกว่าไม่นับ */}
+              <span>
+                <span className="font-medium text-ink-900">ไม่นับ:</span> อาการสะอึกของลูก
+                (เป็นจังหวะสม่ำเสมอ ไม่ใช่การดิ้น)
+              </span>
+            </span>
+          </div>
         </>
       )}
 
@@ -207,6 +223,8 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
 function FinishPanel({
   session,
   elapsed,
+  strength,
+  setStrength,
   note,
   setNote,
   canEdit,
@@ -215,12 +233,29 @@ function FinishPanel({
 }: {
   session: SessionView;
   elapsed: number;
+  strength: number | null;
+  setStrength: (v: number) => void;
   note: string;
   setNote: (v: string) => void;
   canEdit: boolean;
   pending: boolean;
   onFinish: () => void;
 }) {
+  /**
+   * เวลาที่โชว์ต้องเป็น "จนถึงครั้งที่ครบเป้า" ไม่ใช่เวลาที่ยังเดินอยู่
+   *
+   * ถ้าใช้ elapsed ที่ยังวิ่ง ตัวเลขจะเพิ่มขึ้นเรื่อยๆ ระหว่างเลือกความแรง
+   * และพิมพ์โน้ต ทั้งที่ลูกดิ้นครบไปแล้ว — ตัวเลขบนจอต้องตรงกับที่บันทึกลงฐานข้อมูล
+   */
+  const toTarget =
+    session.events.length >= session.target
+      ? Math.max(
+          0,
+          new Date(session.events[session.target - 1].at).getTime() -
+            new Date(session.startedAt).getTime(),
+        )
+      : elapsed;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2.5 py-4">
@@ -230,11 +265,44 @@ function FinishPanel({
         <p className="text-xl font-semibold text-ink-900">
           ครบ {session.target} ครั้งแล้ว
         </p>
-        <p className="text-[15px] text-ink-600">ใช้เวลา {formatDuration(elapsed)}</p>
+        <p className="text-[15px] text-ink-600">ใช้เวลา {formatDuration(toTarget)}</p>
       </div>
 
       {canEdit && (
         <>
+          {/* ถามความแรงหลังครบเป้า ตามวิธีของ Count the Kicks
+              เวลาที่ใช้จับได้จากตัวเลข แต่ความแรงมีแต่แม่เท่านั้นที่รู้
+              และการที่ "ดิ้นเบาลงกว่าเดิม" เป็นสัญญาณที่ตัวเลขจับไม่ได้เลย */}
+          <div className="flex flex-col gap-2">
+            <span className="text-sm text-ink-600">วันนี้ลูกดิ้นแรงแค่ไหน</span>
+            <div className="flex gap-1.5">
+              {STRENGTH_LABELS.map((label, i) => {
+                const value = i + 1;
+                const on = strength === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setStrength(value)}
+                    className={cn(
+                      // min-w-0 จำเป็น: flex-1 มี min-width:auto ตามค่าตั้งต้น ข้อความยาวจะดันจนล้นขอบจอ
+                      "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-sm border px-1 py-1.5",
+                      on ? "border-brown-500 bg-brown-100" : "border-cream-200 bg-white",
+                    )}
+                  >
+                    <span className={cn("text-[15px] font-semibold tabular-nums", on ? "text-brown-900" : "text-ink-600")}>
+                      {value}
+                    </span>
+                    <span className="w-full truncate text-center text-[10px] leading-tight text-ink-400">
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <Textarea
             label="บันทึกเพิ่มเติม"
             rows={2}
@@ -243,9 +311,12 @@ function FinishPanel({
             maxLength={500}
             onChange={(e) => setNote(e.target.value)}
           />
-          <Button full loading={pending} onClick={onFinish}>
+          <Button full loading={pending} disabled={strength == null} onClick={onFinish}>
             บันทึก
           </Button>
+          {strength == null && (
+            <p className="-mt-2 text-center text-xs text-ink-400">เลือกความแรงก่อนจึงจะบันทึกได้</p>
+          )}
         </>
       )}
       <p className="text-center text-xs leading-relaxed text-ink-400">

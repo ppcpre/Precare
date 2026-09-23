@@ -95,6 +95,9 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
     await expect(page.getByText("ครบ 10 ครั้งแล้ว")).toBeVisible();
     await expectNoReassurance(page);
 
+    // ต้องเลือกความแรงก่อน ปุ่มบันทึกถึงจะกดได้ (วิธีของ Count the Kicks)
+    await expect(page.getByRole("button", { name: "บันทึก", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: /^4 / }).click();
     await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await expect(page.getByRole("button", { name: "เริ่มนับ" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("รอบที่ผ่านมา")).toBeVisible();
@@ -154,7 +157,7 @@ test("ลบรอบที่นับไปแล้วได้ และค�
     await expect(tap).toBeVisible({ timeout: 30_000 });
     for (let i = 0; i < 10; i++) await tap.click();
     await expect(page.getByText("ครบ 10 ครั้งแล้ว")).toBeVisible();
-
+    await page.getByRole("button", { name: /^3 / }).click();
     await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await expect(page.getByText("รอบที่ผ่านมา")).toBeVisible({ timeout: 30_000 });
   });
