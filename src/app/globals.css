@@ -55,7 +55,9 @@
   --shadow-card:  0 1px 3px rgba(43,36,32,0.06), 0 1px 2px rgba(43,36,32,0.04);
   --shadow-modal: 0 8px 24px rgba(43,36,32,0.12);
 
-  --font-sans: var(--font-noto-sans-thai), ui-sans-serif, system-ui, sans-serif;
+  /* ไทยก่อน แล้วค่อยละติน — ไฟล์ไทยไม่มีตัวเลขกับอักษรละติน เบราว์เซอร์จะ
+     ไล่ไปตัวถัดไปให้เองทีละตัวอักษร (ดูเหตุผลที่แยกสองชุดใน app/layout.tsx) */
+  --font-sans: var(--font-thai), var(--font-latin), ui-sans-serif, system-ui, sans-serif;
 }
 
 /**

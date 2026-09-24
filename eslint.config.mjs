@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     // build output ของ OpenNext/wrangler — ไม่ใช่โค้ดเรา ห้าม lint
     ".open-next/**",
     ".wrangler/**",
+    // worker ตัวเล็กมี .wrangler ของตัวเองด้วย (workers/media, workers/cron)
+    "**/.wrangler/**",
     "cloudflare-env.d.ts",
     // ไฟล์ต้นทางของ design canvas เป็น HTML ที่ generate จาก design/gen.py
     "design/**",

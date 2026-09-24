@@ -12,6 +12,8 @@ build/
 
 # cloudflare
 .wrangler/
+# worker ตัวเล็กมีของตัวเองด้วย
+**/.wrangler/
 .dev.vars
 .dev.vars.*
 wrangler.toml.bak
