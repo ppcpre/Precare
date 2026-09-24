@@ -58,6 +58,18 @@
   --font-sans: var(--font-noto-sans-thai), ui-sans-serif, system-ui, sans-serif;
 }
 
+/**
+ * ความสูงของแถบดำ/แถบลากด้านล่างจอ (iPhone, Android แบบปุ่มลาก)
+ *
+ * ประกาศเป็นตัวแปรที่ :root เพื่อสองเหตุผล
+ * 1) ทั้งแถบเมนูล่างและ padding ท้ายเนื้อหาต้องใช้ค่าเดียวกัน
+ * 2) **เทสต์กำหนดค่าเองได้** — Chromium ในเทสต์ไม่มีขอบจอ env() จึงเป็น 0 เสมอ
+ *    บั๊กที่เกิดเฉพาะบนเครื่องจริงจะไม่มีวันถูกจับได้ถ้าไม่มีทางจำลองค่านี้
+ */
+:root {
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
 html, body {
   background: var(--color-cream-50);
   color: var(--color-ink-900);

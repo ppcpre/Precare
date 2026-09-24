@@ -29,8 +29,16 @@ export function BottomNav() {
   const pathname = usePathname();
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around
-                 border-t border-cream-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+      /**
+       * ความสูงต้องเป็น 4rem **บวก** ขอบจอ ไม่ใช่ 4rem ที่มี padding อยู่ข้างใน
+       *
+       * Tailwind ตั้ง box-sizing: border-box ทั้งโปรเจกต์ `h-16` จึงนับรวม padding
+       * พอใส่ pb เผื่อขอบจอเข้าไป พื้นที่ของไอคอนเหลือ 64 - 34 = 30px
+       * ซึ่งน้อยกว่าไอคอน 21px + ป้าย 11px + ช่องไฟ — ไอคอนกับตัวหนังสือเลยถูกบีบ
+       * เห็นเฉพาะบนเครื่องจริงที่มีแถบลาง ไม่เห็นในเทสต์ที่ env() = 0
+       */
+      className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+var(--safe-b))] items-center
+                 justify-around border-t border-cream-200 bg-white pb-[var(--safe-b)] md:hidden"
       aria-label="เมนูหลัก"
     >
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

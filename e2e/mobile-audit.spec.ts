@@ -118,19 +118,38 @@ test("มือถือ: bottom nav เผื่อ safe area และไม�
   const nav = page.locator('nav[aria-label="เมนูหลัก"]');
   await expect(nav).toBeVisible();
 
-  // iPhone ที่มี home indicator ต้องเผื่อพื้นที่ล่าง ไม่งั้นปุ่มล่างสุดกดไม่โดน
-  const padding = await nav.evaluate((el) => getComputedStyle(el).paddingBottom);
-  expect(padding, "bottom nav ต้องมี padding-bottom จาก env(safe-area-inset-bottom)").toBeTruthy();
+  /**
+   * จำลองเครื่องที่มีแถบลากด้านล่าง (iPhone ราว 34px)
+   *
+   * Chromium ในเทสต์ไม่มีขอบจอ env(safe-area-inset-bottom) จึงเป็น 0 เสมอ
+   * บั๊กที่ไอคอนเมนูถูกบีบบนเครื่องจริงจะไม่มีวันถูกจับได้ถ้าไม่กำหนดค่าเอง
+   * (เคยเกิดจริง: nav ตั้ง h-16 แล้วใส่ padding ไว้ข้างใน พื้นที่ไอคอนเหลือ 30px)
+   */
+  const INSET = 34;
+  await page.addStyleTag({ content: `:root { --safe-b: ${INSET}px; }` });
 
-  // เนื้อหาท้ายหน้าต้องเลื่อนพ้น nav ได้ ไม่ถูกบังถาวร
-  await page.goto("/health");
-  const clear = await page.evaluate(() => {
-    const nav = document.querySelector('nav[aria-label="เมนูหลัก"]');
-    const main = document.querySelector("main");
-    if (!nav || !main) return null;
-    const navTop = nav.getBoundingClientRect().top;
-    const style = getComputedStyle(main);
-    return { navTop, paddingBottom: parseFloat(style.paddingBottom) };
+  const box = await nav.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const item = el.querySelector("a");
+    return {
+      height: el.getBoundingClientRect().height,
+      paddingBottom: parseFloat(cs.paddingBottom),
+      itemHeight: item ? item.getBoundingClientRect().height : 0,
+    };
   });
-  expect(clear).not.toBeNull();
+
+  expect(box.paddingBottom, "ต้องเผื่อขอบจอด้านล่าง").toBe(INSET);
+  // พื้นที่ของไอคอน = ความสูงทั้งหมด ลบส่วนที่เผื่อไว้ให้ขอบจอ
+  const content = box.height - box.paddingBottom;
+  expect(content, "พื้นที่ไอคอนต้องไม่ถูกขอบจอกินไป").toBeGreaterThanOrEqual(64);
+  expect(box.itemHeight, "ไอคอนกับป้ายต้องอยู่ครบในพื้นที่").toBeLessThanOrEqual(content + 0.5);
+
+  // เนื้อหาท้ายหน้าต้องเว้นให้พ้นแถบที่สูงขึ้นตามขอบจอด้วย
+  await page.goto("/health");
+  await page.addStyleTag({ content: `:root { --safe-b: ${INSET}px; }` });
+  const mainPad = await page.evaluate(
+    () => parseFloat(getComputedStyle(document.querySelector("main")!).paddingBottom),
+  );
+  expect(mainPad, "ท้ายหน้าต้องเว้นเท่าความสูงจริงของแถบเมนู").toBeGreaterThanOrEqual(64 + INSET);
+
 });

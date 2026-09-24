@@ -41,7 +41,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           />
         )}
         {usage && <StorageNotice usage={usage} />}
-        <main className="flex-1 pb-16 md:pb-0">
+        {/* เว้นท้ายหน้าให้เท่ากับความสูงจริงของแถบเมนู (รวมขอบจอ)
+            ไม่งั้นเนื้อหาบรรทัดสุดท้ายจะถูกแถบบังบนเครื่องที่มีแถบลาก */}
+        <main className="flex-1 pb-[calc(4rem+var(--safe-b))] md:pb-0">
           <div className="mx-auto w-full max-w-[1120px] px-4 py-4 md:px-12 md:py-8">{children}</div>
         </main>
       </div>
