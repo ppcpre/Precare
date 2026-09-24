@@ -155,6 +155,14 @@ export const appointments = sqliteTable(
     note: text("note"),
     reminderEnabled: integer("reminder_enabled", { mode: "boolean" }).notNull().default(true),
     reminderMinutesBefore: integer("reminder_minutes_before").notNull().default(60),
+    /**
+     * ยิง push เตือนนัดนี้ไปแล้วเมื่อไหร่ (UTC) — null = ยังไม่ได้ยิง
+     *
+     * ตัวจับเวลา (workers/cron) วิ่งทุก 5 นาที ถ้าไม่มีช่องนี้ นัดหนึ่งนัด
+     * จะถูกเตือนซ้ำทุกรอบจนกว่าจะถึงเวลานัด
+     * ต้องล้างเป็น null ทุกครั้งที่แก้เวลานัด ไม่งั้นเลื่อนนัดแล้วจะไม่มีเตือน
+     */
+    reminderSentAt: text("reminder_sent_at"),
 
     /** null = ยังไม่ได้เลือกกลุ่ม แสดงเป็น "ทั่วไป" ไม่บังคับให้เลือก */
     groupId: text("group_id").references(() => careGroups.id, { onDelete: "set null" }),

@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "precare-cron",
+  "main": "index.ts",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+
+  // ทุก 5 นาที — ละเอียดกว่านี้ไม่ได้ประโยชน์ เพราะคนตั้งเตือนเป็นหน่วยสิบนาที
+  // และหยาบกว่านี้จะทำให้เตือน "ก่อน 60 นาที" คลาดได้เกือบครึ่งชั่วโมง
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "vars": {
+    "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
+    "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com"
+  },
+
+  // VAPID_PRIVATE_KEY ต้องตั้งด้วย `wrangler secret put` ที่ worker ตัวนี้ด้วย
+  //   npx wrangler secret put VAPID_PRIVATE_KEY --config workers/cron/wrangler.jsonc --env dev
+  // ยังไม่ตั้ง = รอบจับเวลาจะออกเงียบๆ ไม่ทำเครื่องหมายว่าเตือนแล้ว
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "precare-db",
+      "database_id": "906981f7-827b-4456-b586-a9d9717eae56"
+    }
+  ],
+
+  "env": {
+    "dev": {
+      "name": "precare-cron-dev",
+      "observability": { "enabled": true },
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "vars": {
+        "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
+        "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "precare-dev-db",
+          "database_id": "ed7a37a6-37ae-4a48-baa0-b78a311402fd"
+        }
+      ]
+    }
+  }
+}

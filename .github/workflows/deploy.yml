@@ -155,6 +155,14 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config workers/media/wrangler.jsonc
 
+      - name: Deploy worker จับเวลา
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/cron/wrangler.jsonc
+
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
         uses: cloudflare/wrangler-action@v4

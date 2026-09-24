@@ -54,7 +54,9 @@ export const updateAppointment = editorAction
     await assertGroupOwned(ctx.db, ctx.familyId, rest.groupId);
     const res = await ctx.db
       .update(appointments)
-      .set(rest)
+      // ล้างเครื่องหมาย "เตือนไปแล้ว" ทุกครั้งที่แก้นัด
+      // เลื่อนนัดไปวันอื่นแล้วไม่ล้าง = นัดใหม่จะไม่มีเตือนเลย
+      .set({ ...rest, reminderSentAt: null })
       .where(and(eq(appointments.id, id), eq(appointments.familyId, ctx.familyId)));
     if (!res.meta.changes) throw new AppError("ไม่พบนัดหมายนี้");
     revalidatePath("/appointments");

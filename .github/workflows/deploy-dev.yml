@@ -161,6 +161,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config workers/media/wrangler.jsonc --env dev
 
+      # ตัวจับเวลาเตือนนัด — deploy แยกเพราะ OpenNext คุม entry point ของ worker หลัก
+      # จะแทรก handler scheduled เข้าไปในนั้นไม่ได้
+      - name: Deploy worker จับเวลา (dev)
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/cron/wrangler.jsonc --env dev
+
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
         uses: cloudflare/wrangler-action@v4
