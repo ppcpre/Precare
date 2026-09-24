@@ -72,7 +72,9 @@
       "observability": { "enabled": true },
       "vars": {
         "BETTER_AUTH_URL": "https://precare-dev.precare.workers.dev",
-        "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com"
+        "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com",
+        "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
+        "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com"
       },
       "r2_buckets": [
         { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },

@@ -71,6 +71,13 @@
       "when": 1790179002768,
       "tag": "0009_kick_strength",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790213823933,
+      "tag": "0010_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

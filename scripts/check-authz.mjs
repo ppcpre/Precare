@@ -49,6 +49,8 @@ const ACTION_RULES = {
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],
+  // push ผูกกับ "ผู้ใช้" ไม่ใช่ family — endpoint เป็นของเครื่องแต่ละคน
+  "push.ts": ["authAction"],
   // consent.ts แตะข้อมูลของ "ผู้ใช้" ไม่ใช่ของ family จึงเป็น authAction ถูกแล้ว
   // การลบบัญชีตรวจสิทธิ์ครอบครัวเองภายใน (ห้ามลบถ้าเป็นเจ้าของที่ยังมีสมาชิกอื่น)
   "consent.ts": ["authAction"],

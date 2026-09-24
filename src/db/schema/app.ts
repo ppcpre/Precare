@@ -359,3 +359,33 @@ export const consents = sqliteTable(
   },
   (t) => [index("idx_consents_user").on(t.userId, t.kind)],
 );
+
+/**
+ * ที่อยู่สำหรับส่ง push ของแต่ละเครื่อง
+ *
+ * หนึ่งคนมีได้หลายแถว (มือถือ + แท็บเล็ต + คอม) endpoint เป็นตัวระบุเครื่อง
+ * จึงต้อง unique — เบราว์เซอร์เดิมที่ subscribe ซ้ำจะได้ endpoint เดิม
+ *
+ * ⚠️ endpoint เป็นตัวระบุเครื่องของผู้ใช้ ต้องหายไปพร้อมบัญชี
+ *    FK cascade ทำให้ลบบัญชีแล้วแถวนี้หายตาม (ดู deleteAccount ใน actions/consent.ts)
+ */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    /**
+     * กุญแจสำหรับเข้ารหัสเนื้อหา — **ตอนนี้ยังไม่ได้ใช้**
+     *
+     * เราส่ง push แบบไม่มีเนื้อหาโดยตั้งใจ (ดู src/lib/push.ts)
+     * แต่เก็บไว้เพราะมันมากับ subscription อยู่แล้ว ถ้าวันหนึ่งเปลี่ยนใจ
+     * จะได้ไม่ต้องให้ผู้ใช้ทุกคนกดอนุญาตใหม่
+     */
+    p256dh: text("p256dh"),
+    auth: text("auth"),
+    createdAt: text("created_at").notNull().default(nowIso),
+    lastSuccessAt: text("last_success_at"),
+  },
+  (t) => [index("idx_push_user").on(t.userId)],
+);

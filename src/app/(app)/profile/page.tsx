@@ -8,6 +8,8 @@ import { Avatar } from "@/components/app-topbar";
 import { SignOutRow } from "@/components/profile/sign-out";
 import { getFamily, getPregnancy, listMembers, requireFamilyContext } from "@/lib/queries";
 import { can } from "@/lib/authz";
+import { PushToggle } from "@/components/push-toggle";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { thaiDate } from "@/lib/format";
 
 export const metadata = { title: "โปรไฟล์ · Health Care" };
@@ -60,6 +62,10 @@ export default async function ProfilePage() {
   ]);
 
   const canEditPregnancy = can.editPregnancy(role);
+  // คีย์สาธารณะอ่านจาก env ตอนรัน ไม่ใช่ฝังตอน build — dev กับ production
+  // จะได้ใช้คีย์คนละตัวได้โดยไม่ต้อง build ใหม่
+  const { env } = await getCloudflareContext({ async: true });
+  const vapidPublicKey = env.VAPID_PUBLIC_KEY ?? "";
 
   return (
     <div className="flex flex-col gap-4 pb-4">
@@ -136,9 +142,11 @@ export default async function ProfilePage() {
             <Bell size={20} strokeWidth={1.9} className="shrink-0 text-ink-600" />
             <span className="flex-1 text-ink-900">แจ้งเตือนนัดหมาย</span>
           </div>
+          {/* ข้อความเดิมบอกว่า "ทำงานเฉพาะตอนเปิดแอปค้างไว้" ซึ่งไม่จริงแล้ว
+              เมื่อเปิด push — แต่ยังจริงอยู่ถ้าผู้ใช้ยังไม่ได้เปิด จึงย้ายไปอยู่ใน
+              PushToggle ที่รู้สถานะจริงของเครื่องนั้น */}
+          <PushToggle vapidPublicKey={vapidPublicKey} />
           <p className="rounded-sm bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
-            แจ้งเตือนทำงานเฉพาะตอนเปิดแอปค้างไว้ ถ้าปิดแท็บจะไม่เตือน
-            <br />
             ตั้งค่าการเตือนของแต่ละนัดได้ในหน้านัดหมาย
           </p>
         </Card>
