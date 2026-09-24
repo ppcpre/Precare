@@ -155,7 +155,7 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
             </div>
 
             {ga && due ? (
-              <Card className="flex flex-col gap-4 rounded-lg border-peach-300 bg-peach-100 p-5">
+              <Card className="flex flex-col gap-4 rounded-lg border-peach-300 bg-peach-100 p-3.5">
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-sm text-ink-600">อายุครรภ์ปัจจุบัน</span>
                   <div className="flex items-baseline gap-2">

@@ -23,7 +23,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Problem({ title, detail }: { title: string; detail: string }) {
   return (
-    <Card className="items-center gap-3 rounded-lg p-6 text-center">
+    <Card className="items-center gap-3 rounded-lg p-4 text-center">
       <AlertCircle size={40} strokeWidth={1.6} className="mx-auto text-warning" />
       <h1 className="text-xl font-semibold text-ink-900">{title}</h1>
       <p className="text-sm leading-relaxed text-ink-600">{detail}</p>
@@ -75,7 +75,7 @@ export default async function AcceptInvitePage({
     <Shell>
       <Logo size={44} className="mx-auto" />
 
-      <Card className="items-center gap-4 rounded-lg p-6 text-center">
+      <Card className="items-center gap-4 rounded-lg p-4 text-center">
         <Avatar name={inv.inviterName} size={60} />
         <div className="flex flex-col gap-1.5">
           <p className="text-lg leading-relaxed font-semibold text-ink-900">
@@ -104,7 +104,7 @@ export default async function AcceptInvitePage({
           แอปทั่วไปบอกแต่ว่า "คุณจะเห็นอะไร" เพราะมองคนถูกเชิญเป็นฝ่ายรับอย่างเดียว
           แต่การเข้าครอบครัวคือการเปิดข้อมูลของตัวเองให้เขาด้วย
           ถ้าไม่บอกตรงนี้ ก็ไม่มีจังหวะไหนอีกแล้วที่จะบอกก่อนเขากดรับ */}
-      <Card className="gap-3 rounded-lg p-5">
+      <Card className="gap-3 rounded-lg p-3.5">
         <p className="text-sm font-medium text-ink-900">เข้าร่วมแล้วจะเป็นยังไง</p>
         <ul className="flex flex-col gap-2.5">
           <TwoWay

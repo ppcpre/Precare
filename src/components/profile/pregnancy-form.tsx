@@ -94,7 +94,7 @@ export function PregnancyForm({
         />
 
         {ga && due && (
-          <Card className="gap-3 rounded-lg border-peach-300 bg-peach-100 p-5">
+          <Card className="gap-3 rounded-lg border-peach-300 bg-peach-100 p-3.5">
             <span className="text-center text-sm text-ink-600">อายุครรภ์ที่จะเป็น</span>
             <div className="flex items-baseline justify-center gap-2">
               <span className="text-[40px] leading-none font-semibold text-peach-700">{ga.weeks}</span>

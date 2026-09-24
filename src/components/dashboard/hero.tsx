@@ -27,7 +27,7 @@ export function GestationHero({
 }) {
   const overdue = daysLeft != null && daysLeft < 0;
   return (
-    <Card className="flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 p-5">
+    <Card className="flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 p-3.5">
       {cover ? (
         /* รูปอยู่ในกรอบของการ์ด โค้งมนทั้งสี่มุม ไม่ใช่ชนขอบการ์ด
            เคยลองให้ชนขอบด้วย p-0 แล้วไม่ได้ผล — cn() เป็นแค่ join
@@ -123,7 +123,7 @@ export function GestationHero({
 /** ยังไม่ได้ตั้ง LMP — owner กดตั้งได้ คนอื่นเห็นแค่ข้อความ */
 export function SetupPrompt({ canEdit }: { canEdit: boolean }) {
   return (
-    <Card className="flex flex-col gap-4 rounded-lg border-cream-200 bg-cream-100 p-5">
+    <Card className="flex flex-col gap-4 rounded-lg border-cream-200 bg-cream-100 p-3.5">
       <div className="flex items-center gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white">
           <CalendarDays size={22} strokeWidth={1.8} className="text-brown-700" />

@@ -71,7 +71,7 @@ export default async function ProfilePage() {
     <div className="flex flex-col gap-4 pb-4">
       <h1 className="text-2xl font-semibold text-ink-900">โปรไฟล์</h1>
 
-      <Card className="items-start gap-4 rounded-lg p-5">
+      <Card className="items-start gap-4 rounded-lg p-3.5">
         <div className="flex w-full items-center gap-3.5">
           <Avatar name={user.name} image={user.image} size={64} />
           <div className="flex min-w-0 flex-col items-start gap-1.5">

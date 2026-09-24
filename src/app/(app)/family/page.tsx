@@ -46,7 +46,7 @@ export default async function FamilyPage() {
         <h1 className="text-2xl font-semibold text-ink-900">ครอบครัว</h1>
       </header>
 
-      <Card className="gap-1 rounded-lg p-5">
+      <Card className="gap-1 rounded-lg p-3.5">
         <h2 className="text-2xl font-semibold text-ink-900">{family?.name}</h2>
         <p className="text-sm text-ink-600">สมาชิก {members.length} คน</p>
       </Card>

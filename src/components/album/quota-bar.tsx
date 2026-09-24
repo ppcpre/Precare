@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
  */
 export function QuotaBar({ usage }: { usage: StorageUsage }) {
   return (
-    <Card className="gap-1.5 p-3.5">
+    <Card className="gap-1.5 p-2.5">
       <div className="flex items-center justify-between">
         <span className="text-xs text-ink-600">พื้นที่เก็บรูป</span>
         <span

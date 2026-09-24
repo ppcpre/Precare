@@ -37,9 +37,13 @@ export interface DueRow {
 /**
  * นัดที่ถึงเวลาต้องเตือนแล้ว
  *
- * ใส่ datetime() ครอบทั้งสองฝั่งของการเทียบ เพราะ datetime() คืนค่าแบบมีช่องว่าง
- * คั่น ("2026-09-25 09:30:00") ส่วนที่เราเก็บมี T คั่น ถ้าเทียบสตริงข้ามแบบกัน
- * ผลจะผิดแบบเงียบๆ (ช่องว่างมาก่อน T ในการเรียงตัวอักษร)
+ * สองเงื่อนไขแรกเทียบคอลัมน์ตรงๆ ไม่ครอบ datetime() เพื่อให้ใช้ index ได้
+ * (ครอบเมื่อไหร่ SQLite ใช้ index ช่วงไม่ได้ ต้องไล่ทั้ง index) — เทียบเป็น
+ * สตริงถูกต้องอยู่แล้วเพราะทุกแถวเก็บรูปแบบเดียวกันคือ YYYY-MM-DDTHH:MM:SS
+ *
+ * ส่วนเงื่อนไขที่สามต้องลบนาทีจึงเลี่ยง datetime() ไม่ได้ และต้องครอบ ?1 ด้วย
+ * เพราะ datetime() คืนค่าแบบมีช่องว่างคั่น ("2026-09-25 09:30:00") ส่วนที่เก็บมี T คั่น
+ * เทียบข้ามแบบกันแล้วผลผิดเงียบๆ (ช่องว่างมาก่อน T ในการเรียงตัวอักษร)
  */
 export async function dueAppointments(db: D1Database, nowLocal: string): Promise<DueRow[]> {
   const horizon = new Date(new Date(`${nowLocal}Z`).getTime() + HORIZON_DAYS * 86400_000)
@@ -52,8 +56,8 @@ export async function dueAppointments(db: D1Database, nowLocal: string): Promise
          FROM appointments
         WHERE reminder_enabled = 1
           AND reminder_sent_at IS NULL
-          AND datetime(appt_datetime) > datetime(?1)
-          AND datetime(appt_datetime) <= datetime(?2)
+          AND appt_datetime > ?1
+          AND appt_datetime <= ?2
           AND datetime(appt_datetime, '-' || reminder_minutes_before || ' minutes') <= datetime(?1)
         ORDER BY appt_datetime
         LIMIT 100`,

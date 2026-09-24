@@ -182,6 +182,21 @@ export const appointments = sqliteTable(
   (t) => [
     index("idx_appts_family").on(t.familyId, t.apptDatetime),
     index("idx_appts_group").on(t.groupId),
+    /**
+     * index บางส่วน สำหรับตัวจับเวลาเตือนนัด (workers/cron)
+     *
+     * มันถามคำถามเดียวทุก 5 นาที = 288 ครั้งต่อวัน ถ้าไม่มี index นี้
+     * ทุกครั้งคือการไล่อ่านตารางนัดทั้งตาราง ซึ่ง D1 นับเป็น "row read"
+     * ทุกแถว — มีนัดค้างอยู่ 1,000 รายการก็เท่ากับ 288,000 row read ต่อวัน
+     * โดยไม่ได้อะไรเลย
+     *
+     * เป็น partial index เพราะเงื่อนไขคงที่ (ยังไม่เตือน + เปิดเตือนไว้)
+     * ตัว index จึงมีแค่แถวที่ "ยังรอเตือน" ซึ่งปกติมีไม่กี่แถว
+     * พอเตือนไปแล้ว แถวนั้นหลุดออกจาก index เอง
+     */
+    index("idx_appts_pending_reminder")
+      .on(t.apptDatetime)
+      .where(sql`reminder_enabled = 1 AND reminder_sent_at IS NULL`),
   ],
 );
 
