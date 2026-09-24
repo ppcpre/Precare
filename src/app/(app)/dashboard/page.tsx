@@ -3,7 +3,7 @@ import { Plus, Eye } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
-import { WeeklyDevelopmentCard, WeeklySizeCard } from "@/components/dashboard/weekly";
+import { WeeklyBabyCard } from "@/components/dashboard/weekly";
 import { weeklyContent } from "@/data/weekly-content";
 import {
   countOpenQuestions,
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
             <SetupPrompt canEdit={can.editPregnancy(role)} />
           )}
 
-          {weekly && <WeeklyDevelopmentCard content={weekly} />}
+          {weekly && <WeeklyBabyCard content={weekly} />}
           <KickCard
             week={data.ga?.weeks ?? null}
             active={activeKick != null}
@@ -84,7 +84,6 @@ export default async function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          {weekly && <WeeklySizeCard content={weekly} />}
           <NextAppointmentCard appt={data.nextAppointment} now={now} openQuestions={openQuestions} />
           <RecentLogsCard logs={data.recentLogs} />
         </div>

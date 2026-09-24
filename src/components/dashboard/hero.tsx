@@ -23,18 +23,17 @@ export function GestationHero({
 }) {
   const overdue = daysLeft != null && daysLeft < 0;
   return (
-    <Card
-      className={`flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 ${
-        cover ? "overflow-hidden p-0 pb-5" : "p-5"
-      }`}
-    >
+    <Card className="flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 p-5">
       {cover ? (
-        <div className="relative">
+        /* รูปอยู่ในกรอบของการ์ด โค้งมนทั้งสี่มุม ไม่ใช่ชนขอบการ์ด
+           เคยลองให้ชนขอบด้วย p-0 แล้วไม่ได้ผล — cn() เป็นแค่ join
+           p-4 ของ Card กับ p-0 ที่ส่งมาชนกัน แล้วลำดับใน CSS เป็นคนตัดสิน */
+        <div className="relative overflow-hidden rounded-lg">
           {/* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */}
           <img
             src={`/api/media/${cover.key}`}
             alt=""
-            className="h-[190px] w-full bg-cream-200 object-cover"
+            className="h-[170px] w-full bg-cream-200 object-cover"
           />
           {/* ไล่เฉดดำทับรูป — อัลตราซาวด์บางใบสว่างจัด ตัวเลขขาวลอยๆ จะอ่านไม่ออก */}
           <span
@@ -75,9 +74,6 @@ export function GestationHero({
         </>
       )}
 
-      {/* มีรูป = ส่วนล่างต้องมี padding เอง เพราะการ์ดถอด p-5 ออกให้รูปชนขอบ
-          ไม่มีรูป = contents ทำให้ div นี้หายไปจาก layout การ์ดหน้าตาเหมือนเดิมเป๊ะ */}
-      <div className={cover ? "flex flex-col gap-3.5 px-5" : "contents"}>
       <GestationProgress week={ga.weeks} />
 
       <div className="flex items-center justify-between pt-1">
@@ -114,7 +110,6 @@ export function GestationHero({
           เลือกรูปหน้าปกจากอัลบั้ม
         </Link>
       )}
-      </div>
     </Card>
   );
 }

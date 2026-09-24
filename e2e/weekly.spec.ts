@@ -2,33 +2,42 @@ import { expect, test } from "@playwright/test";
 import { completeOnboarding, signUp, uniqueEmail } from "./helpers";
 
 /**
- * Phase 2 — การ์ดขนาดและพัฒนาการรายสัปดาห์
+ * Phase 2 — การ์ดพัฒนาการรายสัปดาห์ (ขนาด + พัฒนาการ อยู่ใบเดียวกัน)
  *
  * onboarding ใน helper ตั้ง LMP ย้อนหลัง 168 วัน = 24 สัปดาห์ 0 วันพอดี
  * เนื้อหาที่คาดหวังจึงตรึงไว้ที่สัปดาห์ 24 ได้
  */
-test("หน้าแรกแสดงขนาดและพัฒนาการของสัปดาห์ปัจจุบัน", async ({ page }) => {
+test("หน้าแรกแสดงขนาดและพัฒนาการของสัปดาห์ปัจจุบัน", async ({ page, isMobile }) => {
   await signUp(page, uniqueEmail("weekly"), "แม่รายสัปดาห์");
   await completeOnboarding(page, "ครอบครัวรายสัปดาห์");
 
-  await expect(page.getByRole("heading", { name: "ขนาดของลูกน้อย" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "พัฒนาการของลูกน้อย" })).toBeVisible();
   await expect(page.getByText("ข้าวโพด")).toBeVisible();
   await expect(page.getByText("30 ซม.")).toBeVisible();
   await expect(page.getByText("600 ก.")).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "พัฒนาการของหนูน้อย" })).toBeVisible();
   await expect(page.getByText(/ปอดพัฒนาครบโครงสร้างแล้ว/)).toBeVisible();
 
   // ข้อมูลทางการแพทย์ต้องมีข้อความกำกับเสมอ ไม่ใช่ทางเลือก
-  await expect(page.getByText(/เป็นค่าเฉลี่ยเพื่อการอ้างอิงเท่านั้น/)).toBeVisible();
-  await expect(page.getByText(/ไม่ใช่คำแนะนำทางการแพทย์/)).toBeVisible();
+  const note = page.getByTestId("weekly-disclaimer");
+  await expect(note).toContainText("ค่าเฉลี่ย");
+  await expect(note).toContainText("ไม่ใช่คำแนะนำทางการแพทย์");
+
+  // ต้องพอดีบรรทัดเดียวบนมือถือ — ถ้าข้อความยาวขึ้นจนตกบรรทัดที่สอง ให้แดง
+  if (isMobile) {
+    const h = await note.evaluate((el) => el.getBoundingClientRect().height);
+    expect(h, "ข้อความกำกับต้องไม่เกินหนึ่งบรรทัด").toBeLessThan(22);
+  }
+
+  // รวมเป็นใบเดียวแล้ว — ถ้าการ์ดเก่าโผล่กลับมาคือมีสองใบซ้อนกันอีก
+  await expect(page.getByRole("heading", { name: "ขนาดของลูกน้อย" })).toHaveCount(0);
 });
 
 test("ยังไม่มีไฟล์รูปใน R2 ต้องขึ้นไอคอนแทน ไม่ใช่รูปพัง", async ({ page }) => {
   await signUp(page, uniqueEmail("fallback"), "แม่ฟอลแบ็ก");
   await completeOnboarding(page, "ครอบครัวฟอลแบ็ก");
 
-  const card = page.getByRole("heading", { name: "ขนาดของลูกน้อย" }).locator("..");
+  const card = page.getByRole("heading", { name: "พัฒนาการของลูกน้อย" }).locator("../..");
 
   // route ต้องตอบ 404 จริง (ยังไม่ได้ใส่ไฟล์) ไม่ใช่พังด้วย 500
   const res = await page.request.get("/api/asset/weekly/size/w24.webp");
