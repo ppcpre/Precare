@@ -21,7 +21,17 @@ import { getSessionCookie } from "better-auth/cookies";
 // /legal ต้องเปิดได้โดยไม่ล็อกอิน — คนอ่านคือคนที่ยังไม่ได้สมัครและกำลังตัดสินใจ
 // ถ้าบังคับล็อกอินก่อนอ่าน ก็เท่ากับให้ยินยอมก่อนแล้วค่อยอ่านว่ายินยอมกับอะไร
 // (ก่อนหน้านี้ /terms กับ /privacy ไม่มีหน้าอยู่เลย ลิงก์จากหน้าสมัครจึงพาไป /login)
-const PUBLIC_PREFIXES = ["/login", "/signup", "/invite", "/legal", "/api/auth", "/api/asset"];
+// /manifest.webmanifest ต้อง public — เบราว์เซอร์ดึงไฟล์นี้โดยไม่ส่ง cookie
+// ถ้าไม่เปิดไว้ การติดตั้งลงจอโฮมจะพังทั้งที่ผู้ใช้ล็อกอินอยู่ (ดู src/app/manifest.ts)
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/invite",
+  "/legal",
+  "/manifest.webmanifest",
+  "/api/auth",
+  "/api/asset",
+];
 
 /**
  * T6.5 — CSP แบบมี nonce
