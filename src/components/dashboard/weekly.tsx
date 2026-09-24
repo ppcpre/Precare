@@ -63,21 +63,23 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
 
       <div className="flex items-center gap-3.5">
         <SizeImage week={content.week} />
-        <div className="flex min-w-0 flex-col gap-0.5">
+        {/* flex-1 สำคัญ — ไม่มีแล้วคอลัมน์จะกว้างเท่าเนื้อหา กล่องตัวเลขเลยหดตาม
+            แล้วเหลือที่ว่างทางขวาของการ์ด ส่วน min-w-0 กันคอลัมน์ดันรูปตอนข้อความยาว */}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-xs text-ink-600">สัปดาห์นี้ตัวประมาณ</span>
           <span className="text-lg leading-tight font-semibold text-ink-900">{content.size}</span>
 
           {lengthCm != null && weightG != null ? (
             /* กล่องพื้นครีมแบบเดิม แต่ย้ายมาอยู่ในคอลัมน์ข้างรูป ไม่ใช่แถวเต็ม
                ความกว้างใต้รูปเหมือนก่อน — ได้กรอบเหมือนเดิมโดยไม่เพิ่มแถวใหม่ */
-            <span className="mt-0.5 flex gap-2">
+            <span data-testid="size-chips" className="mt-0.5 flex gap-2">
               <span className="flex flex-1 items-center gap-2 rounded-sm bg-cream-100 px-3 py-2">
                 <Ruler size={16} strokeWidth={1.8} className="shrink-0 text-ink-400" />
-                <span className="text-sm text-ink-900">{lengthCm} ซม.</span>
+                <span className="text-sm whitespace-nowrap text-ink-900">{lengthCm} ซม.</span>
               </span>
               <span className="flex flex-1 items-center gap-2 rounded-sm bg-cream-100 px-3 py-2">
                 <Weight size={16} strokeWidth={1.8} className="shrink-0 text-ink-400" />
-                <span className="text-sm text-ink-900">
+                <span className="text-sm whitespace-nowrap text-ink-900">
                   {weightG >= 1000 ? `${(weightG / 1000).toFixed(2)} กก.` : `${weightG} ก.`}
                 </span>
               </span>

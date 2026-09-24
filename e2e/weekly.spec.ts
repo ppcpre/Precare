@@ -18,6 +18,19 @@ test("หน้าแรกแสดงขนาดและพัฒนาก�
 
   await expect(page.getByText(/ปอดพัฒนาครบโครงสร้างแล้ว/)).toBeVisible();
 
+  // กล่องตัวเลขต้องกว้างจนชนขอบในของการ์ด ไม่ใช่หดตามความยาวข้อความ
+  // แล้วเหลือที่ว่างทางขวา — เคยเป็นแบบนั้นเพราะคอลัมน์ไม่มี flex-1
+  const rightGap = await page
+    .getByRole("heading", { name: "พัฒนาการของลูกน้อย" })
+    .locator("../..")
+    .evaluate((card) => {
+      const chips = card.querySelector('[data-testid="size-chips"]');
+      if (!chips) return NaN;
+      const pad = parseFloat(getComputedStyle(card).paddingRight);
+      return card.getBoundingClientRect().right - pad - chips.getBoundingClientRect().right;
+    });
+  expect(rightGap, "กล่องตัวเลขต้องชนขอบในของการ์ด").toBeLessThan(2);
+
   // ข้อมูลทางการแพทย์ต้องมีข้อความกำกับเสมอ ไม่ใช่ทางเลือก
   const note = page.getByTestId("weekly-disclaimer");
   await expect(note).toContainText("ค่าเฉลี่ย");
