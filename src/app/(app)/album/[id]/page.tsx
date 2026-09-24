@@ -3,6 +3,8 @@ import Link from "next/link";
 import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
+import { PhotoTypePicker } from "@/components/album/type-picker";
+import { TYPE_LABEL } from "@/lib/photo-types";
 import { getCoverPhotoId, getPhotoById, requireFamilyContext } from "@/lib/queries";
 import { familyMediaBase } from "@/lib/media-base";
 import { mediaUrl } from "@/lib/media-src";
@@ -11,12 +13,6 @@ import { thaiDateFull, thaiDate } from "@/lib/format";
 import { formatClip } from "@/lib/video";
 
 export const metadata = { title: "ดูไฟล์ · Pre Care" };
-
-const TYPE_LABEL: Record<string, string> = {
-  ultrasound: "อัลตราซาวด์",
-  family: "ครอบครัว",
-  other: "อื่นๆ",
-};
 
 export default async function PhotoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -139,6 +135,13 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
             ))}
           </div>
         </div>
+
+        {can.writeRecords(ctx.role) && photo.type !== "receipt" && (
+          <>
+            <span className="h-px bg-cream-200" />
+            <PhotoTypePicker id={photo.id} type={photo.type} />
+          </>
+        )}
 
         {can.writeRecords(ctx.role) && (
           <>

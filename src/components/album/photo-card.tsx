@@ -2,12 +2,7 @@ import Link from "next/link";
 import { Pin, Play } from "lucide-react";
 import { formatClip } from "@/lib/video";
 import { mediaUrl, type MediaBase } from "@/lib/media-src";
-
-const TYPE_LABEL: Record<string, string> = {
-  ultrasound: "อัลตราซาวด์",
-  family: "ครอบครัว",
-  other: "",
-};
+import { tileLabel } from "@/lib/photo-types";
 
 /**
  * การ์ดรูปแบบเห็นคำบรรยาย — ใช้ในมุมมอง "รายละเอียด"
@@ -44,7 +39,7 @@ export function PhotoCard({
   /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
   mediaBase?: MediaBase | null;
 }) {
-  const label = TYPE_LABEL[type];
+  const label = tileLabel(type);
   const time = takenAt.length > 10 ? takenAt.slice(11, 16) : null;
   const isVideo = mediaKind === "video";
   const imageKey = isVideo ? thumbKey : r2Key;

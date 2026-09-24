@@ -328,6 +328,40 @@ export const setCoverPhoto = editorAction
     return { coverPhotoId };
   });
 
+/**
+ * แก้ประเภทของไฟล์ในอัลบั้ม
+ *
+ * ใบเสร็จเปลี่ยนไม่ได้ และเปลี่ยนเป็นใบเสร็จก็ไม่ได้ — ใบเสร็จผูกกับนัดหมาย
+ * และถูกกันออกจากอัลบั้มโดยตั้งใจ (ดูคอมเมนต์ของ PHOTO_TYPES) ถ้าเปิดให้สลับ
+ * ไฟล์จะหายจากหน้านัดไปโผล่ในอัลบั้ม หรือหายจากอัลบั้มไปโผล่ใต้นัดที่ไม่เกี่ยวกัน
+ */
+export const setPhotoType = editorAction
+  .metadata({ name: "setPhotoType" })
+  .inputSchema(
+    z.object({
+      id: z.string().min(1),
+      type: z.enum(ALBUM_PHOTO_TYPES),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    const row = await ctx.db
+      .select({ type: photos.type })
+      .from(photos)
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)))
+      .get();
+    if (!row) throw new AppError("ไม่พบไฟล์นี้");
+    if (row.type === "receipt") throw new AppError("ใบเสร็จเปลี่ยนประเภทไม่ได้");
+
+    await ctx.db
+      .update(photos)
+      .set({ type: parsedInput.type })
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)));
+
+    revalidatePath("/album");
+    revalidatePath(`/album/${parsedInput.id}`);
+    return { type: parsedInput.type };
+  });
+
 export const togglePin = editorAction
   .metadata({ name: "togglePin" })
   .inputSchema(z.object({ id: z.string().min(1), pinned: z.boolean() }))

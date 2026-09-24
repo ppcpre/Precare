@@ -207,10 +207,13 @@ export const appointments = sqliteTable(
  * แต่ในสายตาผู้ใช้มันเป็นเอกสารของนัด ไม่ใช่ความทรงจำ ใบเสร็จค่ายา
  * ไปโผล่ข้างรูปอัลตราซาวด์ในอัลบั้มลูกคือสิ่งที่ไม่มีใครอยากเห็น
  */
-export const PHOTO_TYPES = ["ultrasound", "family", "other", "receipt"] as const;
+export const PHOTO_TYPES = ["ultrasound", "family", "document", "other", "receipt"] as const;
 
 /** ประเภทที่อัปผ่านอัลบั้มได้ — ใบเสร็จเข้าได้ทางเดียวคือแนบกับนัด */
-export const ALBUM_PHOTO_TYPES = ["ultrasound", "family", "other"] as const;
+export const ALBUM_PHOTO_TYPES = ["ultrasound", "family", "document", "other"] as const;
+
+export type PhotoType = (typeof PHOTO_TYPES)[number];
+export type AlbumPhotoType = (typeof ALBUM_PHOTO_TYPES)[number];
 
 /**
  * รูปกับวิดีโออยู่ตารางเดียวกัน ไม่แยกตาราง

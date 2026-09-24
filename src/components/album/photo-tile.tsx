@@ -2,12 +2,7 @@ import Link from "next/link";
 import { Pin, Play } from "lucide-react";
 import { formatClip } from "@/lib/video";
 import { mediaUrl, type MediaBase } from "@/lib/media-src";
-
-const TYPE_LABEL: Record<string, string> = {
-  ultrasound: "อัลตราซาวด์",
-  family: "ครอบครัว",
-  other: "",
-};
+import { tileLabel } from "@/lib/photo-types";
 
 export function PhotoTile({
   id,
@@ -31,7 +26,7 @@ export function PhotoTile({
   /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
   mediaBase?: MediaBase | null;
 }) {
-  const label = TYPE_LABEL[type];
+  const label = tileLabel(type);
   const isVideo = mediaKind === "video";
   // วิดีโอโชว์หน้าปกที่ดึงเฟรมมาตอนอัปโหลด — r2Key ของมันคือตัวคลิป ใส่ใน img ไม่ได้
   const imageKey = isVideo ? thumbKey : r2Key;

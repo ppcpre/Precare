@@ -9,6 +9,7 @@ import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
+import type { AlbumPhotoType } from "@/db/schema";
 import {
   appointments, careGroups, families, familyInvites, familyMembers,
   photos, pregnancyProfiles, trackingSessions, user, visitQuestions, weeklyLogs,
@@ -343,7 +344,7 @@ export async function getLayoutData(db: Db, familyId: string) {
 export async function listPhotos(
   db: Db,
   familyId: string,
-  type?: "ultrasound" | "family" | "other",
+  type?: AlbumPhotoType,
   onlyVideo = false,
 ) {
   const rows = await db

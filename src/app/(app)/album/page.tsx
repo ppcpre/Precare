@@ -10,6 +10,7 @@ import { listPhotos, requireFamilyContext } from "@/lib/queries";
 import { familyMediaBase } from "@/lib/media-base";
 import { getStorageUsage } from "@/lib/storage";
 import { can } from "@/lib/authz";
+import { ALBUM_TYPE_OPTIONS } from "@/lib/photo-types";
 
 import { cn } from "@/lib/cn";
 
@@ -17,9 +18,7 @@ export const metadata = { title: "อัลบั้ม · Pre Care" };
 
 const FILTERS = [
   { value: undefined, label: "ทั้งหมด" },
-  { value: "ultrasound" as const, label: "อัลตราซาวด์" },
-  { value: "family" as const, label: "ครอบครัว" },
-  { value: "other" as const, label: "อื่นๆ" },
+  ...ALBUM_TYPE_OPTIONS,
 ];
 
 export default async function AlbumPage({
@@ -67,7 +66,7 @@ export default async function AlbumPage({
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-20">
+    <div className="flex flex-col gap-3 pb-20">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-ink-900">อัลบั้ม</h1>
         {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join

@@ -19,12 +19,9 @@ import {
   videoMimeOf,
 } from "@/lib/video";
 import { cn } from "@/lib/cn";
+import { ALBUM_TYPE_OPTIONS } from "@/lib/photo-types";
 
-const TYPES = [
-  { value: "ultrasound", label: "อัลตราซาวด์" },
-  { value: "family", label: "ครอบครัว" },
-  { value: "other", label: "อื่นๆ" },
-] as const;
+const TYPES = ALBUM_TYPE_OPTIONS;
 
 const MAX_BATCH = 10;
 /** ต้องต่ำกว่า serverActions.bodySizeLimit ใน next.config.ts เผื่อ overhead ของ multipart */
