@@ -52,7 +52,7 @@ export default async function DashboardPage() {
   const weekly = weeklyContent(data.ga?.weeks);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* viewer เห็นแถบบอกสิทธิ์ครั้งแรก จะได้ไม่สงสัยว่าทำไมไม่มีปุ่มเพิ่ม */}
       {role === "viewer" && (
         <p className="flex items-center gap-2 rounded-md bg-cream-100 px-4 py-2.5 text-[13px] text-ink-600">
@@ -61,8 +61,8 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[2fr_1fr] lg:items-start">
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[2fr_1fr] lg:items-start">
+        <div className="flex flex-col gap-3">
           {data.ga ? (
             <GestationHero
               ga={data.ga}
@@ -86,7 +86,7 @@ export default async function DashboardPage() {
           <LaborCard week={data.ga?.weeks ?? null} active={activeLabor != null} />
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <NextAppointmentCard appt={data.nextAppointment} now={now} openQuestions={openQuestions} />
           <RecentLogsCard logs={data.recentLogs} />
         </div>

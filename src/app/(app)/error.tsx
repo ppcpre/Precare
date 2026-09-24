@@ -17,7 +17,7 @@ export default function AppError({
   }, [error]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-start gap-3 rounded-md border border-danger bg-cream-100 p-4">
         <AlertCircle size={20} strokeWidth={1.9} className="mt-0.5 shrink-0 text-danger" />
         <div className="flex flex-col gap-1">

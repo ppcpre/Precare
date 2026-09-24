@@ -62,7 +62,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <header className="flex items-center gap-2">
         <Link
           href="/appointments"
@@ -170,7 +170,7 @@ function MonthView({
   const groupsInMonth = byGroup(cur.items).filter((g) => g.totals.counted > 0);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between gap-2">
           <MonthArrow to={prev && href({ view: "month", month: prev.key })} dir="prev" />
@@ -287,7 +287,7 @@ function GroupView({ all }: { all: CostItem[] }) {
   const nowIso = new Date().toISOString();
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
         <div className="flex flex-col gap-0.5">
           <span className="text-[13px] text-ink-600">รวมทุกกลุ่ม</span>

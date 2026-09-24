@@ -73,7 +73,7 @@ export function LaborTimer({
   const rows = [...done].reverse().slice(0, 8);
 
   return (
-    <div className="flex flex-col gap-4 pb-24">
+    <div className="flex flex-col gap-3 pb-24">
       <div className="flex gap-2.5">
         <Pill label="จับมาแล้ว" value={sessionMs ? clock(sessionMs) : "—"} />
         <Pill label="บันทึกไว้" value={`${done.length} ครั้ง`} />

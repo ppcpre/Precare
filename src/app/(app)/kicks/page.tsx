@@ -40,7 +40,7 @@ export default async function KicksPage() {
   const avg = averageMs(sessions);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <header className="flex items-center gap-2">
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900">
           <Footprints size={22} strokeWidth={1.9} className="text-peach-700" />
@@ -152,7 +152,7 @@ function History({
   const max = Math.max(...recent.map((s) => s.durationMs ?? 0), 1);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {recent.length > 1 && (
         <div className="flex flex-col gap-3 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
           <div className="flex items-center justify-between gap-2">

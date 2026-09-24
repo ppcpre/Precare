@@ -51,7 +51,7 @@ export function PrivacyControls({
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3 rounded-md border border-cream-200 bg-white p-3.5 shadow-[var(--shadow-card)]">
         <button
           type="button"
@@ -107,7 +107,7 @@ export function PrivacyControls({
             ลบบัญชี
           </Button>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <Field
               label="พิมพ์อีเมลของคุณเพื่อยืนยัน"
               value={typed}

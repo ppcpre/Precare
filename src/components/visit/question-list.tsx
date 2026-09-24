@@ -28,7 +28,7 @@ export function QuestionList({ items, canWrite }: { items: Item[]; canWrite: boo
     add.result.serverError ?? toggle.result.serverError ?? remove.result.serverError;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Section title={`ยังไม่ได้ถาม · ${open.length} ข้อ`} empty="ยังไม่มีคำถามที่จดไว้">
         {open.map((q) => (
           <Row key={q.id} q={q} canWrite={canWrite} onToggle={toggle.execute} onDelete={remove.execute} />

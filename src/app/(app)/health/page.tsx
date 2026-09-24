@@ -37,7 +37,7 @@ export default async function HealthPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-20">
+    <div className="flex flex-col gap-3 pb-20">
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-ink-900">บันทึกสุขภาพ</h1>
         <div className="flex shrink-0 items-center gap-2">

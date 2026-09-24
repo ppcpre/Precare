@@ -44,7 +44,7 @@ export default async function PrivacyPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-6">
+    <div className="flex flex-col gap-3 pb-6">
       <header className="flex items-center gap-2">
         <Link
           href="/profile"

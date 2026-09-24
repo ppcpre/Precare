@@ -66,7 +66,7 @@ export function KickCounter({ session, canEdit }: { session: SessionView; canEdi
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex gap-2.5">
         <Stat label="ผ่านไปแล้ว" value={now === 0 ? "—" : formatDuration(elapsed)} warn={overLimit} />
         <Stat
@@ -257,7 +257,7 @@ function FinishPanel({
       : elapsed;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col items-center gap-2.5 py-4">
         <span className="flex size-20 items-center justify-center rounded-full bg-peach-100">
           <Footprints size={38} strokeWidth={1.6} className="text-peach-700" />

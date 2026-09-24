@@ -33,7 +33,7 @@ export default async function FamilyPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <header className="flex items-center gap-1">
         {/* เข้ามาจากโปรไฟล์ จึงต้องมีปุ่มย้อนกลับ */}
         <Link

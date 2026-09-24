@@ -68,7 +68,7 @@ export default async function ProfilePage() {
   const vapidPublicKey = env.VAPID_PUBLIC_KEY ?? "";
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <div className="flex flex-col gap-3 pb-4">
       <h1 className="text-2xl font-semibold text-ink-900">โปรไฟล์</h1>
 
       <Card className="items-start gap-4 rounded-lg p-3.5">

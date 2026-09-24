@@ -43,7 +43,7 @@ export default async function LaborPage() {
   const week = dash.ga?.weeks ?? null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <header className="flex items-center gap-2">
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900">
           <Waves size={22} strokeWidth={1.9} className="text-peach-700" />
