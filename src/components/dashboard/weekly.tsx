@@ -68,22 +68,23 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
           <span className="text-lg leading-tight font-semibold text-ink-900">{content.size}</span>
 
           {lengthCm != null && weightG != null ? (
-            /* เดิมเป็นสองกล่องเต็มความกว้าง กินความสูงอีก 36px เพื่อบอกเลขสองตัว
-               ตัวเลขสั้นขนาดนี้อยู่บรรทัดเดียวกับชื่อขนาดได้สบาย */
-            <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-600">
-              <span className="flex items-center gap-1.5">
-                <Ruler size={14} strokeWidth={1.8} className="shrink-0 text-ink-400" />
-                {lengthCm} ซม.
+            /* กล่องพื้นครีมแบบเดิม แต่ย้ายมาอยู่ในคอลัมน์ข้างรูป ไม่ใช่แถวเต็ม
+               ความกว้างใต้รูปเหมือนก่อน — ได้กรอบเหมือนเดิมโดยไม่เพิ่มแถวใหม่ */
+            <span className="mt-0.5 flex gap-2">
+              <span className="flex flex-1 items-center gap-2 rounded-sm bg-cream-100 px-3 py-2">
+                <Ruler size={16} strokeWidth={1.8} className="shrink-0 text-ink-400" />
+                <span className="text-sm text-ink-900">{lengthCm} ซม.</span>
               </span>
-              <span aria-hidden className="size-1 rounded-full bg-brown-300" />
-              <span className="flex items-center gap-1.5">
-                <Weight size={14} strokeWidth={1.8} className="shrink-0 text-ink-400" />
-                {weightG >= 1000 ? `${(weightG / 1000).toFixed(2)} กก.` : `${weightG} ก.`}
+              <span className="flex flex-1 items-center gap-2 rounded-sm bg-cream-100 px-3 py-2">
+                <Weight size={16} strokeWidth={1.8} className="shrink-0 text-ink-400" />
+                <span className="text-sm text-ink-900">
+                  {weightG >= 1000 ? `${(weightG / 1000).toFixed(2)} กก.` : `${weightG} ก.`}
+                </span>
               </span>
             </span>
           ) : (
             // สัปดาห์ 4–7 ยังเล็กเกินกว่าจะวัดเป็นมาตรฐานได้ อย่าโชว์ช่องว่างเปล่าๆ
-            <span className="text-[13px] leading-relaxed text-ink-600">
+            <span className="mt-0.5 rounded-sm bg-cream-100 px-3 py-2 text-[13px] leading-relaxed text-ink-600">
               ช่วงนี้ตัวยังเล็กเกินกว่าจะวัดความยาวและน้ำหนักเป็นมาตรฐานได้
             </span>
           )}
