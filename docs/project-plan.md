@@ -721,6 +721,14 @@ npx wrangler secret put VAPID_PRIVATE_KEY --config workers/cron/wrangler.jsonc -
 
 ### 6.6 Phase 2 — เนื้อหารายสัปดาห์ (ขนาดลูกน้อย + พัฒนาการ)
 
+**รูปเทียบขนาดครบ 37 สัปดาห์แล้ว (24 ก.ย.)** — อยู่ใน R2 `precare-assets`
+ที่ `weekly/size/wNN.webp` · ต้นฉบับ SVG อยู่ใน `assets/weekly-size/`
+สร้างใหม่และอัปซ้ำได้ด้วย `node scripts/build-size-images.mjs --upload`
+
+25 ใบดัดแปลงจาก Microsoft Fluent Emoji (MIT) อีก 12 ใบวาดเองเพราะไม่มีอีโมจิ
+ของผลไม้/ผักนั้น — รายละเอียดสัญญาอนุญาตอยู่ใน [third-party-licenses.md](./third-party-licenses.md)
+
+
 ข้อมูล 37 สัปดาห์รวบรวมเสร็จแล้วใน **[pregnancy-weekly-data.md](./pregnancy-weekly-data.md)** — ความยาว น้ำหนัก การเทียบขนาดกับผลไม้ไทย และคำบรรยายพัฒนาการ พร้อมแหล่งอ้างอิง
 
 | งาน | รายละเอียด | ประเมิน |

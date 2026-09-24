@@ -52,19 +52,40 @@ test("หน้าแรกแสดงขนาดและพัฒนาก�
   await expect(page.getByRole("heading", { name: "ขนาดของลูกน้อย" })).toHaveCount(0);
 });
 
-test("ยังไม่มีไฟล์รูปใน R2 ต้องขึ้นไอคอนแทน ไม่ใช่รูปพัง", async ({ page }) => {
+test("รูปเทียบขนาดโหลดไม่ขึ้น ต้องขึ้นไอคอนแทน ไม่ใช่รูปพัง", async ({ page }) => {
+  // ตัดคำขอรูปทิ้งเอง ไม่พึ่งว่า "R2 ว่างอยู่" — พออัปไฟล์จริงขึ้นไปแล้ว
+  // เทสต์ที่พึ่งความว่างจะกลายเป็นของปลอมที่ผ่านตลอดโดยไม่ได้ทดสอบอะไร
+  await page.route("**/api/asset/weekly/size/**", (r) => r.abort());
+
   await signUp(page, uniqueEmail("fallback"), "แม่ฟอลแบ็ก");
   await completeOnboarding(page, "ครอบครัวฟอลแบ็ก");
 
   const card = page.getByRole("heading", { name: "พัฒนาการของลูกน้อย" }).locator("../..");
-
-  // route ต้องตอบ 404 จริง (ยังไม่ได้ใส่ไฟล์) ไม่ใช่พังด้วย 500
-  const res = await page.request.get("/api/asset/weekly/size/w24.webp");
-  expect(res.status()).toBe(404);
-
-  // แล้ว UI ต้องสลับไปไอคอนเอง ไม่เหลือ <img> ที่โหลดไม่ขึ้นค้างไว้
+  // ต้องไม่เหลือ <img> ที่โหลดไม่ขึ้นค้างไว้ ไม่งั้นเบราว์เซอร์วาดไอคอนรูปพังให้
   await expect(card.locator('img[src*="/api/asset/"]')).toHaveCount(0);
   await expect(card.locator("svg").first()).toBeVisible();
+});
+
+/** 1x1 png โปร่งใส — เล็กที่สุดที่ยังเป็นไฟล์ภาพที่เบราว์เซอร์ถอดรหัสได้จริง */
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test("รูปเทียบขนาดโหลดขึ้น ต้องใช้รูปนั้น ไม่ใช่ตกไปที่ไอคอน", async ({ page }) => {
+  await page.route("**/api/asset/weekly/size/**", (r) =>
+    r.fulfill({ status: 200, contentType: "image/png", body: TINY_PNG }),
+  );
+
+  await signUp(page, uniqueEmail("hasimg"), "แม่มีรูป");
+  await completeOnboarding(page, "ครอบครัวมีรูป");
+
+  const card = page.getByRole("heading", { name: "พัฒนาการของลูกน้อย" }).locator("../..");
+  const img = card.locator('img[src*="/api/asset/"]');
+  await expect(img).toHaveCount(1);
+  await expect
+    .poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
+    .toBeGreaterThan(0);
 });
 
 test("รูปประกอบต้อง cache แบบ public ได้ ต่างจากรูปของผู้ใช้", async ({ page, browser }) => {
