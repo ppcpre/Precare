@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Images, Play, Plus } from "lucide-react";
 import { formatClip } from "@/lib/video";
+import { mediaUrl, type MediaBase } from "@/lib/media-src";
 
 type Item = {
   id: string;
@@ -24,11 +25,14 @@ export function AppointmentMedia({
   takenAt,
   items,
   canWrite,
+  mediaBase,
 }: {
   appointmentId: string;
   takenAt: string;
   items: Item[];
   canWrite: boolean;
+  /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
+  mediaBase?: MediaBase | null;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -62,7 +66,7 @@ export function AppointmentMedia({
               {key ? (
                 /* eslint-disable-next-line @next/next/no-img-element -- ไฟล์จาก R2 ผ่าน route ที่เช็คสิทธิ์แล้ว */
                 <img
-                  src={`/api/media/${key}`}
+                  src={mediaUrl(mediaBase, key)}
                   alt={m.caption ?? (isVideo ? "คลิปที่แนบกับนัด" : "รูปที่แนบกับนัด")}
                   loading="lazy"
                   className="size-full object-cover"

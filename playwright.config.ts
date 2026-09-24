@@ -10,6 +10,8 @@ import { defineConfig, devices } from "@playwright/test";
  * แลกมาด้วยเวลา build ~15 วินาทีก่อนเริ่ม ซึ่งรับได้
  */
 const PORT = 8788;
+/** worker เสิร์ฟไฟล์ — คนละ worker คนละพอร์ต เหมือนตอน deploy จริง */
+const MEDIA_PORT = 8789;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -36,7 +38,8 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
   ],
 
-  webServer: {
+  webServer: [
+    {
     /**
      * migrate ก่อนเสมอ — บน CI ยังไม่มี D1 local เลย ถ้าไม่รันตรงนี้
      * worker จะขึ้นได้แต่ทุกหน้าพังเพราะไม่มีตาราง
@@ -58,6 +61,9 @@ export default defineConfig({
       `npx wrangler dev --local --port ${PORT} ` +
       `--var BETTER_AUTH_URL:http://localhost:${PORT} ` +
       `--var BETTER_AUTH_SECRET:e2e-only-not-a-real-secret-000000000000 ` +
+      // ชี้ไป worker เสิร์ฟไฟล์ที่เปิดคู่กันข้างล่าง ไม่ใช่ตัวที่ deploy จริง
+      // ไม่ทับค่านี้ เทสต์จะไปดึงไฟล์จาก production
+      `--var MEDIA_ORIGIN:http://localhost:${MEDIA_PORT} ` +
       `--var AUTH_RATE_LIMIT_MAX:500`,
     url: `http://localhost:${PORT}/login`,
     reuseExistingServer: !process.env.CI,
@@ -68,8 +74,27 @@ export default defineConfig({
      * ตามจำนวน migration ที่เพิ่มขึ้น เคยตั้งไว้ 240 วินาทีแล้วเกินจนล้มทั้งชุด
      * โดยขึ้น error ว่า webServer ไม่ยอมสตาร์ต ซึ่งชี้ไปผิดที่
      */
-    timeout: 600_000,
-    stdout: "pipe",
-    stderr: "pipe",
-  },
+      timeout: 600_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+
+    /**
+     * worker เสิร์ฟไฟล์ — เปิดจริงคู่กัน ไม่ใช่จำลอง
+     *
+     * ตัวที่พังเงียบที่สุดของเรื่องนี้คือ "กุญแจเซ็นตั๋วไม่ตรงกันระหว่างสอง worker"
+     * ซึ่งจะเห็นก็ต่อเมื่อมีสองตัวจริงๆ คุยกันผ่าน D1 ตัวเดียวกัน
+     * --persist-to จึงต้องชี้มาที่เดียวกับของแอป (ค่า default ของแอปคือที่นี่)
+     */
+    {
+      command:
+        `npx wrangler dev --config workers/media/wrangler.jsonc --local ` +
+        `--port ${MEDIA_PORT} --persist-to .wrangler/state`,
+      url: `http://localhost:${MEDIA_PORT}/healthz`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  ],
 });

@@ -56,17 +56,28 @@ const PUBLIC_PREFIXES = [
  * ซึ่งจำเป็นกับ chunk ของ Next ที่โหลดกันเป็นทอดๆ
  */
 function buildCsp(nonce: string) {
+  /**
+   * ต้นทางของ worker เสิร์ฟไฟล์ ถ้ามี
+   *
+   * อ่านจาก process.env ไม่ใช่ getCloudflareContext — middleware รันก่อน
+   * ที่ context จะพร้อม และ OpenNext ยก vars ของ worker มาไว้ใน process.env ให้แล้ว
+   */
+  const origin = process.env.MEDIA_ORIGIN?.replace(/\/+$/, "");
+  const media = origin ? ` ${origin}` : "";
+
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.googleusercontent.com",
+    // media: คือ worker เสิร์ฟไฟล์ (workers/media) ซึ่งเป็นคนละ origin กับแอป
+    // ลืมข้อนี้แล้วรูปทุกใบจะหายเงียบๆ โดยไม่มี error ในหน้า — เจอมาแล้วตอนต่อครั้งแรก
+    `img-src 'self' data: blob: https://*.googleusercontent.com${media}`,
     // media-src blob:: หน้าเพิ่มไฟล์เปิดคลิปที่เลือกไว้ด้วย URL.createObjectURL
     // เพื่ออ่านความยาวและดึงเฟรมมาทำหน้าปก — ทั้งสองอย่างทำฝั่ง server ไม่ได้
     // ถ้าไม่มีบรรทัดนี้ media-src จะตกไปใช้ default-src 'self' ซึ่งไม่รวม blob:
     // แล้ว <video> จะยิง error โดยไม่บอกว่าโดน CSP บล็อก — โผล่เป็น
     // "เปิดไฟล์วิดีโอไม่ได้" กับ mp4 ที่ปกติดีทุกไฟล์ (เจอตอนทดสอบบนเครื่องจริง)
-    "media-src 'self' blob:",
+    `media-src 'self' blob:${media}`,
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",

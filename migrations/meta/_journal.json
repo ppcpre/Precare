@@ -85,6 +85,13 @@
       "when": 1790228080664,
       "tag": "0011_cover_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790230911211,
+      "tag": "0012_app_secrets",
+      "breakpoints": true
     }
   ]
 }

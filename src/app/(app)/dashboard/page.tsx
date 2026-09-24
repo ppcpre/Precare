@@ -17,6 +17,7 @@ import { KickCard } from "@/components/kicks/dashboard-card";
 import { LaborCard } from "@/components/labor/dashboard-card";
 import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
+import { familyMediaBase } from "@/lib/media-base";
 
 export const metadata = { title: "หน้าแรก · Pre Care" };
 
@@ -33,12 +34,13 @@ export default async function DashboardPage() {
   }
 
   const { db, familyId, role } = ctx;
-  const [data, activeKick, kickSessions, openQuestions, activeLabor] = await Promise.all([
+  const [data, activeKick, kickSessions, openQuestions, activeLabor, mediaBase] = await Promise.all([
     getDashboard(db, familyId),
     getActiveKickSession(db, familyId),
     listKickSessions(db, familyId, 10),
     countOpenQuestions(db, familyId),
     getActiveLaborSession(db, familyId),
+    familyMediaBase(familyId),
   ]);
 
   // now มาจาก getDashboard ไม่ใช่เรียก Date.now() ใน render
@@ -68,6 +70,7 @@ export default async function DashboardPage() {
               dueDate={data.profile?.dueDate ?? null}
               cover={data.cover}
               canEdit={canWrite}
+              mediaBase={mediaBase}
             />
           ) : (
             <SetupPrompt canEdit={can.editPregnancy(role)} />

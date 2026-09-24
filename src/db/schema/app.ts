@@ -18,6 +18,22 @@ export const families = sqliteTable("families", {
   createdAt: text("created_at").notNull().default(nowIso),
 });
 
+/**
+ * ความลับที่ระบบสร้างเอง ไม่ใช่ของที่คนตั้ง
+ *
+ * ตอนนี้มีรายการเดียว: กุญแจเซ็นลิงก์ไฟล์ที่ worker เสิร์ฟไฟล์ใช้ตรวจ
+ * เก็บใน D1 เพราะทั้งแอปและ worker ตัวนั้นผูก D1 ตัวเดียวกันอยู่แล้ว
+ * ถ้าใช้ `wrangler secret put` แทน จะต้องตั้งค่าเดียวกันสองที่ด้วยมือ
+ * และตอนหมุนกุญแจต้องทำพร้อมกันเป๊ะ ไม่งั้นลิงก์ที่ค้างอยู่พังทั้งหมด
+ *
+ * ไม่ได้ลดชั้นความปลอดภัยลง — ใครที่อ่าน D1 ได้ก็อ่านข้อมูลผู้ใช้ทั้งหมดได้อยู่แล้ว
+ */
+export const appSecrets = sqliteTable("app_secrets", {
+  name: text("name").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(nowIso),
+});
+
 export const ROLES = ["owner", "editor", "viewer"] as const;
 export const MEMBER_STATUS = ["active", "invited", "removed"] as const;
 

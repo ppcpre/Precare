@@ -35,6 +35,21 @@ test("หน้าล็อกอินส่ง security header ครบ", asy
   // ทำให้ mp4 ที่ปกติดีทุกไฟล์ขึ้นว่า "เปิดไฟล์วิดีโอไม่ได้" (เจอบนเครื่องจริง)
   // อ่านความยาวคลิปกับดึงเฟรมมาทำหน้าปกจึงพังทั้งคู่ = อัปคลิปไม่ได้เลย
   expect(csp).toMatch(/media-src[^;]*blob:/);
+
+  /**
+   * regression: worker เสิร์ฟไฟล์อยู่คนละ origin กับแอป
+   *
+   * ลืมใส่ต้นทางของมันใน img-src/media-src แล้วรูปทุกใบหายเงียบ ไม่มี error
+   * ในหน้า ไม่มีคำขอใน network — เบราว์เซอร์บล็อกก่อนยิง (เจอตอนต่อครั้งแรก)
+   * เทสต์นี้ผูกกับค่าที่ worker ได้รับจริง ไม่ใช่ค่าคงที่ในเทสต์
+   */
+  const mediaOrigin = "http://localhost:8789";
+  expect(csp, "img-src ต้องอนุญาตต้นทางของ worker เสิร์ฟไฟล์").toMatch(
+    new RegExp(`img-src[^;]*${mediaOrigin}`),
+  );
+  expect(csp, "media-src ต้องอนุญาตต้นทางของ worker เสิร์ฟไฟล์").toMatch(
+    new RegExp(`media-src[^;]*${mediaOrigin}`),
+  );
 });
 
 test("nonce ต้องไม่ซ้ำกันระหว่าง request", async ({ page }) => {

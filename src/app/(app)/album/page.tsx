@@ -7,6 +7,7 @@ import { PhotoGroups } from "@/components/album/photo-groups";
 import { AlbumViewToggle } from "@/components/album/view-toggle";
 import { QuotaBar } from "@/components/album/quota-bar";
 import { listPhotos, requireFamilyContext } from "@/lib/queries";
+import { familyMediaBase } from "@/lib/media-base";
 import { getStorageUsage } from "@/lib/storage";
 import { can } from "@/lib/authz";
 
@@ -49,9 +50,10 @@ export default async function AlbumPage({
     throw e;
   }
 
-  const [items, usage] = await Promise.all([
+  const [items, usage, mediaBase] = await Promise.all([
     listPhotos(ctx.db, ctx.familyId, active, onlyVideo),
     getStorageUsage(ctx.db),
+    familyMediaBase(ctx.familyId),
   ]);
   const canWrite = can.writeRecords(ctx.role);
 
@@ -143,7 +145,7 @@ export default async function AlbumPage({
           {/* จัดกลุ่มตามวันที่ ไม่ใช่ตามสัปดาห์ครรภ์
               หน้านี้จะถูกใช้กับบันทึกเรื่องอื่นที่ไม่ใช่การตั้งครรภ์ด้วย
               วันที่มีเสมอ ส่วนสัปดาห์มีเฉพาะตอนตั้งครรภ์ จึงเป็นแค่แท็ก */}
-          <PhotoGroups items={items} canWrite={canWrite} />
+          <PhotoGroups items={items} canWrite={canWrite} mediaBase={mediaBase} />
         </>
       )}
 

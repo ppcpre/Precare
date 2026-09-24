@@ -10,6 +10,7 @@ import {
   requireFamilyContext,
 } from "@/lib/queries";
 import { can } from "@/lib/authz";
+import { familyMediaBase } from "@/lib/media-base";
 
 export const metadata = { title: "แก้ไขนัดหมาย · Pre Care" };
 
@@ -30,11 +31,12 @@ export default async function EditAppointmentPage({
     redirect("/appointments");
   }
 
-  const [appt, groups, media, receipts] = await Promise.all([
+  const [appt, groups, media, receipts, mediaBase] = await Promise.all([
     getAppointmentById(ctx.db, ctx.familyId, id),
     listCareGroups(ctx.db, ctx.familyId),
     listAppointmentMedia(ctx.db, ctx.familyId, id),
     listAppointmentReceipts(ctx.db, ctx.familyId, id),
+    familyMediaBase(ctx.familyId),
   ]);
   if (!appt) notFound();
 
@@ -49,6 +51,7 @@ export default async function EditAppointmentPage({
           costSatang={appt.costSatang}
           claimStatus={appt.claimStatus}
           canWrite={can.writeRecords(ctx.role)}
+          mediaBase={mediaBase}
         />
       }
       media={
@@ -59,6 +62,7 @@ export default async function EditAppointmentPage({
           takenAt={appt.apptDatetime.slice(0, 10)}
           items={media}
           canWrite={can.writeRecords(ctx.role)}
+          mediaBase={mediaBase}
         />
       }
     />

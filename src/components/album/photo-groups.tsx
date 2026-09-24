@@ -7,6 +7,7 @@ import { PhotoTile } from "@/components/album/photo-tile";
 import { useAlbumView } from "@/components/album/view-toggle";
 import { groupByMonthDay, type AlbumPhoto } from "@/lib/album-groups";
 import { monthKeyLabel } from "@/lib/format";
+import type { MediaBase } from "@/lib/media-src";
 
 const isVideo = (p: AlbumPhoto) => p.mediaKind === "video";
 
@@ -31,7 +32,16 @@ function dayLabel(key: string) {
  * การหาว่า "วันนั้นถ่ายอะไรไว้" จะช้าลงทุกสัปดาห์
  * แถวเลื่อนทำให้หนึ่งวันสูงเท่ากันเสมอ ไม่ว่าจะมี 2 รูปหรือ 20 รูป
  */
-export function PhotoGroups({ items, canWrite }: { items: AlbumPhoto[]; canWrite: boolean }) {
+export function PhotoGroups({
+  items,
+  canWrite,
+  mediaBase,
+}: {
+  items: AlbumPhoto[];
+  canWrite: boolean;
+  /** ตั๋วเข้าถึงไฟล์ของครอบครัวนี้ ออกจากฝั่ง server ตอน render หน้า */
+  mediaBase?: MediaBase | null;
+}) {
   const [view] = useAlbumView();
   const months = groupByMonthDay(items);
 
@@ -95,11 +105,11 @@ export function PhotoGroups({ items, canWrite }: { items: AlbumPhoto[]; canWrite
                 {day.items.map((p) =>
                   view === "grid" ? (
                     <span key={p.id} className="w-[108px] shrink-0 snap-start">
-                      <PhotoTile {...p} />
+                      <PhotoTile {...p} mediaBase={mediaBase} />
                     </span>
                   ) : (
                     <span key={p.id} className="shrink-0 snap-start">
-                      <PhotoCard {...p} />
+                      <PhotoCard {...p} mediaBase={mediaBase} />
                     </span>
                   ),
                 )}

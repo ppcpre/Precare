@@ -4,6 +4,8 @@ import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } f
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
 import { getCoverPhotoId, getPhotoById, requireFamilyContext } from "@/lib/queries";
+import { familyMediaBase } from "@/lib/media-base";
+import { mediaUrl } from "@/lib/media-src";
 import { can } from "@/lib/authz";
 import { thaiDateFull, thaiDate } from "@/lib/format";
 import { formatClip } from "@/lib/video";
@@ -29,9 +31,10 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
     throw e;
   }
 
-  const [photo, coverPhotoId] = await Promise.all([
+  const [photo, coverPhotoId, mediaBase] = await Promise.all([
     getPhotoById(ctx.db, ctx.familyId, id),
     getCoverPhotoId(ctx.db, ctx.familyId),
+    familyMediaBase(ctx.familyId),
   ]);
   if (!photo) notFound();
 
@@ -49,8 +52,8 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
              การกดเล่นจะเด้งเป็นเครื่องเล่นเต็มจอของระบบแทนที่จะเล่นในหน้า
              poster ทำให้เห็นว่าคลิปนี้คืออะไรก่อนกด ไม่ใช่กล่องดำ */
           <video
-            src={`/api/media/${photo.r2Key}`}
-            poster={photo.thumbKey ? `/api/media/${photo.thumbKey}` : undefined}
+            src={mediaUrl(mediaBase, photo.r2Key)}
+            poster={photo.thumbKey ? mediaUrl(mediaBase, photo.thumbKey) : undefined}
             controls
             playsInline
             preload="metadata"
@@ -59,7 +62,7 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
         ) : (
           /* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */
           <img
-            src={`/api/media/${photo.r2Key}`}
+            src={mediaUrl(mediaBase, photo.r2Key)}
             alt={photo.caption ?? "รูปในอัลบั้ม"}
             className="max-h-[60dvh] w-full rounded-md object-contain"
           />

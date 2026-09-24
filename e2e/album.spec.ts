@@ -70,7 +70,7 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
   });
 
   await test.step("รูปโหลดขึ้นจริง ไม่ใช่กรอบว่าง", async () => {
-    const tiles = page.locator('img[src^="/api/media/"]');
+    const tiles = page.locator('img[src*="/photos/"]');
     await expect(tiles).toHaveCount(2);
     for (let i = 0; i < 2; i++) {
       await expect

@@ -15,7 +15,7 @@ test("ตั้งรูปในอัลบั้มเป็นรูปห�
   await signUp(page, uniqueEmail("cover"), "แม่หน้าปก");
   await completeOnboarding(page, "ครอบครัวหน้าปก");
 
-  const hero = page.locator('img[src^="/api/media/"]').first();
+  const hero = page.locator('img[src*="/photos/"]').first();
 
   await test.step("ยังไม่ได้เลือก — การ์ดไม่มีรูป แต่มีทางเข้า", async () => {
     await expect(page.getByRole("link", { name: "เลือกรูปหน้าปกจากอัลบั้ม" })).toBeVisible();
@@ -33,7 +33,7 @@ test("ตั้งรูปในอัลบั้มเป็นรูปห�
 
   await test.step("กดเข้าไปที่รูป แล้วตั้งเป็นหน้าปก", async () => {
     // คลิกที่ไทล์รูป ไม่ใช่ a[href^="/album/"] ตัวแรก — ตัวนั้นคือปุ่ม "เพิ่มไฟล์" ที่ชี้ /album/upload
-    await page.locator('img[src^="/api/media/"]').first().click();
+    await page.locator('img[src*="/photos/"]').first().click();
     await page.waitForURL(/\/album\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await page.getByRole("button", { name: "ตั้งเป็นรูปหน้าปกหน้าแรก" }).click();
     await expect(page.getByText("รูปหน้าปกหน้าแรก", { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -69,7 +69,7 @@ test("ลบรูปที่เป็นหน้าปกอยู่ได�
   await page.getByRole("button", { name: /เพิ่ม 1 ไฟล์/ }).click();
   await page.waitForURL(/\/album$/, { timeout: 45_000 });
 
-  await page.locator('img[src^="/api/media/"]').first().click();
+  await page.locator('img[src*="/photos/"]').first().click();
   await page.waitForURL(/\/album\/[0-9a-f-]{36}/, { timeout: 30_000 });
   await page.getByRole("button", { name: "ตั้งเป็นรูปหน้าปกหน้าแรก" }).click();
   await expect(page.getByText("รูปหน้าปกหน้าแรก", { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -80,6 +80,6 @@ test("ลบรูปที่เป็นหน้าปกอยู่ได�
   await page.waitForURL(/\/album$/, { timeout: 45_000 });
 
   await page.goto("/dashboard");
-  await expect(page.locator('img[src^="/api/media/"]')).toHaveCount(0);
+  await expect(page.locator('img[src*="/photos/"]')).toHaveCount(0);
   await expect(page.getByRole("link", { name: "เลือกรูปหน้าปกจากอัลบั้ม" })).toBeVisible();
 });

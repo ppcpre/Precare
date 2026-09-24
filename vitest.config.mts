@@ -19,6 +19,8 @@ export default defineConfig({
         compatibilityFlags: ["nodejs_compat"],
         // D1 จริงในหน่วยความจำ ไม่ใช่ mock
         d1Databases: ["DB"],
+        // R2 จริงในหน่วยความจำ — worker เสิร์ฟไฟล์อ่านจาก bucket นี้
+        r2Buckets: ["PHOTOS_BUCKET"],
         bindings: { TEST_MIGRATIONS: migrations },
       },
     }),

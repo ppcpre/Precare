@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { GestationProgress } from "@/components/ui/progress";
 import { thaiDate } from "@/lib/format";
+import { mediaUrl, type MediaBase } from "@/lib/media-src";
 import type { GestationalAge } from "@/lib/pregnancy";
 
 /** เลขสัปดาห์คือจุดสายตาแรกของหน้า ตาม design principle ข้อ 2 */
@@ -13,6 +14,7 @@ export function GestationHero({
   dueDate,
   cover,
   canEdit,
+  mediaBase,
 }: {
   ga: GestationalAge;
   daysLeft: number | null;
@@ -20,6 +22,8 @@ export function GestationHero({
   /** รูปหน้าปกที่เลือกไว้จากอัลบั้ม — ไม่มีก็กลับไปเป็นการ์ดพื้นสีล้วนแบบเดิม */
   cover?: { key: string; week: number | null } | null;
   canEdit?: boolean;
+  /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
+  mediaBase?: MediaBase | null;
 }) {
   const overdue = daysLeft != null && daysLeft < 0;
   return (
@@ -31,7 +35,7 @@ export function GestationHero({
         <div className="relative overflow-hidden rounded-lg">
           {/* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */}
           <img
-            src={`/api/media/${cover.key}`}
+            src={mediaUrl(mediaBase, cover.key)}
             alt=""
             className="h-[170px] w-full bg-cream-200 object-cover"
           />

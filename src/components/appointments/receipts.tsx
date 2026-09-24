@@ -12,6 +12,7 @@ import { PHOTO_EDGE, resizeToWebp } from "@/lib/image";
 import { formatBaht, parseBaht } from "@/lib/money";
 import type { ReceiptRead } from "@/lib/receipt";
 import type { ClaimStatus } from "@/db/schema";
+import { mediaUrl, type MediaBase } from "@/lib/media-src";
 
 type Item = { id: string; r2Key: string; receiptTotalSatang: number | null };
 
@@ -28,12 +29,15 @@ export function AppointmentReceipts({
   costSatang,
   claimStatus,
   canWrite,
+  mediaBase,
 }: {
   appointmentId: string;
   items: Item[];
   costSatang: number | null;
   claimStatus: ClaimStatus;
   canWrite: boolean;
+  /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
+  mediaBase?: MediaBase | null;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -142,7 +146,7 @@ export function AppointmentReceipts({
             <li key={it.id} className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element -- ไฟล์ส่วนตัวผ่าน /api/media ใช้ next/image ไม่ได้ */}
               <img
-                src={`/api/media/${it.r2Key}`}
+                src={mediaUrl(mediaBase, it.r2Key)}
                 alt={`ใบเสร็จใบที่ ${i + 1}`}
                 className="size-12 shrink-0 rounded-[8px] border border-cream-200 object-cover"
               />

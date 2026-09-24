@@ -1,0 +1,34 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "precare-media",
+  "main": "index.ts",
+  "compatibility_date": "2026-08-01",
+
+  "observability": { "enabled": true },
+
+  // ไม่มี assets, ไม่มี AI, ไม่มี nodejs_compat — ตั้งใจให้ bundle เล็กที่สุด
+  // ยิ่งเล็ก isolate ยิ่งตื่นเร็ว ซึ่งคือเหตุผลทั้งหมดที่ worker ตัวนี้มีอยู่
+  "r2_buckets": [{ "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "precare-db",
+      "database_id": "906981f7-827b-4456-b586-a9d9717eae56"
+    }
+  ],
+
+  "env": {
+    "dev": {
+      "name": "precare-media-dev",
+      "observability": { "enabled": true },
+      "r2_buckets": [{ "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "precare-dev-db",
+          "database_id": "ed7a37a6-37ae-4a48-baa0-b78a311402fd"
+        }
+      ]
+    }
+  }
+}

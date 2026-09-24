@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pin, Play } from "lucide-react";
 import { formatClip } from "@/lib/video";
+import { mediaUrl, type MediaBase } from "@/lib/media-src";
 
 const TYPE_LABEL: Record<string, string> = {
   ultrasound: "อัลตราซาวด์",
@@ -17,6 +18,7 @@ export function PhotoTile({
   type,
   pinned,
   caption,
+  mediaBase,
 }: {
   id: string;
   r2Key: string;
@@ -26,6 +28,8 @@ export function PhotoTile({
   type: string;
   pinned: boolean;
   caption: string | null;
+  /** ตั๋วของ worker เสิร์ฟไฟล์ — ไม่มีก็กลับไปใช้ /api/media ของแอป */
+  mediaBase?: MediaBase | null;
 }) {
   const label = TYPE_LABEL[type];
   const isVideo = mediaKind === "video";
@@ -40,7 +44,7 @@ export function PhotoTile({
       {imageKey ? (
         /* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session แล้ว next/image ตั้ง unoptimized อยู่แล้ว */
         <img
-          src={`/api/media/${imageKey}`}
+          src={mediaUrl(mediaBase, imageKey)}
           alt={caption ?? (isVideo ? "วิดีโอในอัลบั้ม" : "รูปในอัลบั้ม")}
           loading="lazy"
           className="size-full object-cover"

@@ -20,36 +20,48 @@ test("คนนอกครอบครัวเปิดรูปด้วย U
   await page.getByRole("button", { name: /เพิ่ม 1 ไฟล์/ }).click();
   await page.waitForURL(/\/album$/, { timeout: 45_000 });
 
-  const mediaUrl = await page
-    .locator('img[src^="/api/media/"]')
-    .first()
-    .getAttribute("src");
-  expect(mediaUrl).toBeTruthy();
+  const shown = await page.locator('img[src*="/photos/"]').first().getAttribute("src");
+  expect(shown).toBeTruthy();
+
+  // แยกส่วนของ URL ออกมา — ไฟล์เดียวกันเปิดได้สองทาง
+  //   worker เสิร์ฟไฟล์ (มีตั๋วใน query) กับ /api/media ของแอป (ใช้ session)
+  const shownUrl = new URL(shown!, "http://localhost:8788");
+  const key = shownUrl.pathname.replace(/^\/(api\/media\/)?/, "");
+  const appUrl = `http://localhost:8788/api/media/${key}`;
 
   await test.step("เจ้าของเปิดได้ปกติ", async () => {
-    const res = await page.request.get(mediaUrl!);
+    const res = await page.request.get(shown!);
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toContain("image/");
     // ห้าม public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
     expect(res.headers()["cache-control"]).toContain("private");
   });
 
-  await test.step("คนที่ล็อกอินอยู่แต่คนละครอบครัว ต้องได้ 404", async () => {
+  await test.step("ตัดตั๋วออกแล้วเปิดไม่ได้", async () => {
+    const res = await page.request.get(shownUrl.origin + shownUrl.pathname);
+    expect(res.status()).toBe(404);
+  });
+
+  await test.step("คนละครอบครัว เปิดผ่าน /api/media ไม่ได้", async () => {
     const ctx = await browser.newContext();
     const stranger = await ctx.newPage();
     await signUp(stranger, uniqueEmail("stranger"), "คนแปลกหน้า");
     await completeOnboarding(stranger, "ครอบครัวคนแปลกหน้า");
 
-    const res = await stranger.request.get(mediaUrl!);
     // 404 ไม่ใช่ 403 — คนนอกไม่ควรรู้ด้วยซ้ำว่าไฟล์นี้มีอยู่จริง
-    expect(res.status()).toBe(404);
+    expect((await stranger.request.get(appUrl)).status()).toBe(404);
 
+    /**
+     * ส่วน "เอาตั๋วของครอบครัวตัวเองไปยิงใส่ไฟล์ของครอบครัวอื่น" อยู่ใน
+     * test/media-worker.test.ts — ตรงนั้นสร้างตั๋วได้ตรงๆ ไม่ต้องอัปรูปให้
+     * คนแปลกหน้าก่อนเพื่อให้ได้ตั๋วมาหนึ่งใบ (เคยเขียนแบบนั้นแล้วเทสต์หมดเวลา)
+     */
     await ctx.close();
   });
 
-  await test.step("ไม่ได้ล็อกอินต้องได้ 401", async () => {
+  await test.step("ไม่ได้ล็อกอิน เปิดผ่าน /api/media ต้องได้ 401", async () => {
     const ctx = await browser.newContext();
-    const res = await ctx.request.get(`http://localhost:8788${mediaUrl}`);
+    const res = await ctx.request.get(appUrl);
     expect(res.status()).toBe(401);
     await ctx.close();
   });

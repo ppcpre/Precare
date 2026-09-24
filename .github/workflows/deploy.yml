@@ -145,6 +145,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote
 
+      # worker เสิร์ฟไฟล์ต้องขึ้นก่อนแอปเสมอ — แอปเป็นคนออกลิงก์ที่ชี้ไปหามัน
+      # ถ้าแอปขึ้นก่อน จะมีช่วงที่รูปทุกใบ 404
+      - name: Deploy worker เสิร์ฟไฟล์
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/media/wrangler.jsonc
+
       - name: Deploy
         if: steps.probe.outputs.app == 'true'
         uses: cloudflare/wrangler-action@v4
