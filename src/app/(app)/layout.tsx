@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { getLayoutData } from "@/lib/queries";
 import { getStorageUsage } from "@/lib/storage";
 import { StorageNotice } from "@/components/storage-notice";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { timeOf } from "@/lib/format";
 
 /** shell ของโซนที่ล็อกอินแล้ว — header + sidebar (จอกว้าง) / bottom nav (มือถือ) */
@@ -48,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <BottomNav />
+      <PullToRefresh />
       {reminders.length > 0 && <AppointmentReminders reminders={reminders} />}
     </div>
   );

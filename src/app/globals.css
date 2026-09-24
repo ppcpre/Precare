@@ -74,6 +74,9 @@ html, body {
   background: var(--color-cream-50);
   color: var(--color-ink-900);
   -webkit-font-smoothing: antialiased;
+  /* ปิดท่าลากลงรีเฟรชของ Chrome บน Android — เราวาดของเราเองใน PullToRefresh
+     ถ้าไม่ปิด ลากทีเดียวจะรีเฟรชซ้อนกันสองที และตัวชี้สองอันซ้อนกัน */
+  overscroll-behavior-y: contain;
 }
 
 /* touch target ขั้นต่ำ 44px ตาม design principle ข้อ 4 */
