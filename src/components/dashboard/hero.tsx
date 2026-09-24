@@ -104,7 +104,9 @@ export function GestationHero({
       {!cover && canEdit && (
         <Link
           href="/album"
-          className="flex items-center justify-center gap-1.5 text-xs font-medium text-brown-700"
+          /* min-h-11 = 44px ตาม design-system.md ข้อ 4 — ข้อความ text-xs สูงแค่ 16px
+             กฎใน globals.css ครอบเฉพาะ a[role="button"] ลิงก์ธรรมดาไม่โดน */
+          className="flex min-h-11 items-center justify-center gap-1.5 text-xs font-medium text-brown-700"
         >
           <ImagePlus size={14} strokeWidth={1.9} />
           เลือกรูปหน้าปกจากอัลบั้ม

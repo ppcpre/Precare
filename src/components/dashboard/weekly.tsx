@@ -110,7 +110,7 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
       )}
 
       {/* บรรทัดเดียวจริงๆ บนมือถือ — เดิมสองใบมีใบละข้อความ ซ้ำความหมายกันครึ่งหนึ่ง */}
-      <p data-testid="weekly-disclaimer" className="text-[11px] text-ink-400">
+      <p data-testid="weekly-disclaimer" className="text-[11px] leading-snug text-ink-400">
         {DISCLAIMER}
       </p>
     </Card>

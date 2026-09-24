@@ -64,6 +64,15 @@ test("มือถือ: ไม่มีหน้าไหนล้นออก
     await page.goto(path);
     await page.waitForLoadState("load");
 
+    /**
+     * ต้องยืนยันว่าอยู่หน้าที่ตั้งใจจะวัดจริง
+     *
+     * ถ้าโดน redirect ไป /login หรือ /onboarding (เกิดได้ตอน wrangler dev ป่วย)
+     * ลูปนี้จะวัดหน้าอื่นแล้วผ่านฉลุยโดยไม่มีใครรู้ว่าไม่ได้วัดอะไรเลย
+     * เคยเป็นแบบนั้นมาแล้ว — เทสต์เขียวในเครื่อง แต่ CI จับบั๊กปุ่มเล็กได้
+     */
+    expect(new URL(page.url()).pathname, `${path} ถูก redirect ไปหน้าอื่น`).toBe(path);
+
     const report = await page.evaluate((min) => {
       const doc = document.documentElement;
       // เผื่อ 1px กันการปัดเศษของเบราว์เซอร์

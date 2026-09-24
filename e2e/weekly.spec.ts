@@ -24,9 +24,15 @@ test("หน้าแรกแสดงขนาดและพัฒนาก�
   await expect(note).toContainText("ไม่ใช่คำแนะนำทางการแพทย์");
 
   // ต้องพอดีบรรทัดเดียวบนมือถือ — ถ้าข้อความยาวขึ้นจนตกบรรทัดที่สอง ให้แดง
+  //
+  // นับ "จำนวนบรรทัด" จากความสูงหารด้วย line-height ของตัวมันเอง ไม่ใช่เทียบ
+  // พิกเซลตายตัว — ตัวเลขตายตัวผูกกับฟอนต์ที่เครื่องนั้นมี เครื่องอื่นเลขจะเพี้ยน
   if (isMobile) {
-    const h = await note.evaluate((el) => el.getBoundingClientRect().height);
-    expect(h, "ข้อความกำกับต้องไม่เกินหนึ่งบรรทัด").toBeLessThan(22);
+    const lines = await note.evaluate((el) => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight);
+      return Math.round(el.getBoundingClientRect().height / lh);
+    });
+    expect(lines, "ข้อความกำกับต้องไม่เกินหนึ่งบรรทัด").toBe(1);
   }
 
   // รวมเป็นใบเดียวแล้ว — ถ้าการ์ดเก่าโผล่กลับมาคือมีสองใบซ้อนกันอีก
