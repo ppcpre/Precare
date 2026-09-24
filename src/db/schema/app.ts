@@ -64,6 +64,13 @@ export const pregnancyProfiles = sqliteTable("pregnancy_profiles", {
   /** คำนวณจาก lmpDate + 280 วัน (ดู src/lib/pregnancy.ts) */
   dueDate: text("due_date"),
   status: text("status", { enum: ["pregnant", "postpartum"] }).notNull().default("pregnant"),
+  /**
+   * รูปหน้าปกของการ์ดอายุครรภ์บนหน้าแรก — เลือกจากรูปที่อยู่ในอัลบั้มแล้วเท่านั้น
+   *
+   * อยู่ที่ครอบครัว ไม่ใช่ที่ผู้ใช้ เพราะมันคือหน้าปกของ "ครรภ์นี้" ทุกคนเห็นรูปเดียวกัน
+   * set null ตอนลบรูป — ไม่งั้นการ์ดจะชี้ไปยังไฟล์ที่ไม่มีแล้วและพังเงียบๆ
+   */
+  coverPhotoId: text("cover_photo_id").references(() => photos.id, { onDelete: "set null" }),
   updatedAt: text("updated_at").notNull().default(nowIso),
 });
 

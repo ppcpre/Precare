@@ -4,7 +4,7 @@
  * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
-import { and, asc, desc, eq, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
@@ -253,7 +253,18 @@ export async function getDashboard(db: Db, familyId: string) {
   const nowIso = new Date(now).toISOString();
 
   const [pregnancyRows, apptRows, logRows, memberCount] = await db.batch([
-    db.select().from(pregnancyProfiles).where(eq(pregnancyProfiles.familyId, familyId)),
+    // join รูปหน้าปกมาด้วยในคิวรีเดียว — ถ้ารูปถูกลบไปแล้ว join ไม่เจอ การ์ดก็กลับไปเป็นแบบไม่มีรูปเอง
+    db
+      .select({
+        ...getTableColumns(pregnancyProfiles),
+        coverR2Key: photos.r2Key,
+        coverThumbKey: photos.thumbKey,
+        coverMediaKind: photos.mediaKind,
+        coverWeek: photos.week,
+      })
+      .from(pregnancyProfiles)
+      .leftJoin(photos, eq(photos.id, pregnancyProfiles.coverPhotoId))
+      .where(eq(pregnancyProfiles.familyId, familyId)),
     db
       .select()
       .from(appointments)
@@ -273,9 +284,13 @@ export async function getDashboard(db: Db, familyId: string) {
   ]);
 
   const profile = pregnancyRows[0] ?? null;
+  // วิดีโอใช้เฟรมหน้าปกเป็นรูป ไม่ใช่ตัวไฟล์ — <img src> ชี้ไปที่ .mp4 ไม่ได้
+  const coverKey =
+    profile?.coverMediaKind === "video" ? profile.coverThumbKey : (profile?.coverR2Key ?? null);
   return {
     now,
     profile,
+    cover: coverKey ? { key: coverKey, week: profile?.coverWeek ?? null } : null,
     ga: profile?.lmpDate ? calculateGestationalAge(profile.lmpDate) : null,
     daysLeft: profile?.dueDate ? daysUntilDueDate(profile.dueDate) : null,
     nextAppointment: apptRows[0] ?? null,
@@ -403,6 +418,16 @@ export async function listAppointmentReceipts(db: Db, familyId: string, appointm
       ),
     )
     .orderBy(asc(photos.createdAt));
+}
+
+/** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */
+export async function getCoverPhotoId(db: Db, familyId: string) {
+  const row = await db
+    .select({ id: pregnancyProfiles.coverPhotoId })
+    .from(pregnancyProfiles)
+    .where(eq(pregnancyProfiles.familyId, familyId))
+    .get();
+  return row?.id ?? null;
 }
 
 export async function getPhotoById(db: Db, familyId: string, id: string) {

@@ -1,4 +1,5 @@
-import { CalendarDays } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, ImagePlus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { GestationProgress } from "@/components/ui/progress";
@@ -10,24 +11,73 @@ export function GestationHero({
   ga,
   daysLeft,
   dueDate,
+  cover,
+  canEdit,
 }: {
   ga: GestationalAge;
   daysLeft: number | null;
   dueDate: string | null;
+  /** รูปหน้าปกที่เลือกไว้จากอัลบั้ม — ไม่มีก็กลับไปเป็นการ์ดพื้นสีล้วนแบบเดิม */
+  cover?: { key: string; week: number | null } | null;
+  canEdit?: boolean;
 }) {
   const overdue = daysLeft != null && daysLeft < 0;
   return (
-    <Card className="flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 p-5">
-      <span className="text-center text-sm text-ink-600">อายุครรภ์</span>
-
-      <div className="flex items-baseline justify-center gap-2.5">
-        <span className="text-[52px] leading-none font-semibold text-peach-700">{ga.weeks}</span>
-        <div className="flex flex-col">
-          <span className="font-medium text-brown-900">สัปดาห์</span>
-          <span className="text-sm text-ink-600">{ga.days} วัน</span>
+    <Card
+      className={`flex flex-col gap-3.5 rounded-lg border-peach-300 bg-peach-100 ${
+        cover ? "overflow-hidden p-0 pb-5" : "p-5"
+      }`}
+    >
+      {cover ? (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element -- รูปจาก R2 ผ่าน route ที่เช็ค session */}
+          <img
+            src={`/api/media/${cover.key}`}
+            alt=""
+            className="h-[190px] w-full bg-cream-200 object-cover"
+          />
+          {/* ไล่เฉดดำทับรูป — อัลตราซาวด์บางใบสว่างจัด ตัวเลขขาวลอยๆ จะอ่านไม่ออก */}
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/25 to-black/70"
+          />
+          {canEdit && (
+            <Link
+              href="/album"
+              aria-label="เปลี่ยนรูปหน้าปก"
+              className="absolute top-3 right-3 flex size-9 items-center justify-center rounded-full bg-black/40 text-white"
+            >
+              <ImagePlus size={17} strokeWidth={1.9} />
+            </Link>
+          )}
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-5 text-white">
+            <span className="text-[13px] text-white/85">อายุครรภ์</span>
+            <div className="flex items-baseline gap-2.5">
+              <span className="text-[46px] leading-none font-semibold">{ga.weeks}</span>
+              <div className="flex flex-col">
+                <span className="font-medium">สัปดาห์</span>
+                <span className="text-sm text-white/85">{ga.days} วัน</span>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <span className="text-center text-sm text-ink-600">อายุครรภ์</span>
 
+          <div className="flex items-baseline justify-center gap-2.5">
+            <span className="text-[52px] leading-none font-semibold text-peach-700">{ga.weeks}</span>
+            <div className="flex flex-col">
+              <span className="font-medium text-brown-900">สัปดาห์</span>
+              <span className="text-sm text-ink-600">{ga.days} วัน</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* มีรูป = ส่วนล่างต้องมี padding เอง เพราะการ์ดถอด p-5 ออกให้รูปชนขอบ
+          ไม่มีรูป = contents ทำให้ div นี้หายไปจาก layout การ์ดหน้าตาเหมือนเดิมเป๊ะ */}
+      <div className={cover ? "flex flex-col gap-3.5 px-5" : "contents"}>
       <GestationProgress week={ga.weeks} />
 
       <div className="flex items-center justify-between pt-1">
@@ -53,6 +103,18 @@ export function GestationHero({
       {dueDate && (
         <p className="text-center text-xs text-ink-400">คาดคลอด {thaiDate(dueDate)}</p>
       )}
+
+      {/* ทางเข้าเดียวที่บอกว่าใส่รูปได้ ถ้าไม่มีก็ไม่มีใครรู้ว่าฟีเจอร์นี้มีอยู่ */}
+      {!cover && canEdit && (
+        <Link
+          href="/album"
+          className="flex items-center justify-center gap-1.5 text-xs font-medium text-brown-700"
+        >
+          <ImagePlus size={14} strokeWidth={1.9} />
+          เลือกรูปหน้าปกจากอัลบั้ม
+        </Link>
+      )}
+      </div>
     </Card>
   );
 }

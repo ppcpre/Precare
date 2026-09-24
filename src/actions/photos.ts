@@ -276,7 +276,56 @@ export const deletePhoto = editorAction
       .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)));
 
     revalidatePath("/album");
+    // ถ้ารูปที่ลบเป็นหน้าปกอยู่ FK จะ set null ให้เอง แต่หน้าแรกที่ cache ไว้ยังโชว์รูปเดิม
+    revalidatePath("/dashboard");
     return { ok: true };
+  });
+
+/**
+ * ตั้ง/เอาออก รูปหน้าปกของการ์ดอายุครรภ์ — เลือกจากรูปที่อยู่ในอัลบั้มแล้วเท่านั้น
+ *
+ * ไม่มีทางอัปโหลดรูปหน้าปกโดยตรง ตั้งใจให้มีทางเดียว: อัปเข้าอัลบั้มก่อน แล้วค่อยเลือก
+ * ไม่งั้นจะมีไฟล์ที่กินโควตาแต่ไม่โผล่ในอัลบั้มให้ลบ
+ */
+export const setCoverPhoto = editorAction
+  .metadata({ name: "setCoverPhoto" })
+  .inputSchema(z.object({ id: z.string().min(1).nullable() }))
+  .action(async ({ parsedInput, ctx }) => {
+    let coverPhotoId: string | null = null;
+
+    if (parsedInput.id) {
+      const row = await ctx.db
+        .select({
+          id: photos.id,
+          mediaKind: photos.mediaKind,
+          thumbKey: photos.thumbKey,
+          type: photos.type,
+        })
+        .from(photos)
+        .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)))
+        .get();
+      if (!row) throw new AppError("ไม่พบรูปนี้");
+      // ใบเสร็จมีชื่อคนไข้กับรายการรักษาอยู่บนรูป ขึ้นหน้าแรกไม่ได้
+      if (row.type === "receipt") throw new AppError("ใบเสร็จตั้งเป็นรูปหน้าปกไม่ได้");
+      // คลิปที่ถอดเฟรมหน้าปกไม่ได้ตอนอัป จะไม่มีรูปให้เอามาแสดง
+      if (row.mediaKind === "video" && !row.thumbKey) {
+        throw new AppError("คลิปนี้ไม่มีภาพหน้าปก ตั้งเป็นรูปหน้าปกไม่ได้");
+      }
+      coverPhotoId = row.id;
+    }
+
+    // แถว profile อาจยังไม่มีถ้ายังไม่ได้ตั้งวันตั้งครรภ์ — upsert ไม่งั้น update จะเงียบไปเฉยๆ
+    await ctx.db
+      .insert(pregnancyProfiles)
+      .values({ familyId: ctx.familyId, coverPhotoId })
+      .onConflictDoUpdate({
+        target: pregnancyProfiles.familyId,
+        set: { coverPhotoId, updatedAt: new Date().toISOString() },
+      });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/album");
+    return { coverPhotoId };
   });
 
 export const togglePin = editorAction

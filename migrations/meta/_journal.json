@@ -78,6 +78,13 @@
       "when": 1790213823933,
       "tag": "0010_push_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790228080664,
+      "tag": "0011_cover_photo",
+      "breakpoints": true
     }
   ]
 }

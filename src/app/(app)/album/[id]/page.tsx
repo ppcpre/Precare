@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
-import { getPhotoById, requireFamilyContext } from "@/lib/queries";
+import { getCoverPhotoId, getPhotoById, requireFamilyContext } from "@/lib/queries";
 import { can } from "@/lib/authz";
 import { thaiDateFull, thaiDate } from "@/lib/format";
 import { formatClip } from "@/lib/video";
@@ -29,7 +29,10 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
     throw e;
   }
 
-  const photo = await getPhotoById(ctx.db, ctx.familyId, id);
+  const [photo, coverPhotoId] = await Promise.all([
+    getPhotoById(ctx.db, ctx.familyId, id),
+    getCoverPhotoId(ctx.db, ctx.familyId),
+  ]);
   if (!photo) notFound();
 
   return (
@@ -70,6 +73,7 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
           </h1>
           <Badge className="bg-brown-100 text-brown-900">{TYPE_LABEL[photo.type]}</Badge>
           {photo.pinned && <Badge>รูปเด่น</Badge>}
+          {coverPhotoId === photo.id && <Badge>รูปหน้าปกหน้าแรก</Badge>}
           {photo.mediaKind === "video" && photo.durationMs != null && (
             <Badge>คลิป {formatClip(photo.durationMs)}</Badge>
           )}
@@ -136,7 +140,15 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
         {can.writeRecords(ctx.role) && (
           <>
             <span className="h-px bg-cream-200" />
-            <PhotoActions id={photo.id} pinned={photo.pinned} />
+            <PhotoActions
+              id={photo.id}
+              pinned={photo.pinned}
+              isCover={coverPhotoId === photo.id}
+              canBeCover={
+                photo.type !== "receipt" &&
+                (photo.mediaKind !== "video" || photo.thumbKey != null)
+              }
+            />
           </>
         )}
       </div>

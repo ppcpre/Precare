@@ -66,6 +66,8 @@ export default async function DashboardPage() {
               ga={data.ga}
               daysLeft={data.daysLeft}
               dueDate={data.profile?.dueDate ?? null}
+              cover={data.cover}
+              canEdit={canWrite}
             />
           ) : (
             <SetupPrompt canEdit={can.editPregnancy(role)} />
