@@ -29,14 +29,16 @@ test("เปลี่ยนประเภทไฟล์ได้ และต�
     await page.waitForURL(/\/album\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await expect(page.getByText("อัลตราซาวด์").first()).toBeVisible();
 
+    // กดที่ป้ายประเภทก่อน ตัวเลือกถึงจะกางออก
+    await page.getByRole("button", { name: /^ประเภท:/ }).click();
     await page.getByRole("button", { name: "เอกสาร", exact: true }).click();
     // ป้ายบนหัวเรื่องต้องเปลี่ยนตาม ไม่ใช่แค่ชิปที่กดเปลี่ยนสี
     await expect(page.getByText("เอกสาร").first()).toBeVisible({ timeout: 30_000 });
     await expect
-      .poll(() =>
-        page.getByRole("button", { name: "เอกสาร", exact: true }).getAttribute("aria-pressed"),
-      )
-      .toBe("true");
+      .poll(() => page.getByRole("button", { name: /^ประเภท:/ }).getAttribute("aria-label"))
+      .toContain("เอกสาร");
+    // กดเลือกแล้วตัวเลือกต้องหุบเอง ไม่ค้างเปิดไว้ให้กินที่
+    await expect(page.getByRole("button", { name: "เอกสาร", exact: true })).toHaveCount(0);
   });
 
   await test.step("ตัวกรองในอัลบั้มเห็นตาม", async () => {
@@ -62,6 +64,10 @@ test("หน้าดูรูปของคนที่แก้ไขได�
   await page.locator('img[src*="/photos/"]').first().click();
   await page.waitForURL(/\/album\/[0-9a-f-]{36}/, { timeout: 30_000 });
 
+  // ปิดอยู่ก่อน — หน้านี้เปิดมาเพื่อดูรูป ไม่ใช่มาแก้ประเภท
+  await expect(page.getByRole("button", { name: "ครอบครัว", exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^ประเภท:/ }).click();
   for (const label of ["อัลตราซาวด์", "ครอบครัว", "เอกสาร", "อื่นๆ"]) {
     await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
   }

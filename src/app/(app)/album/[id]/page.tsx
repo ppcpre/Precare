@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
-import { PhotoTypePicker } from "@/components/album/type-picker";
+import { PhotoTypeBadge } from "@/components/album/type-picker";
 import { TYPE_LABEL } from "@/lib/photo-types";
 import { getCoverPhotoId, getPhotoById, requireFamilyContext } from "@/lib/queries";
 import { familyMediaBase } from "@/lib/media-base";
@@ -66,11 +66,20 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="flex flex-col gap-3.5 rounded-t-lg bg-cream-50 p-5">
-        <div className="flex items-center gap-2">
+        {/* wrap เพราะตัวเลือกประเภทกางออกมาต่อท้ายแถวนี้ ต้องมีที่ให้มันลงบรรทัดใหม่ */}
+        <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold text-ink-900">
             {photo.week != null ? `สัปดาห์ที่ ${photo.week}` : "ไม่ระบุสัปดาห์"}
           </h1>
-          <Badge className="bg-brown-100 text-brown-900">{TYPE_LABEL[photo.type]}</Badge>
+          {photo.type === "receipt" ? (
+            <Badge className="bg-brown-100 text-brown-900">{TYPE_LABEL[photo.type]}</Badge>
+          ) : (
+            <PhotoTypeBadge
+              id={photo.id}
+              type={photo.type}
+              canEdit={can.writeRecords(ctx.role)}
+            />
+          )}
           {photo.pinned && <Badge>รูปเด่น</Badge>}
           {coverPhotoId === photo.id && <Badge>รูปหน้าปกหน้าแรก</Badge>}
           {photo.mediaKind === "video" && photo.durationMs != null && (
@@ -135,13 +144,6 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
             ))}
           </div>
         </div>
-
-        {can.writeRecords(ctx.role) && photo.type !== "receipt" && (
-          <>
-            <span className="h-px bg-cream-200" />
-            <PhotoTypePicker id={photo.id} type={photo.type} />
-          </>
-        )}
 
         {can.writeRecords(ctx.role) && (
           <>
