@@ -4,13 +4,27 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { appointments, careGroups, photos } from "@/db/schema";
+import { appointmentReminders, appointments, careGroups, photos } from "@/db/schema";
 import { deleteObject } from "@/lib/storage";
 import { editorAction, AppError } from "@/lib/safe-action";
 import type { Db } from "@/db";
 import { appointmentInput, idInput } from "@/lib/validation";
 
 const newId = () => crypto.randomUUID();
+
+/**
+ * เขียนเวลาเตือนของนัดใหม่ทั้งชุด — ลบของเดิมทิ้งก่อนเสมอ
+ *
+ * การลบแล้วใส่ใหม่ล้างสถานะ "เตือนแล้ว" ไปในตัว ซึ่งเป็นสิ่งที่ต้องการ:
+ * แก้นัดทีไรก็ควรได้เตือนใหม่ ไม่งั้นเลื่อนนัดแล้วจะเงียบสนิท
+ */
+async function writeReminders(db: Db, appointmentId: string, offsets: number[]) {
+  await db.delete(appointmentReminders).where(eq(appointmentReminders.appointmentId, appointmentId));
+  if (offsets.length === 0) return;
+  await db.insert(appointmentReminders).values(
+    offsets.map((minutesBefore) => ({ id: newId(), appointmentId, minutesBefore })),
+  );
+}
 
 /**
  * groupId มาจาก client จึงเชื่อไม่ได้ ต้องยืนยันว่าเป็นกลุ่มของครอบครัวนี้จริง
@@ -34,13 +48,16 @@ export const createAppointment = editorAction
   .metadata({ name: "createAppointment" })
   .inputSchema(appointmentInput)
   .action(async ({ parsedInput, ctx }) => {
-    await assertGroupOwned(ctx.db, ctx.familyId, parsedInput.groupId);
+    const { reminderOffsets, ...fields } = parsedInput;
+    await assertGroupOwned(ctx.db, ctx.familyId, fields.groupId);
+    const id = newId();
     await ctx.db.insert(appointments).values({
-      ...parsedInput,
-      id: newId(),
+      ...fields,
+      id,
       familyId: ctx.familyId,
       createdBy: ctx.user.id,
     });
+    await writeReminders(ctx.db, id, reminderOffsets);
     revalidatePath("/appointments");
     revalidatePath("/dashboard");
     return { ok: true };
@@ -50,15 +67,15 @@ export const updateAppointment = editorAction
   .metadata({ name: "updateAppointment" })
   .inputSchema(appointmentInput.extend({ id: z.string().min(1) }))
   .action(async ({ parsedInput, ctx }) => {
-    const { id, ...rest } = parsedInput;
+    const { id, reminderOffsets, ...rest } = parsedInput;
     await assertGroupOwned(ctx.db, ctx.familyId, rest.groupId);
     const res = await ctx.db
       .update(appointments)
-      // ล้างเครื่องหมาย "เตือนไปแล้ว" ทุกครั้งที่แก้นัด
-      // เลื่อนนัดไปวันอื่นแล้วไม่ล้าง = นัดใหม่จะไม่มีเตือนเลย
-      .set({ ...rest, reminderSentAt: null })
+      .set(rest)
       .where(and(eq(appointments.id, id), eq(appointments.familyId, ctx.familyId)));
     if (!res.meta.changes) throw new AppError("ไม่พบนัดหมายนี้");
+    // เขียนใหม่ทั้งชุด ซึ่งล้างสถานะ "เตือนแล้ว" ไปด้วย (ดู writeReminders)
+    await writeReminders(ctx.db, id, reminderOffsets);
     revalidatePath("/appointments");
     revalidatePath("/dashboard");
     return { ok: true };

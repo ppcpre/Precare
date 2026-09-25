@@ -14,7 +14,7 @@ export interface CronEnv {
   VAPID_SUBJECT?: string;
 }
 
-/** นัดที่จะเตือนต้องอยู่ในอีกไม่เกินเท่านี้ — เพดานของ reminderMinutesBefore คือ 7 วัน */
+/** นัดที่จะเตือนต้องอยู่ในอีกไม่เกินเท่านี้ — เพดานของเวลาเตือนคือ 7 วันก่อนนัด */
 const HORIZON_DAYS = 8;
 
 /**
@@ -29,9 +29,12 @@ export const bangkokNow = (now: number) =>
   new Date(now + BANGKOK_OFFSET_MS).toISOString().slice(0, 19);
 
 export interface DueRow {
+  /** id ของ "ครั้งที่จะเตือน" ไม่ใช่ id ของนัด — นัดเดียวมีได้หลายครั้ง */
+  reminder_id: string;
   id: string;
   family_id: string;
   appt_datetime: string;
+  minutes_before: number;
 }
 
 /**
@@ -52,14 +55,15 @@ export async function dueAppointments(db: D1Database, nowLocal: string): Promise
 
   const { results } = await db
     .prepare(
-      `SELECT id, family_id, appt_datetime
-         FROM appointments
-        WHERE reminder_enabled = 1
-          AND reminder_sent_at IS NULL
-          AND appt_datetime > ?1
-          AND appt_datetime <= ?2
-          AND datetime(appt_datetime, '-' || reminder_minutes_before || ' minutes') <= datetime(?1)
-        ORDER BY appt_datetime
+      `SELECT r.id AS reminder_id, a.id, a.family_id, a.appt_datetime, r.minutes_before
+         FROM appointment_reminders r
+         JOIN appointments a ON a.id = r.appointment_id
+        WHERE r.sent_at IS NULL
+          AND a.reminder_enabled = 1
+          AND a.appt_datetime > ?1
+          AND a.appt_datetime <= ?2
+          AND datetime(a.appt_datetime, '-' || r.minutes_before || ' minutes') <= datetime(?1)
+        ORDER BY a.appt_datetime
         LIMIT 100`,
     )
     .bind(nowLocal, horizon)
@@ -101,7 +105,24 @@ export async function runReminders(
     return { due: 0, sent: 0, removed: 0, skipped: "no-key" };
   }
 
-  const rows = await dueAppointments(env.DB, bangkokNow(now));
+  const nowLocal = bangkokNow(now);
+
+  /**
+   * เก็บกวาดครั้งที่เลยเวลานัดไปแล้วแต่ไม่เคยถูกยิง
+   *
+   * เกิดได้จากนัดที่สร้างย้อนหลัง หรือนัดที่ปิดแจ้งเตือนไว้ตลอด แถวพวกนี้ค้าง
+   * เป็น "ยังไม่ได้ยิง" ตลอดกาล และอยู่ใน index ที่ตัวจับเวลาไล่อ่านทุก 5 นาที
+   * ไม่เก็บกวาดก็คือให้มันโตขึ้นเรื่อยๆ แล้วช้าลงเรื่อยๆ โดยไม่มีใครสังเกต
+   */
+  await env.DB.prepare(
+    `UPDATE appointment_reminders SET sent_at = ?1
+      WHERE sent_at IS NULL
+        AND appointment_id IN (SELECT id FROM appointments WHERE appt_datetime <= ?2)`,
+  )
+    .bind(new Date(now).toISOString(), nowLocal)
+    .run();
+
+  const rows = await dueAppointments(env.DB, nowLocal);
   let sent = 0;
   let removed = 0;
 
@@ -139,11 +160,14 @@ export async function runReminders(
     /**
      * ทำเครื่องหมายว่าเตือนแล้วเสมอ แม้ไม่มีใครเปิดแจ้งเตือนไว้เลย
      *
-     * ถ้าไม่ทำ นัดนั้นจะถูกหยิบขึ้นมาใหม่ทุก 5 นาทีจนถึงเวลานัด
+     * ถ้าไม่ทำ ครั้งนั้นจะถูกหยิบขึ้นมาใหม่ทุก 5 นาทีจนถึงเวลานัด
      * กินโควตา D1 ฟรีไปเรื่อยๆ โดยไม่ได้อะไรเลย
+     *
+     * ทำเครื่องหมายที่ "ครั้งที่เตือน" ไม่ใช่ที่ตัวนัด — นัดเดียวมีได้สามครั้ง
+     * ถ้าไปทำที่ตัวนัด ครั้งที่เหลือจะไม่มีวันถูกยิง
      */
-    await env.DB.prepare("UPDATE appointments SET reminder_sent_at = ?1 WHERE id = ?2")
-      .bind(new Date(now).toISOString(), row.id)
+    await env.DB.prepare("UPDATE appointment_reminders SET sent_at = ?1 WHERE id = ?2")
+      .bind(new Date(now).toISOString(), row.reminder_id)
       .run();
   }
 

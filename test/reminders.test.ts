@@ -24,10 +24,11 @@ const at = (local: string) => local;
 async function seed(rows: {
   id: string;
   when: string;
-  minutes?: number;
+  minutes?: number[];
   enabled?: boolean;
   sentAt?: string | null;
 }[]) {
+  await env.DB.prepare("DELETE FROM appointment_reminders").run();
   await env.DB.prepare("DELETE FROM appointments").run();
   await env.DB.prepare("DELETE FROM push_subscriptions").run();
   await env.DB.prepare("DELETE FROM family_members").run();
@@ -46,11 +47,21 @@ async function seed(rows: {
 
   for (const r of rows) {
     await env.DB.prepare(
-      `INSERT INTO appointments (id, family_id, created_by, appt_datetime, reminder_enabled, reminder_minutes_before, reminder_sent_at)
-       VALUES (?1,'f1','u1',?2,?3,?4,?5)`,
+      `INSERT INTO appointments (id, family_id, created_by, appt_datetime, reminder_enabled)
+       VALUES (?1,'f1','u1',?2,?3)`,
     )
-      .bind(r.id, r.when, r.enabled === false ? 0 : 1, r.minutes ?? 60, r.sentAt ?? null)
+      .bind(r.id, r.when, r.enabled === false ? 0 : 1)
       .run();
+
+    // เวลาเตือนอยู่ตารางลูก หนึ่งนัดมีได้หลายครั้ง
+    for (const m of r.minutes ?? [60]) {
+      await env.DB.prepare(
+        `INSERT INTO appointment_reminders (id, appointment_id, minutes_before, sent_at)
+         VALUES (?1,?2,?3,?4)`,
+      )
+        .bind(`${r.id}-${m}`, r.id, m, r.sentAt ?? null)
+        .run();
+    }
   }
 }
 
@@ -94,6 +105,48 @@ describe("หานัดที่ถึงเวลาเตือน", () => {
 describe("ยิงเตือน", () => {
   beforeEach(async () => {
     await seed([{ id: "a-due", when: at("2026-09-25T10:30:00") }]);
+  });
+
+  /**
+   * หัวใจของการเตือนได้สามครั้ง — แต่ละครั้งต้องยิงแยกกันตามเวลาของตัวเอง
+   * และครั้งที่ยิงไปแล้วต้องไม่ถูกยิงซ้ำ ขณะที่ครั้งที่เหลือยังต้องรอคิวอยู่
+   */
+  it("นัดเดียวสามเวลา ยิงทีละครั้งตามเวลาของมัน ไม่ยิงซ้ำและไม่ข้าม", async () => {
+    // นัด 12:00 · เตือนก่อน 1 วัน / 2 ชม. / 30 นาที
+    await seed([{ id: "a3", when: at("2026-09-25T12:00:00"), minutes: [1440, 120, 30] }]);
+    await addSub("s1", "https://push.test/1");
+
+    const at10 = Date.UTC(2026, 8, 25, 3, 0); // 10:00 ไทย — ถึงคิวแค่ 1 วันกับ 2 ชม.
+    const hits: number[] = [];
+    const send = async () => {
+      hits.push(1);
+      return { ok: true } as PushResult;
+    };
+
+    const first = await runReminders(cronEnv(), { now: at10, send });
+    expect(first.due).toBe(2);
+    expect(first.sent).toBe(2);
+
+    // รอบถัดไปในนาทีเดียวกัน ต้องไม่มีอะไรค้างให้ยิงอีก
+    const again = await runReminders(cronEnv(), { now: at10 + 300_000, send });
+    expect(again.due).toBe(0);
+
+    // 11:35 ไทย — ถึงคิวของ 30 นาที
+    const at1135 = Date.UTC(2026, 8, 25, 4, 35);
+    const last = await runReminders(cronEnv(), { now: at1135, send });
+    expect(last.due).toBe(1);
+    expect(hits).toHaveLength(3);
+  });
+
+  /** เลยเวลานัดไปแล้วแต่ไม่เคยยิง ต้องถูกเก็บกวาด ไม่ค้างใน index ตลอดกาล */
+  it("ครั้งที่เลยเวลานัดไปแล้วถูกปิดทิ้ง ไม่วนกลับมาทุกรอบ", async () => {
+    await seed([{ id: "a-old", when: at("2026-09-25T09:00:00"), minutes: [60] }]);
+    await runReminders(cronEnv(), { now: NOW, send: async () => ({ ok: true }) });
+
+    const left = await env.DB.prepare(
+      "SELECT count(*) AS n FROM appointment_reminders WHERE sent_at IS NULL",
+    ).first<{ n: number }>();
+    expect(left?.n).toBe(0);
   });
 
   it("ส่งให้ทุกคนในครอบครัวที่เปิดไว้ แล้วทำเครื่องหมายว่าเตือนแล้ว", async () => {

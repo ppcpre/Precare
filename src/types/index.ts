@@ -22,7 +22,14 @@ export type FamilyMember = typeof familyMembers.$inferSelect;
 export type FamilyInvite = typeof familyInvites.$inferSelect;
 export type PregnancyProfile = typeof pregnancyProfiles.$inferSelect;
 export type WeeklyLog = typeof weeklyLogs.$inferSelect;
-export type Appointment = typeof appointments.$inferSelect;
+/**
+ * นัดหมายหนึ่งนัด พร้อมเวลาเตือนที่เลือกไว้
+ *
+ * `reminders` ไม่ได้อยู่ในตาราง appointments แต่มาจากตารางลูก
+ * (ดู remindersFor ใน src/lib/queries.ts) — ใส่ไว้ในชนิดเดียวกันเพราะ
+ * ทุกที่ที่ใช้ "นัดหมาย" ในหน้าจอ ต้องการเวลาเตือนไปด้วยเสมอ
+ */
+export type Appointment = typeof appointments.$inferSelect & { reminders?: number[] };
 export type Photo = typeof photos.$inferSelect;
 
 export type NewFamily = typeof families.$inferInsert;

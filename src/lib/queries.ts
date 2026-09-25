@@ -4,14 +4,14 @@
  * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
-import { and, asc, desc, eq, getTableColumns, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import type { AlbumPhotoType } from "@/db/schema";
 import {
-  appointments, careGroups, families, familyInvites, familyMembers,
+  appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers,
   photos, pregnancyProfiles, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
@@ -90,6 +90,31 @@ export async function getLogFormDefaults(db: Db, familyId: string) {
   };
 }
 
+/**
+ * เวลาเตือนของนัดหลายนัดในคิวรีเดียว คืนเป็น map id -> นาที (ไกลไปใกล้)
+ *
+ * ดึงทีเดียวทั้งชุดแทนที่จะ join ในคิวรีหลัก เพราะ join แล้วแถวนัดจะซ้ำตาม
+ * จำนวนเวลาเตือน ต้องมายุบกลับใน JS อยู่ดี และทำให้ทุกที่ที่ select * พังตามไปด้วย
+ */
+export async function remindersFor(db: Db, ids: string[]) {
+  const map = new Map<string, number[]>();
+  if (ids.length === 0) return map;
+  const rows = await db
+    .select({
+      appointmentId: appointmentReminders.appointmentId,
+      minutesBefore: appointmentReminders.minutesBefore,
+    })
+    .from(appointmentReminders)
+    .where(inArray(appointmentReminders.appointmentId, ids))
+    .orderBy(desc(appointmentReminders.minutesBefore));
+  for (const r of rows) {
+    const list = map.get(r.appointmentId);
+    if (list) list.push(r.minutesBefore);
+    else map.set(r.appointmentId, [r.minutesBefore]);
+  }
+  return map;
+}
+
 export async function listAppointments(db: Db, familyId: string, when: "upcoming" | "past" = "upcoming") {
   // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง (react-hooks/purity)
   const now = Date.now();
@@ -106,7 +131,8 @@ export async function listAppointments(db: Db, familyId: string, when: "upcoming
       ),
     )
     .orderBy(when === "upcoming" ? asc(appointments.apptDatetime) : desc(appointments.apptDatetime));
-  return { items, now };
+  const reminders = await remindersFor(db, items.map((a) => a.id));
+  return { items: items.map((a) => ({ ...a, reminders: reminders.get(a.id) ?? [] })), now };
 }
 
 
@@ -206,11 +232,13 @@ export async function listKickSessions(db: Db, familyId: string, limit = 30) {
 }
 
 export async function getAppointmentById(db: Db, familyId: string, id: string) {
-  return db
+  const row = await db
     .select()
     .from(appointments)
     .where(and(eq(appointments.id, id), eq(appointments.familyId, familyId)))
     .get();
+  if (!row) return row;
+  return { ...row, reminders: (await remindersFor(db, [id])).get(id) ?? [] };
 }
 
 export async function listMembers(db: Db, familyId: string, meId: string) {
@@ -318,7 +346,6 @@ export async function getLayoutData(db: Db, familyId: string) {
         doctorName: appointments.doctorName,
         location: appointments.location,
         reminderEnabled: appointments.reminderEnabled,
-        reminderMinutesBefore: appointments.reminderMinutesBefore,
       })
       .from(appointments)
       .where(
@@ -331,11 +358,13 @@ export async function getLayoutData(db: Db, familyId: string) {
       .orderBy(asc(appointments.apptDatetime)),
   ]);
 
+  const reminders = await remindersFor(db, apptRows.map((a) => a.id));
+
   return {
     family: familyRows[0] ?? null,
     // มีนัดใน 24 ชม. -> จุดสีบนกระดิ่ง
     hasSoonAppointment: apptRows.length > 0,
-    upcoming: apptRows,
+    upcoming: apptRows.map((a) => ({ ...a, reminders: reminders.get(a.id) ?? [] })),
     now,
   };
 }

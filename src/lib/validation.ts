@@ -2,7 +2,7 @@
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { weeklyLogs, appointments } from "@/db/schema";
-import { MOODS } from "@/db/schema";
+import { MOODS, MAX_REMINDERS } from "@/db/schema";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง");
 
@@ -39,7 +39,20 @@ export const appointmentInput = createInsertSchema(appointments)
     location: z.string().max(200).nullable().optional(),
     note: z.string().max(2000).nullable().optional(),
     reminderEnabled: z.boolean().default(true),
-    reminderMinutesBefore: z.number().int().min(0).max(10080).default(60),
+    /**
+     * เวลาเตือน หน่วยเป็นนาทีก่อนถึงเวลานัด เลือกได้มากสุด MAX_REMINDERS ครั้ง
+     *
+     * บังคับเพดานที่นี่ด้วย ไม่ใช่แค่ใน UI — client แก้ได้ และแต่ละครั้ง
+     * เท่ากับ push หนึ่งใบต่อสมาชิกทุกคนในครอบครัว
+     *
+     * เรียงและตัดตัวซ้ำให้เลย ไม่งั้นเลือก 60 สองครั้งจะกลายเป็นเตือนซ้อนกัน
+     * (ตารางมี unique index กันไว้อีกชั้น แต่ที่นั่นจะกลายเป็น error แทนที่จะเงียบ)
+     */
+    reminderOffsets: z
+      .array(z.number().int().min(0).max(10080))
+      .max(MAX_REMINDERS, `เลือกเวลาเตือนได้มากสุด ${MAX_REMINDERS} ครั้ง`)
+      .default([60])
+      .transform((v) => [...new Set(v)].sort((a, b) => b - a)),
     /** null = ไม่เลือกกลุ่ม แสดงเป็น "ทั่วไป" — ตรวจว่าเป็นกลุ่มของครอบครัวนี้ใน action */
     groupId: z.string().min(1).nullable().optional(),
   });

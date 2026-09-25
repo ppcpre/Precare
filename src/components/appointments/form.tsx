@@ -7,6 +7,7 @@ import { X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { Chip } from "@/components/ui/chip";
+import { MAX_REMINDERS } from "@/db/schema";
 import { GroupPicker, type CareGroupOption } from "@/components/costs/group-picker";
 import { createAppointment, updateAppointment, deleteAppointment } from "@/actions/appointments";
 import type { Appointment } from "@/types";
@@ -57,7 +58,18 @@ export function AppointmentForm({
   const [groupId, setGroupId] = useState<string | null>(appt?.groupId ?? null);
   const [location, setLocation] = useState(appt?.location ?? "");
   const [remind, setRemind] = useState(appt?.reminderEnabled ?? true);
-  const [minutes, setMinutes] = useState(appt?.reminderMinutesBefore ?? 60);
+  /** เวลาเตือน เลือกได้หลายครั้ง สูงสุด MAX_REMINDERS */
+  const [offsets, setOffsets] = useState<number[]>(appt?.reminders?.length ? appt.reminders : [60]);
+  const full = offsets.length >= MAX_REMINDERS;
+
+  const toggleOffset = (m: number) =>
+    setOffsets((prev) =>
+      prev.includes(m)
+        ? prev.filter((x) => x !== m)
+        : prev.length >= MAX_REMINDERS
+          ? prev
+          : [...prev, m].sort((a, b) => b - a),
+    );
   const [note, setNote] = useState(appt?.note ?? "");
 
   /**
@@ -88,8 +100,9 @@ export function AppointmentForm({
       doctorName: doctor.trim() || null,
       location: location.trim() || null,
       note: note.trim() || null,
+      // ปิดสวิตช์ = ไม่เตือน แต่ยังเก็บเวลาที่เลือกไว้ กดเปิดใหม่แล้วได้ของเดิมคืน
       reminderEnabled: isPast ? false : remind,
-      reminderMinutesBefore: minutes,
+      reminderOffsets: offsets,
       groupId,
     };
     if (appt) update.execute({ ...payload, id: appt.id });
@@ -197,14 +210,32 @@ export function AppointmentForm({
             <>
               <span className="h-px bg-cream-200" />
               <div className="flex flex-col gap-2">
-                <span className="text-sm text-ink-600">เตือนล่วงหน้า</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm text-ink-600">เตือนล่วงหน้า</span>
+                  {/* บอกเพดานตลอดเวลา ไม่ใช่รอให้กดเกินแล้วค่อยบอก */}
+                  <span className="text-xs text-ink-400">
+                    เลือกได้ {offsets.length}/{MAX_REMINDERS}
+                  </span>
+                </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {REMINDERS.map((r) => (
-                    <Chip key={r.m} active={minutes === r.m} onClick={() => setMinutes(r.m)}>
-                      {r.label}
-                    </Chip>
-                  ))}
+                  {REMINDERS.map((r) => {
+                    const on = offsets.includes(r.m);
+                    return (
+                      <Chip
+                        key={r.m}
+                        active={on}
+                        // ครบสามแล้วชิปที่เหลือกดไม่ได้ แต่ชิปที่เลือกอยู่ยังกดเอาออกได้
+                        disabled={!on && full}
+                        onClick={() => toggleOffset(r.m)}
+                      >
+                        {r.label}
+                      </Chip>
+                    );
+                  })}
                 </div>
+                {offsets.length === 0 && (
+                  <p className="text-xs text-ink-400">ยังไม่ได้เลือกเวลา จะไม่มีการเตือน</p>
+                )}
               </div>
             </>
           )}

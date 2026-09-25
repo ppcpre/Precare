@@ -207,6 +207,42 @@ export const appointments = sqliteTable(
  * แต่ในสายตาผู้ใช้มันเป็นเอกสารของนัด ไม่ใช่ความทรงจำ ใบเสร็จค่ายา
  * ไปโผล่ข้างรูปอัลตราซาวด์ในอัลบั้มลูกคือสิ่งที่ไม่มีใครอยากเห็น
  */
+/**
+ * เวลาเตือนของนัดหนึ่งนัด — นัดเดียวมีได้หลายครั้ง
+ *
+ * เดิมเก็บเป็น appointments.reminder_minutes_before ช่องเดียว = เตือนได้ครั้งเดียว
+ * แยกออกมาเป็นตารางลูกเพราะแต่ละครั้งต้องจำแยกกันว่า "ยิงไปหรือยัง"
+ * ถ้ายัดเป็น JSON ในแถวนัด ตัวจับเวลาจะหาว่า "ครั้งไหนถึงคิว" ด้วย index ไม่ได้
+ * ต้องอ่านทุกแถวมาไล่เองใน JS ซึ่งกิน row read ของ D1 ฟรีไปเรื่อยๆ
+ *
+ * ลบนัด = ลบเวลาเตือนตาม (cascade) · แก้เวลานัด = ลบทิ้งแล้วใส่ใหม่
+ * ซึ่งล้างสถานะ "เตือนแล้ว" ไปในตัว
+ */
+export const appointmentReminders = sqliteTable(
+  "appointment_reminders",
+  {
+    id: text("id").primaryKey(),
+    appointmentId: text("appointment_id")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    /** กี่นาทีก่อนถึงเวลานัด */
+    minutesBefore: integer("minutes_before").notNull(),
+    /** ยิงไปแล้วเมื่อไหร่ (UTC) — null = ยังไม่ได้ยิง */
+    sentAt: text("sent_at"),
+  },
+  (t) => [
+    // กันเลือกเวลาเดียวกันซ้ำสองครั้งในนัดเดียว ซึ่งจะกลายเป็น push สองใบติดกัน
+    uniqueIndex("uq_reminder_appt_minutes").on(t.appointmentId, t.minutesBefore),
+    /** index บางส่วนสำหรับตัวจับเวลา — เหลือเฉพาะครั้งที่ยังไม่ได้ยิง */
+    index("idx_reminders_pending")
+      .on(t.appointmentId)
+      .where(sql`sent_at IS NULL`),
+  ],
+);
+
+/** เลือกเวลาเตือนได้มากสุดกี่ครั้งต่อนัด — บังคับทั้งใน UI, zod และ action */
+export const MAX_REMINDERS = 3;
+
 export const PHOTO_TYPES = ["ultrasound", "family", "document", "other", "receipt"] as const;
 
 /** ประเภทที่อัปผ่านอัลบั้มได้ — ใบเสร็จเข้าได้ทางเดียวคือแนบกับนัด */

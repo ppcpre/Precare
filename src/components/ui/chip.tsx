@@ -15,6 +15,8 @@ export function Chip({
       {...props}
       className={cn(
         "h-auto min-h-0 rounded-full border px-3.5 py-1.5 text-sm whitespace-nowrap transition-colors",
+        // กดไม่ได้ต้องดูออกว่ากดไม่ได้ ไม่ใช่กดแล้วเงียบ
+        "disabled:opacity-40",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown-500",
         active
           ? "border-brown-100 bg-brown-100 text-brown-900"

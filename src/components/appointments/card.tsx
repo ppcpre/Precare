@@ -61,10 +61,11 @@ export function AppointmentCard({
           </div>
 
           <span className="flex items-center gap-1.5 text-xs text-ink-400">
-            {appt.reminderEnabled ? (
+            {appt.reminderEnabled && appt.reminders?.length ? (
               <>
                 <Bell size={13} strokeWidth={1.9} />
-                เตือนก่อน {REMIND_LABEL(appt.reminderMinutesBefore)}
+                {/* เรียงจากไกลไปใกล้มาแล้วจาก query — อ่านแล้วเห็นลำดับการเตือนจริง */}
+                เตือนก่อน {appt.reminders.map(REMIND_LABEL).join(" · ")}
               </>
             ) : (
               <>

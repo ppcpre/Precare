@@ -19,15 +19,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db ? getStorageUsage(db) : null,
   ]);
 
+  // หนึ่งนัดมีได้หลายเวลาเตือน จึงแตกเป็นหลายรายการ ไม่ใช่รายการเดียวต่อนัด
   const reminders: Reminder[] =
     data?.upcoming
       .filter((a) => a.reminderEnabled)
-      .map((a) => ({
-        id: `${a.id}:${a.reminderMinutesBefore}`,
-        at: new Date(a.apptDatetime).getTime() - a.reminderMinutesBefore * 60_000,
-        title: a.title ? `นัดหมาย: ${a.title}` : "ใกล้ถึงเวลานัดหมาย",
-        body: [timeOf(a.apptDatetime), a.doctorName, a.location].filter(Boolean).join(" · "),
-      })) ?? [];
+      .flatMap((a) =>
+        a.reminders.map((minutes) => ({
+          id: `${a.id}:${minutes}`,
+          at: new Date(a.apptDatetime).getTime() - minutes * 60_000,
+          title: a.title ? `นัดหมาย: ${a.title}` : "ใกล้ถึงเวลานัดหมาย",
+          body: [timeOf(a.apptDatetime), a.doctorName, a.location].filter(Boolean).join(" · "),
+        })),
+      ) ?? [];
 
   return (
     <div className="flex min-h-dvh">
