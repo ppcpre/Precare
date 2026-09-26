@@ -64,6 +64,15 @@ describe("worker เสิร์ฟไฟล์", () => {
     expect(res.headers.get("content-length")).toBe(String(BODY.length));
   });
 
+  /** เส้นทางที่ Safari ใช้จริงก่อนเริ่มเล่น — ตอบผิดแล้วเครื่องเล่นค้างเงียบๆ */
+  it("suffix range ต้องได้ท้ายไฟล์เป็น 206 ไม่ใช่ทั้งไฟล์เป็น 200", async () => {
+    const res = await get(`${VIDEO}?t=${token}`, { headers: { range: "bytes=-64" } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-length")).toBe("64");
+    expect(res.headers.get("content-range")).toBe(`bytes ${BODY.length - 64}-${BODY.length - 1}/${BODY.length}`);
+    expect(new Uint8Array(await res.arrayBuffer()).length).toBe(64);
+  });
+
   it("ช่วงที่ขอเกินไฟล์ ไม่ทำให้พัง — ส่งทั้งไฟล์แทน", async () => {
     const res = await get(`${VIDEO}?t=${token}`, { headers: { range: "bytes=99999-" } });
     expect(res.status).toBe(200);

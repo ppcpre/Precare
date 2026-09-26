@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/db";
 import { familyMembers, storageObjects } from "@/db/schema";
 import { getSessionUser } from "@/lib/session";
+import { parseRange } from "@/lib/range";
 
 /**
  * เสิร์ฟไฟล์จาก bucket private
@@ -25,20 +26,6 @@ const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png", "video/mp4", 
 
 /** นามสกุลของไฟล์วิดีโอที่เราตั้งเอง -> content-type ที่ต้องตอบกลับ */
 const VIDEO_EXT: Record<string, string> = { mp4: "video/mp4", mov: "video/quicktime" };
-
-/**
- * อ่านหัว Range แบบที่วิดีโอใช้จริง คือ `bytes=<start>-` และ `bytes=<start>-<end>`
- * รูปแบบอื่น (หลายช่วง, suffix range) คืน null แล้วให้ส่งทั้งไฟล์ไป
- * ซึ่งถูกต้องตามสเปกและง่ายกว่าการรองรับให้ครบโดยไม่มีใครใช้
- */
-function parseRange(header: string | null, size: number) {
-  const m = /^bytes=(\d+)-(\d*)$/.exec(header?.trim() ?? "");
-  if (!m) return null;
-  const start = Number(m[1]);
-  const end = m[2] === "" ? size - 1 : Number(m[2]);
-  if (start >= size || end < start) return null;
-  return { start, end: Math.min(end, size - 1) };
-}
 
 export async function GET(req: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const user = await getSessionUser();

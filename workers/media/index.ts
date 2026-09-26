@@ -11,6 +11,7 @@
  */
 import { verifyMediaToken } from "../../src/lib/media-token";
 import { getMediaSecret } from "../../src/lib/media-secret";
+import { parseRange } from "../../src/lib/range";
 
 export interface MediaEnv {
   PHOTOS_BUCKET: R2Bucket;
@@ -20,19 +21,6 @@ export interface MediaEnv {
 /** ชนิดที่ยอมให้เสิร์ฟ — กันไฟล์แปลกปลอมที่หลุดเข้า bucket มาทำงานในเบราว์เซอร์ */
 const SERVABLE = new Set(["image/webp", "image/jpeg", "image/png", "video/mp4", "video/quicktime"]);
 const VIDEO_EXT: Record<string, string> = { mp4: "video/mp4", mov: "video/quicktime" };
-
-/**
- * อ่านหัว Range แบบที่วิดีโอใช้จริง คือ `bytes=<start>-` และ `bytes=<start>-<end>`
- * รูปแบบอื่นคืน null แล้วส่งทั้งไฟล์ ซึ่งถูกตามสเปกและง่ายกว่ารองรับให้ครบโดยไม่มีใครใช้
- */
-function parseRange(header: string | null, size: number) {
-  const m = /^bytes=(\d+)-(\d*)$/.exec(header?.trim() ?? "");
-  if (!m) return null;
-  const start = Number(m[1]);
-  const end = m[2] === "" ? size - 1 : Number(m[2]);
-  if (start >= size || end < start) return null;
-  return { start, end: Math.min(end, size - 1) };
-}
 
 const COMMON = {
   // ห้าม public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
