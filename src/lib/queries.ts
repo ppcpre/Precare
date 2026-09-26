@@ -12,7 +12,7 @@ import { requireRole } from "@/lib/authz";
 import type { AlbumPhotoType } from "@/db/schema";
 import {
   appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers,
-  photos, pregnancyProfiles, trackingSessions, user, visitQuestions, weeklyLogs,
+  photos, pregnancyProfiles, storageObjects, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
 import { toLaborView } from "@/lib/labor";
@@ -475,9 +475,14 @@ export async function getPhotoById(db: Db, familyId: string, id: string) {
       durationMs: photos.durationMs,
       createdAt: photos.createdAt,
       uploaderName: user.name,
+      /** ขนาดไฟล์ — หน้าดูรูปใช้ตัดสินว่าจะ "แชร์" (อ่านเข้าหน่วยความจำก่อน)
+       *  หรือ "บันทึกลงเครื่อง" (ให้เบราว์เซอร์สตรีมลงดิสก์เอง) */
+      sizeBytes: storageObjects.sizeBytes,
     })
     .from(photos)
     .innerJoin(user, eq(user.id, photos.uploadedBy))
+    // left เพราะไฟล์เก่าบางไฟล์อาจไม่มีแถวในบัญชี — ไม่ควรทำให้เปิดรูปไม่ได้
+    .leftJoin(storageObjects, eq(storageObjects.key, photos.r2Key))
     .where(and(eq(photos.id, id), eq(photos.familyId, familyId)))
     .get();
 }

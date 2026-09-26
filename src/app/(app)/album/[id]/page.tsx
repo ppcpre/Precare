@@ -4,6 +4,7 @@ import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } f
 import { RoleBadge, Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
 import { PhotoTypeBadge } from "@/components/album/type-picker";
+import { DownloadLink, ShareButton } from "@/components/album/share-button";
 import { TYPE_LABEL } from "@/lib/photo-types";
 import { getCoverPhotoId, getPhotoById, requireFamilyContext } from "@/lib/queries";
 import { familyMediaBase } from "@/lib/media-base";
@@ -13,6 +14,9 @@ import { thaiDateFull, thaiDate } from "@/lib/format";
 import { formatClip } from "@/lib/video";
 
 export const metadata = { title: "ดูไฟล์ · Pre Care" };
+
+/** ใหญ่กว่านี้ให้เบราว์เซอร์สตรีมลงดิสก์เอง แทนที่จะอ่านเข้าหน่วยความจำเพื่อแชร์ */
+const SHARE_MAX_BYTES = 50 * 1024 ** 2;
 
 export default async function PhotoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -120,30 +124,26 @@ export default async function PhotoPage({ params }: { params: Promise<{ id: stri
 
         <span className="h-px bg-cream-200" />
 
-        {/* Phase 3 — วางโครงไว้ให้เห็นว่าจะมา แต่ disabled จริง ไม่หลอกให้กด */}
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-ink-900">แชร์</span>
-            <RoleBadge role="viewer" />
-            <span className="text-xs text-ink-400">เร็วๆ นี้ · Phase 3</span>
-          </div>
-          <div className="flex gap-2">
-            {[
-              { icon: Share2, label: "แชร์ลิงก์" },
-              { icon: Users, label: "ส่งให้ครอบครัว" },
-              { icon: Download, label: "บันทึกรูป" },
-            ].map(({ icon: Icon, label }) => (
-              <span
-                key={label}
-                aria-disabled
-                className="flex h-16 flex-1 flex-col items-center justify-center gap-1.5 rounded-[10px] border border-cream-200 bg-white opacity-55"
-              >
-                <Icon size={20} strokeWidth={1.8} className="text-ink-600" />
-                <span className="text-[11px] text-ink-600">{label}</span>
-              </span>
-            ))}
-          </div>
-        </div>
+        {/**
+          * แชร์ = ส่งตัวไฟล์ผ่านแผงของเครื่อง ไม่ใช่ลิงก์สาธารณะ
+          *
+          * แผงของเครื่องให้ทุกอย่างที่คนอยากได้จริง (เซฟลงคลังรูป ส่ง LINE
+          * ส่งข้อความ AirDrop) โดยไฟล์ไม่ออกไปไหนนอกจากที่ผู้ใช้เลือกเอง
+          * ส่วนลิงก์สาธารณะแปลว่าไฟล์สุขภาพเปิดได้โดยไม่ต้องล็อกอิน
+          * ซึ่งเป็นการตัดสินใจที่ใหญ่เกินกว่าจะแถมมากับปุ่มแชร์
+          *
+          * ไฟล์ใหญ่เกิน SHARE_MAX_BYTES ไม่เข้าทางแชร์ เพราะต้องอ่านทั้งก้อน
+          * เข้าหน่วยความจำก่อน — คลิป 500 MB ทำแท็บบนมือถือถูกฆ่าทิ้งได้
+          */}
+        {photo.sizeBytes != null && photo.sizeBytes > SHARE_MAX_BYTES ? (
+          <DownloadLink r2Key={photo.r2Key} />
+        ) : (
+          <ShareButton
+            r2Key={photo.r2Key}
+            filename={`precare-${photo.takenAt.slice(0, 10)}${photo.week != null ? `-w${photo.week}` : ""}${photo.r2Key.slice(photo.r2Key.lastIndexOf("."))}`}
+            title={photo.caption ?? "รูปจาก Pre Care"}
+          />
+        )}
 
         {can.writeRecords(ctx.role) && (
           <>

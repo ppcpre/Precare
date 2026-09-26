@@ -60,11 +60,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
 
   const { env } = await getCloudflareContext({ async: true });
 
+  /**
+   * ?download=1 = ให้เบราว์เซอร์เซฟลงเครื่องแทนที่จะเปิดดู
+   *
+   * ชื่อไฟล์สร้างเองจาก key ไม่รับจาก query string — ค่าจาก URL ที่ยัดลง
+   * header ตรงๆ เปิดทางให้แทรกบรรทัดใหม่เข้าไปใน response header ได้
+   * (CRLF injection) ส่วนชื่อที่สร้างเองมีแค่ uuid กับนามสกุลที่เรากำหนด
+   */
+  const wantsDownload = new URL(req.url).searchParams.get("download") === "1";
+  const filename = `precare-${key.slice(key.lastIndexOf("/") + 1)}`;
+
   const common = {
     // ห้ามเป็น public — CDN จะเก็บไฟล์ส่วนตัวไว้แจกคนอื่น
     "cache-control": "private, max-age=3600",
     // ต่อให้ content-type หลุดมาผิด ก็ยังไม่ถูกเปิดเป็นหน้าเว็บ
-    "content-disposition": "inline",
+    "content-disposition": wantsDownload ? `attachment; filename="${filename}"` : "inline",
     "x-content-type-options": "nosniff",
   };
 
