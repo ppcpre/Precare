@@ -13,6 +13,18 @@ type StorageKind = "avatar" | "photo" | "video" | "asset";
  */
 export const STORAGE_LIMIT = 5 * 1024 ** 3; // 5 GB — เกินแล้วอัปโหลดไม่ได้
 export const STORAGE_WARN = 4 * 1024 ** 3; // 4 GB — เริ่มขึ้นป้ายเตือน
+
+/**
+ * เพดานต่อครอบครัว — กันครอบครัวเดียวกินพื้นที่ของทุกคนจนหมด
+ *
+ * ไม่มีเพดานนี้ = ครอบครัวเดียวอัปคลิป 500 MB สิบไฟล์ก็เต็ม 5 GB ของทั้งระบบ
+ * แล้วทุกครอบครัวอัปอะไรไม่ได้อีกเลย โดยที่คนที่โดนไม่รู้ด้วยซ้ำว่าเพราะอะไร
+ *
+ * 1 GB ต่อครอบครัว = รองรับได้ 5 ครอบครัวเต็มเพดานพอดีในเพดานรวม 5 GB
+ * และยังอัปคลิป 500 MB ได้สองคลิปซึ่งเกินพอสำหรับคลิปอัลตราซาวด์
+ */
+export const FAMILY_LIMIT = 1024 ** 3; // 1 GB ต่อครอบครัว
+export const FAMILY_WARN = 800 * 1024 ** 2; // 800 MB — เริ่มขึ้นป้ายเตือน
 /** ไฟล์เดี่ยวห้ามเกิน 5 MB — รูปที่ resize ฝั่ง client แล้วไม่ควรใหญ่กว่านี้ */
 export const MAX_FILE_BYTES = 5 * 1024 ** 2;
 
@@ -37,24 +49,41 @@ export type StorageUsage = {
   usedBytes: number;
   limitBytes: number;
   percent: number;
-  /** ถึงเกณฑ์เตือนแล้วหรือยัง (4 GB) */
+  /** ถึงเกณฑ์เตือนแล้วหรือยัง */
   warn: boolean;
-  /** เต็มแล้ว อัปโหลดต่อไม่ได้ (5 GB) */
+  /** เต็มแล้ว อัปโหลดต่อไม่ได้ */
   full: boolean;
+  /** นับของครอบครัวเดียว หรือของทั้งระบบ — ใช้เลือกคำที่แสดงในหน้าจอ */
+  scope: "family" | "system";
 };
 
-export async function getStorageUsage(db: Db): Promise<StorageUsage> {
-  const row = await db
+/**
+ * พื้นที่ที่ใช้ไป — ของครอบครัวหนึ่ง หรือของทั้งระบบถ้าไม่ระบุ
+ *
+ * หน้าจอทุกหน้าควรส่ง familyId เสมอ เพราะเลขที่ผู้ใช้ต้องตัดสินใจคือ
+ * "ครอบครัวฉันเหลือเท่าไหร่" ไม่ใช่ยอดรวมของคนอื่นที่เขาทำอะไรไม่ได้
+ *
+ * ไฟล์ของผู้ใช้เอง (avatar) มี family_id เป็น null จึงไม่ถูกนับเข้าครอบครัวไหน
+ * แต่ยังนับรวมในเพดานของระบบ — ตั้งใจ เพราะ avatar ติดตัวผู้ใช้ข้ามครอบครัว
+ */
+export async function getStorageUsage(db: Db, familyId?: string): Promise<StorageUsage> {
+  const q = db
     .select({ total: sql<number>`coalesce(sum(${storageObjects.sizeBytes}), 0)` })
-    .from(storageObjects)
-    .get();
+    .from(storageObjects);
+  const row = await (familyId
+    ? q.where(eq(storageObjects.familyId, familyId)).get()
+    : q.get());
+
   const usedBytes = Number(row?.total ?? 0);
+  const limitBytes = familyId ? FAMILY_LIMIT : STORAGE_LIMIT;
+  const warnAt = familyId ? FAMILY_WARN : STORAGE_WARN;
   return {
     usedBytes,
-    limitBytes: STORAGE_LIMIT,
-    percent: Math.min(100, (usedBytes / STORAGE_LIMIT) * 100),
-    warn: usedBytes >= STORAGE_WARN,
-    full: usedBytes >= STORAGE_LIMIT,
+    limitBytes,
+    percent: Math.min(100, (usedBytes / limitBytes) * 100),
+    warn: usedBytes >= warnAt,
+    full: usedBytes >= limitBytes,
+    scope: familyId ? "family" : "system",
   };
 }
 
@@ -84,7 +113,7 @@ export async function putObject(
 ) {
   const size = opts.body.byteLength;
 
-  await assertRoomFor(db, size, opts.kind, opts.key);
+  await assertRoomFor(db, size, opts.kind, opts.key, opts.familyId ?? undefined);
 
   await bucket.put(opts.key, opts.body, { httpMetadata: { contentType: opts.contentType } });
 
@@ -116,6 +145,8 @@ export async function assertRoomFor(
   size: number,
   kind: StorageKind,
   key?: string,
+  /** ไม่ส่ง = ตรวจเฉพาะเพดานรวมของระบบ (ใช้กับไฟล์ที่ไม่ได้เป็นของครอบครัวไหน) */
+  familyId?: string,
 ) {
   const cap = maxBytesFor(kind);
   if (size > cap) {
@@ -124,7 +155,6 @@ export async function assertRoomFor(
     );
   }
 
-  const usage = await getStorageUsage(db);
   // เขียนทับไฟล์เดิม = คิดเฉพาะส่วนต่าง ไม่ใช่บวกใหม่ทั้งก้อน
   const existing = key
     ? await db
@@ -135,9 +165,24 @@ export async function assertRoomFor(
     : undefined;
   const delta = size - (existing?.sizeBytes ?? 0);
 
-  if (usage.usedBytes + delta > STORAGE_LIMIT) {
+  /**
+   * เพดานของครอบครัวมาก่อน เพราะเป็นอันที่ผู้ใช้แก้ได้เอง (ลบไฟล์ของตัวเอง)
+   * ถ้าเช็คเพดานระบบก่อน เขาจะได้ข้อความว่า "ระบบเต็ม" ทั้งที่ครอบครัวตัวเอง
+   * ใช้ไปเกือบหมดแล้วและลบเองได้
+   */
+  if (familyId) {
+    const family = await getStorageUsage(db, familyId);
+    if (family.usedBytes + delta > FAMILY_LIMIT) {
+      throw new StorageQuotaError(
+        `พื้นที่ของครอบครัวเต็ม (ใช้ไป ${formatBytes(family.usedBytes)} จาก ${formatBytes(FAMILY_LIMIT)}) — ลบไฟล์เก่าออกก่อน`,
+      );
+    }
+  }
+
+  const system = await getStorageUsage(db);
+  if (system.usedBytes + delta > STORAGE_LIMIT) {
     throw new StorageQuotaError(
-      `พื้นที่เก็บไฟล์เต็ม (ใช้ไป ${formatBytes(usage.usedBytes)} จาก ${formatBytes(STORAGE_LIMIT)}) — ลบไฟล์เก่าออกก่อน`,
+      `พื้นที่เก็บไฟล์ของระบบเต็ม (ใช้ไป ${formatBytes(system.usedBytes)} จาก ${formatBytes(STORAGE_LIMIT)}) — ติดต่อผู้ดูแล`,
     );
   }
 }

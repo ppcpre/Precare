@@ -23,12 +23,18 @@ export function StorageNotice({ usage }: { usage: StorageUsage }) {
       <p className="flex-1 text-[13px] leading-relaxed text-ink-600">
         {usage.full ? (
           <>
-            <span className="font-medium text-danger">พื้นที่เก็บไฟล์เต็มแล้ว</span> — อัปโหลดรูปใหม่ไม่ได้
+            <span className="font-medium text-danger">
+              พื้นที่{usage.scope === "family" ? "ของครอบครัว" : "ของระบบ"}เต็มแล้ว
+            </span>{" "}
+            — อัปโหลดรูปใหม่ไม่ได้
             จนกว่าจะลบไฟล์เก่าออก
           </>
         ) : (
           <>
-            <span className="font-medium text-ink-900">พื้นที่เก็บไฟล์ใกล้เต็ม</span> — ใช้ไป{" "}
+            <span className="font-medium text-ink-900">
+              พื้นที่{usage.scope === "family" ? "ของครอบครัว" : "ของระบบ"}ใกล้เต็ม
+            </span>{" "}
+            — ใช้ไป{" "}
             {formatBytes(usage.usedBytes)} จาก {formatBytes(usage.limitBytes)}
           </>
         )}

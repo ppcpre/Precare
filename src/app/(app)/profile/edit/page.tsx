@@ -9,7 +9,8 @@ export const metadata = { title: "แก้ไขโปรไฟล์ · Health
 export default async function ProfileEditPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const usage = await getStorageUsage(await getDb());
+  // avatar ไม่ได้นับเข้าครอบครัว แต่เลขที่ผู้ใช้ควรเห็นคือของครอบครัวตัวเอง
+  const usage = await getStorageUsage(await getDb(), user.activeFamilyId ?? undefined);
   return (
     <ProfileEditForm
       name={user.name}

@@ -9,7 +9,9 @@ export function QuotaBar({ usage }: { usage: StorageUsage }) {
   return (
     <Card className="gap-1.5 p-2.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-ink-600">พื้นที่เก็บรูป</span>
+        <span className="text-xs text-ink-600">
+          {usage.scope === "family" ? "พื้นที่ของครอบครัว" : "พื้นที่ของระบบ"}
+        </span>
         <span
           className={`text-xs font-medium ${
             usage.full ? "text-danger" : usage.warn ? "text-warning" : "text-ink-900"

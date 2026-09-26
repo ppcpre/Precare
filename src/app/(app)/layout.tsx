@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const db = user ? await getDb() : null;
   const [data, usage] = await Promise.all([
     db && user?.activeFamilyId ? getLayoutData(db, user.activeFamilyId) : null,
-    db ? getStorageUsage(db) : null,
+    db && user?.activeFamilyId ? getStorageUsage(db, user.activeFamilyId) : null,
   ]);
 
   // หนึ่งนัดมีได้หลายเวลาเตือน จึงแตกเป็นหลายรายการ ไม่ใช่รายการเดียวต่อนัด

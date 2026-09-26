@@ -51,7 +51,7 @@ export default async function AlbumPage({
 
   const [items, usage, mediaBase] = await Promise.all([
     listPhotos(ctx.db, ctx.familyId, active, onlyVideo),
-    getStorageUsage(ctx.db),
+    getStorageUsage(ctx.db, ctx.familyId),
     familyMediaBase(ctx.familyId),
   ]);
   const canWrite = can.writeRecords(ctx.role);

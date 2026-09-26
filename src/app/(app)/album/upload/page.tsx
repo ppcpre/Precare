@@ -22,7 +22,7 @@ export default async function AlbumUploadPage({
     redirect("/album");
   }
 
-  const usage = await getStorageUsage(ctx.db);
+  const usage = await getStorageUsage(ctx.db, ctx.familyId);
   // takenAt มาจากปุ่ม + ของแต่ละวันในอัลบั้ม — รับเฉพาะรูปแบบวันที่
   // ไม่งั้นค่าที่พิมพ์มามั่วๆ จะไปโผล่ในช่องวันที่แล้วบันทึกไม่ผ่านโดยไม่บอกสาเหตุ
   const initialTakenAt = takenAt && /^\d{4}-\d{2}-\d{2}$/.test(takenAt) ? takenAt : undefined;

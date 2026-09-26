@@ -61,7 +61,7 @@ async function start(req: Request, bucket: R2Bucket, familyId: string) {
   }
 
   try {
-    await assertRoomFor(await getDb(), declared, "video");
+    await assertRoomFor(await getDb(), declared, "video", undefined, familyId);
   } catch (e) {
     if (e instanceof StorageQuotaError) return json(507, e.message);
     throw e;
@@ -140,7 +140,7 @@ async function complete(req: Request, bucket: R2Bucket, familyId: string, userId
 
   const db = await getDb();
   try {
-    await assertRoomFor(db, size, "video");
+    await assertRoomFor(db, size, "video", target.key, familyId);
   } catch (e) {
     // โควตาเต็มระหว่างทาง (คนอื่นในบ้านอัปพร้อมกัน) — ลบทิ้ง ไม่ปล่อยให้เกิน
     await bucket.delete(target.key);
