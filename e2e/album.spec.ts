@@ -79,8 +79,11 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
     }
   });
 
-  await test.step("แถบโควตาต้องขยับขึ้นจากศูนย์", async () => {
-    await expect(page.getByText(/\/ 5\.00 GB/)).toBeVisible();
+  await test.step("แถบโควตาต้องเป็นของครอบครัว และขยับขึ้นจากศูนย์", async () => {
+    // เลขที่ผู้ใช้ต้องตัดสินใจคือ "ครอบครัวฉันเหลือเท่าไหร่" ไม่ใช่ยอดรวมของทั้งระบบ
+    // ที่เขาทำอะไรกับมันไม่ได้ — 1.00 GB คือ FAMILY_LIMIT ใน src/lib/storage.ts
+    await expect(page.getByText("พื้นที่ของครอบครัว")).toBeVisible();
+    await expect(page.getByText(/\/ 1\.00 GB/)).toBeVisible();
     await expect(page.getByText(/^0 B \//)).toHaveCount(0);
   });
 });
