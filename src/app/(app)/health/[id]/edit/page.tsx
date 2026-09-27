@@ -31,6 +31,7 @@ export default async function EditLogPage({ params }: { params: Promise<{ id: st
       suggestedWeek={d.suggestedWeek}
       lastWeight={d.lastWeight}
       photoCount={counts.get(log.id) ?? 0}
+      usedSymptoms={d.usedSymptoms}
     />
   );
 }

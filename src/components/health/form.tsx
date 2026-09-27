@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { X, Trash2, Camera, ChevronRight } from "lucide-react";
+import { X, Trash2, Camera, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { ChipMultiSelect } from "@/components/ui/chip";
@@ -19,6 +19,9 @@ const SYMPTOMS = [
   "เหนื่อยง่าย", "นอนไม่หลับ", "ท้องผูก", "เวียนหัว",
 ] as const;
 
+/** ยาวกว่านี้ไม่ใช่ "อาการ" แล้ว แต่เป็นบันทึก ซึ่งมีช่องของตัวเองอยู่ข้างล่าง */
+const SYMPTOM_MAX = 40;
+
 const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v));
 
 export function HealthForm({
@@ -26,8 +29,11 @@ export function HealthForm({
   suggestedWeek,
   lastWeight,
   photoCount = 0,
+  usedSymptoms = [],
 }: {
   log?: WeeklyLogView;
+  /** อาการที่ครอบครัวนี้เคยบันทึกเอง — กดเลือกซ้ำได้ ไม่ต้องพิมพ์ใหม่ */
+  usedSymptoms?: string[];
   suggestedWeek: number | null;
   lastWeight: number | null;
   photoCount?: number;
@@ -41,6 +47,26 @@ export function HealthForm({
   const [sys, setSys] = useState(log?.bpSystolic != null ? String(log.bpSystolic) : "");
   const [dia, setDia] = useState(log?.bpDiastolic != null ? String(log.bpDiastolic) : "");
   const [symptoms, setSymptoms] = useState<string[]>(log?.symptoms ?? []);
+  const [custom, setCustom] = useState("");
+
+  /**
+   * ชิปที่ให้เลือก = ชุดสำเร็จ + อาการที่เคยบันทึกเอง + ที่เลือกอยู่ตอนนี้
+   *
+   * รวมของที่เลือกอยู่ด้วย เพราะบันทึกเก่าที่กำลังแก้อาจมีอาการที่หลุดออกจาก
+   * รายการ 12 ตัวล่าสุดไปแล้ว ถ้าไม่รวม ชิปนั้นจะหายไปทั้งที่ยังถูกเลือกอยู่
+   */
+  const options = useMemo(
+    () => [...new Set([...SYMPTOMS, ...usedSymptoms, ...symptoms])],
+    [usedSymptoms, symptoms],
+  );
+
+  const addCustom = () => {
+    const v = custom.trim().slice(0, SYMPTOM_MAX);
+    if (!v) return;
+    // กดเพิ่มอาการที่มีอยู่แล้ว = เลือกอันนั้น ไม่ใช่สร้างซ้ำ
+    setSymptoms((prev) => (prev.includes(v) ? prev : [...prev, v]));
+    setCustom("");
+  };
   const [mood, setMood] = useState<Mood | null>(log?.mood ?? null);
   const [note, setNote] = useState(log?.note ?? "");
 
@@ -148,7 +174,36 @@ export function HealthForm({
 
         <div className="flex flex-col gap-2">
           <span className="text-sm text-ink-600">อาการ</span>
-          <ChipMultiSelect options={SYMPTOMS} value={symptoms} onChange={setSymptoms} />
+          <ChipMultiSelect options={options} value={symptoms} onChange={setSymptoms} />
+
+          {/* พิมพ์เองได้ — ชุดสำเร็จครอบคลุมไม่หมด และอาการที่ไม่มีในรายการ
+              คือสิ่งที่ควรบอกหมอที่สุด · พิมพ์ครั้งเดียว ครั้งหน้ากดเลือกได้เลย */}
+          <div className="flex gap-2">
+            <input
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  // อยู่ในฟอร์ม กด Enter แล้วจะกลายเป็นบันทึกทั้งฟอร์ม
+                  e.preventDefault();
+                  addCustom();
+                }
+              }}
+              maxLength={SYMPTOM_MAX}
+              aria-label="เพิ่มอาการเอง"
+              placeholder="อาการอื่น เช่น ปวดท้องน้อย"
+              className="h-11 min-w-0 flex-1 rounded-md border border-cream-200 bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400"
+            />
+            <button
+              type="button"
+              onClick={addCustom}
+              disabled={custom.trim() === ""}
+              className="flex h-11 shrink-0 items-center gap-1.5 rounded-md border border-cream-200 bg-white px-3.5 text-sm font-medium text-ink-900 disabled:opacity-40"
+            >
+              <Plus size={16} strokeWidth={2} />
+              เพิ่ม
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

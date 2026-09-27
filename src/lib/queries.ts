@@ -87,7 +87,35 @@ export async function getLogFormDefaults(db: Db, familyId: string) {
   return {
     suggestedWeek: lmp ? calculateGestationalAge(lmp).weeks : null,
     lastWeight: lastRows[0]?.weight ?? null,
+    usedSymptoms: await listUsedSymptoms(db, familyId),
   };
+}
+
+/**
+ * อาการที่ครอบครัวนี้เคยบันทึกไว้เอง — เอาไปขึ้นเป็นชิปให้กดซ้ำได้
+ *
+ * ไม่ต้องมีตารางเก็บ "อาการที่ผู้ใช้สร้างเอง" แยก เพราะบันทึกเก่าคือรายการนั้น
+ * อยู่แล้ว พิมพ์ครั้งเดียวแล้วครั้งต่อไปกดเลือกได้ ไม่ต้องพิมพ์ใหม่ทุกสัปดาห์
+ *
+ * ดึงมาจากบันทึกล่าสุด 30 รายการก็พอ — ไกลกว่านั้นคืออาการของไตรมาสก่อน
+ * ซึ่งมักไม่ใช่สิ่งที่กำลังจะบันทึกวันนี้
+ */
+export async function listUsedSymptoms(db: Db, familyId: string, limit = 12) {
+  const rows = await db
+    .select({ symptoms: weeklyLogs.symptoms })
+    .from(weeklyLogs)
+    .where(eq(weeklyLogs.familyId, familyId))
+    .orderBy(desc(weeklyLogs.logDate))
+    .limit(30);
+
+  const seen = new Set<string>();
+  for (const r of rows) {
+    for (const s of parseSymptoms(r.symptoms)) {
+      if (seen.size >= limit) break;
+      seen.add(s);
+    }
+  }
+  return [...seen];
 }
 
 /**

@@ -18,7 +18,18 @@ export const weeklyLogInput = createInsertSchema(weeklyLogs)
     note: z.string().max(2000).nullable().optional(),
     logDate: isoDate,
     // รับเป็น array แล้วค่อย stringify ตอนเขียนลง D1
-    symptoms: z.array(z.string().max(50)).max(20).default([]),
+    /**
+     * อาการ — มีทั้งชุดสำเร็จและที่ผู้ใช้พิมพ์เอง
+     *
+     * ตัดช่องว่างหัวท้าย ทิ้งตัวว่าง และตัดตัวซ้ำตั้งแต่ชั้นนี้ ไม่ใช่ฝั่ง UI
+     * อย่างเดียว เพราะ Server Action ยิงตรงได้ และ "  ปวดหลัง  " กับ "ปวดหลัง"
+     * ที่กลายเป็นคนละอาการจะทำให้ชิปในครั้งถัดไปซ้ำกันสองอัน
+     */
+    symptoms: z
+      .array(z.string().max(50))
+      .max(20)
+      .default([])
+      .transform((list) => [...new Set(list.map((s) => s.trim()).filter(Boolean))]),
   });
 
 export const appointmentInput = createInsertSchema(appointments)

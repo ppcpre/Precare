@@ -17,5 +17,11 @@ export default async function NewLogPage() {
   }
 
   const d = await getLogFormDefaults(ctx.db, ctx.familyId);
-  return <HealthForm suggestedWeek={d.suggestedWeek} lastWeight={d.lastWeight} />;
+  return (
+    <HealthForm
+      suggestedWeek={d.suggestedWeek}
+      lastWeight={d.lastWeight}
+      usedSymptoms={d.usedSymptoms}
+    />
+  );
 }
