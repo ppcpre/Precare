@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClip, videoMimeOf } from "@/lib/video";
+import { formatClip, videoMimeOf, withDeadline } from "@/lib/video";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_MS, VIDEO_PART_BYTES, maxBytesFor, formatBytes } from "@/lib/storage";
 
 describe("formatClip", () => {
@@ -79,5 +79,29 @@ describe("videoMimeOf", () => {
   it("ชนิดอื่นคืน null", () => {
     expect(videoMimeOf(file("a.webm", "video/webm"))).toBeNull();
     expect(videoMimeOf(file("a.avi", ""))).toBeNull();
+  });
+});
+
+/**
+ * ตัวจับเวลาของการอ่านไฟล์วิดีโอ
+ *
+ * <video> ไม่รับประกันว่าจะยิง event สักตัว — Safari บนมือถือไม่เริ่มโหลด blob
+ * ให้ element ที่ไม่ได้อยู่ในหน้า และ seek ที่ไปไม่ถึงก็เงียบไปเฉยๆ
+ * ถ้าไม่มีเพดานเวลา หน้าจอจะค้างตลอดกาลโดยไม่มีข้อความและไม่มีคำขอออกจากเครื่อง
+ * (เกิดขึ้นจริงตอนแนบวิดีโอบน Safari)
+ */
+describe("withDeadline", () => {
+  it("promise ที่ไม่มีวันจบ ต้องถูกตัดด้วยข้อความที่อ่านรู้เรื่อง", async () => {
+    await expect(withDeadline(new Promise(() => {}), 20, "ช้าเกินไป")).rejects.toThrow("ช้าเกินไป");
+  });
+
+  it("จบทันเวลา ได้ค่ากลับมาปกติ", async () => {
+    await expect(withDeadline(Promise.resolve("ok"), 1000, "ช้าเกินไป")).resolves.toBe("ok");
+  });
+
+  it("ล้มเหลวเองก่อนหมดเวลา ต้องได้ error ตัวจริง ไม่ใช่ข้อความหมดเวลา", async () => {
+    await expect(
+      withDeadline(Promise.reject(new Error("ไฟล์เสีย")), 1000, "ช้าเกินไป"),
+    ).rejects.toThrow("ไฟล์เสีย");
   });
 });

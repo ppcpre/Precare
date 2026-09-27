@@ -52,8 +52,60 @@ function mediaError(v: HTMLVideoElement) {
   return "เปิดไฟล์วิดีโอไม่ได้ (เบราว์เซอร์บล็อกก่อนอ่านไฟล์)";
 }
 
+
+/**
+ * บังคับให้ promise จบเสมอ ไม่ว่าจะสำเร็จ ล้มเหลว หรือเงียบหาย
+ *
+ * <video> ในเบราว์เซอร์ **ไม่รับประกันว่าจะยิง event สักตัว** — Safari บนมือถือ
+ * ไม่เริ่มโหลด blob ให้กับ element ที่ไม่ได้อยู่ในหน้า และการ seek ที่ไปไม่ถึง
+ * ก็เงียบไปเฉยๆ ไม่มีทั้ง loadedmetadata และ error
+ *
+ * ผลคือหน้าจอค้างตลอดกาลโดยไม่มีข้อความอะไรเลย และไม่มีคำขอออกจากเครื่องด้วยซ้ำ
+ * (เจอจริงตอนแนบวิดีโอบน Safari) — ตัวจับเวลานี้คือกันไม่ให้ "เงียบ" กลายเป็น "ค้าง"
+ */
+export function withDeadline<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+/**
+ * ให้ element อยู่ในหน้าจริงๆ ระหว่างอ่านไฟล์
+ *
+ * Safari บนมือถือเลื่อนการโหลดสื่อของ element ที่ไม่ได้อยู่ใน DOM ออกไป
+ * แบบไม่มีกำหนด ซ่อนด้วย display:none ก็ไม่ได้ด้วยเหตุผลเดียวกัน
+ * จึงวางไว้นอกจอแทน — ผู้ใช้ไม่เห็น แต่เบราว์เซอร์ถือว่าต้องโหลด
+ */
+function mount(v: HTMLVideoElement) {
+  v.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0";
+  v.setAttribute("playsinline", "");
+  v.muted = true;
+  document.body.appendChild(v);
+}
+
+const unmount = (v: HTMLVideoElement) => v.remove();
+
+/** อ่าน metadata อย่างเดียว ไม่ต้องถอดรหัสภาพ จึงเร็วกว่าการดึงเฟรมมาก */
+const PROBE_TIMEOUT_MS = 12_000;
+/** ต้องถอดรหัสและ seek ด้วย ให้เวลามากกว่า แต่ต้องมีเพดาน */
+const POSTER_TIMEOUT_MS = 20_000;
+
 /** อ่านความยาวและขนาดภาพ โดยไม่ต้องเล่นไฟล์ */
 export function probeVideo(file: File): Promise<VideoInfo> {
+  return withDeadline(rawProbe(file), PROBE_TIMEOUT_MS, "อ่านไฟล์วิดีโอนานเกินไป");
+}
+
+function rawProbe(file: File): Promise<VideoInfo> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const v = document.createElement("video");
@@ -62,6 +114,7 @@ export function probeVideo(file: File): Promise<VideoInfo> {
     const done = (fn: () => void) => {
       URL.revokeObjectURL(url);
       v.removeAttribute("src");
+      unmount(v);
       fn();
     };
     v.onloadedmetadata = () => {
@@ -79,7 +132,10 @@ export function probeVideo(file: File): Promise<VideoInfo> {
       done(() => resolve(info));
     };
     v.onerror = () => done(() => reject(new Error(mediaError(v))));
+    mount(v);
     v.src = url;
+    // Safari ต้องสั่ง load() เอง ตั้ง src อย่างเดียวบางครั้งไม่เริ่มโหลด
+    v.load();
   });
 }
 
@@ -93,6 +149,10 @@ export function probeVideo(file: File): Promise<VideoInfo> {
  * ขยับไปหนึ่งในสี่ของคลิป (ไม่เกิน 2 วินาที) ได้ภาพที่บอกได้ว่าคลิปนี้คืออะไร
  */
 export function posterFrame(file: File, maxEdge = 640): Promise<Blob> {
+  return withDeadline(rawPoster(file, maxEdge), POSTER_TIMEOUT_MS, "ดึงหน้าปกนานเกินไป");
+}
+
+function rawPoster(file: File, maxEdge: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const v = document.createElement("video");
@@ -102,6 +162,7 @@ export function posterFrame(file: File, maxEdge = 640): Promise<Blob> {
 
     const fail = (msg: string) => {
       URL.revokeObjectURL(url);
+      unmount(v);
       reject(new Error(msg));
     };
 
@@ -119,6 +180,7 @@ export function posterFrame(file: File, maxEdge = 640): Promise<Blob> {
       canvas.toBlob(
         (blob) => {
           URL.revokeObjectURL(url);
+          unmount(v);
           if (blob) resolve(blob);
           else reject(new Error("สร้างหน้าปกไม่ได้"));
         },
@@ -127,7 +189,9 @@ export function posterFrame(file: File, maxEdge = 640): Promise<Blob> {
       );
     };
     v.onerror = () => fail(mediaError(v));
+    mount(v);
     v.src = url;
+    v.load();
   });
 }
 
