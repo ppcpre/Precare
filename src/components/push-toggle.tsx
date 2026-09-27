@@ -113,17 +113,25 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {permission === "granted" ? (
           <>
             <Button variant="secondary" loading={busy} onClick={disable}>
               <BellOff size={18} strokeWidth={1.9} />
               ปิดการแจ้งเตือน
             </Button>
-            <Button variant="secondary" loading={test.isPending} onClick={() => test.execute({})}>
-              <Send size={18} strokeWidth={1.9} />
-              ส่งทดสอบ
-            </Button>
+            {/* ปุ่มรอง — เป็นของที่กดครั้งเดียวตอนตั้งค่า ไม่ใช่ของที่ใช้ประจำ
+                จึงทำให้เบากว่าปุ่มปิดการแจ้งเตือน แต่พื้นที่กดยังสูง 44px
+                ตาม design-system.md ข้อ 4 (ตัวอักษรเล็กลง ไม่ใช่ปุ่มเตี้ยลง) */}
+            <button
+              type="button"
+              disabled={test.isPending}
+              onClick={() => test.execute({})}
+              className="flex min-h-11 items-center gap-1.5 px-1 text-xs font-medium text-brown-700 disabled:opacity-50"
+            >
+              <Send size={14} strokeWidth={2} />
+              {test.isPending ? "กำลังส่ง…" : "ส่งทดสอบ"}
+            </button>
           </>
         ) : (
           <Button loading={busy} onClick={enable}>
