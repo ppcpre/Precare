@@ -16,16 +16,18 @@ test.describe.configure({ mode: "serial" });
 const pad = (n: number) => String(n).padStart(2, "0");
 
 test("นัดที่ผ่านไปสองชั่วโมงต้องอยู่แท็บผ่านมาแล้ว ไม่ใช่กำลังจะถึง", async ({ page }) => {
-  await signUp(page, uniqueEmail("appttime"), "แม่เวลา");
-  await completeOnboarding(page, "ครอบครัวเวลา");
+  // ห้ามใส่คำว่า "เวลา" ในชื่อ — ลิงก์โปรไฟล์มี aria-label ว่า "โปรไฟล์ของ <ชื่อ>"
+  // แล้ว getByLabel("เวลา") จะไปโดนลิงก์นั้นด้วย
+  await signUp(page, uniqueEmail("appttime"), "แม่นัดย้อนหลัง");
+  await completeOnboarding(page, "ครอบครัวนัดย้อนหลัง");
 
   const twoHoursAgo = new Date(Date.now() - 2 * 3600_000);
   const date = `${twoHoursAgo.getFullYear()}-${pad(twoHoursAgo.getMonth() + 1)}-${pad(twoHoursAgo.getDate())}`;
   const time = `${pad(twoHoursAgo.getHours())}:${pad(twoHoursAgo.getMinutes())}`;
 
   await gotoApp(page, "/appointments/new");
-  await page.getByLabel("วันที่").fill(date);
-  await page.getByLabel("เวลา").fill(time);
+  await page.getByLabel("วันที่", { exact: true }).fill(date);
+  await page.getByLabel("เวลา", { exact: true }).fill(time);
   await page.getByLabel("หัวข้อนัด").fill("นัดที่ผ่านไปแล้ว");
   await page.getByRole("button", { name: "บันทึกนัดหมาย" }).click();
   await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
