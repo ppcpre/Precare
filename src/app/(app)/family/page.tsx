@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Plus, Users, Copy } from "lucide-react";
+import { ChevronLeft, Plus, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
-import { RoleBadge, Badge } from "@/components/ui/badge";
+import { RoleBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/app-topbar";
 import { MemberActions } from "@/components/family/member-actions";
 import { DeleteFamily, LeaveFamily } from "@/components/family/danger-zone";
 import { getFamily, listMembers, listPendingInvites, requireFamilyContext } from "@/lib/queries";
+import { InviteActions } from "@/components/family/invite-actions";
 import { can } from "@/lib/authz";
 import { thaiDate } from "@/lib/format";
 
@@ -84,7 +85,8 @@ export default async function FamilyPage() {
           <h3 className="text-sm text-ink-600">คำเชิญที่รอตอบรับ</h3>
           <Card className="gap-0 p-0">
             {invites.map((inv, i) => {
-              const expired = new Date(inv.expiresAt) < new Date(inv.createdAt);
+              // expired คำนวณมาจาก query แล้ว (ดูเหตุผลใน listPendingInvites)
+              const expired = inv.expired;
               return (
                 <div
                   key={inv.id}
@@ -99,10 +101,7 @@ export default async function FamilyPage() {
                       </span>
                     </span>
                   </div>
-                  <Badge className="shrink-0">
-                    <Copy size={12} strokeWidth={2} className="mr-1 inline" />
-                    /invite/{inv.id.slice(0, 6)}…
-                  </Badge>
+                  <InviteActions id={inv.id} email={inv.invitedEmail} />
                 </div>
               );
             })}

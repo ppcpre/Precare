@@ -290,11 +290,21 @@ export async function listMembers(db: Db, familyId: string, meId: string) {
 
 /** คำเชิญที่ยังรอตอบรับ — owner เท่านั้นที่ควรเห็น เช็คสิทธิ์ที่หน้าเรียกใช้ */
 export async function listPendingInvites(db: Db, familyId: string) {
-  return db
+  const rows = await db
     .select()
     .from(familyInvites)
     .where(and(eq(familyInvites.familyId, familyId), eq(familyInvites.status, "pending")))
     .orderBy(desc(familyInvites.createdAt));
+
+  /**
+   * คิด "หมดอายุหรือยัง" ตรงนี้ ไม่ใช่ในหน้าจอ
+   *
+   * react-hooks/purity ห้ามเรียก Date.now() ระหว่าง render แม้จะเป็น server
+   * component — และของเดิมเลี่ยงกฎนั้นด้วยการเทียบ expires_at กับ created_at
+   * ซึ่งอยู่ก่อนเสมอ ป้าย "หมดอายุแล้ว" จึงไม่เคยขึ้นเลยสักครั้ง
+   */
+  const now = Date.now();
+  return rows.map((r) => ({ ...r, expired: new Date(r.expiresAt).getTime() < now }));
 }
 
 /**
