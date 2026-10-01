@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { appointments, familyMembers, user as userTable } from "@/db/schema";
 import { getSessionUser } from "@/lib/session";
 import { thaiDate, timeOf } from "@/lib/format";
+import { localNowIso } from "@/lib/local-time";
 
 /**
  * บอก service worker ว่าจะเตือนเรื่องอะไร
@@ -39,7 +40,8 @@ export async function GET() {
     .where(
       and(
         eq(appointments.familyId, userTable.activeFamilyId),
-        gte(appointments.apptDatetime, new Date().toISOString()),
+        // เวลาไทย ไม่ใช่ UTC — ไม่งั้นแจ้งเตือนนัดที่ผ่านไปแล้ว
+        gte(appointments.apptDatetime, localNowIso()),
       ),
     )
     .orderBy(asc(appointments.apptDatetime))

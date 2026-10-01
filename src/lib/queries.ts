@@ -19,6 +19,7 @@ import { toLaborView } from "@/lib/labor";
 import type { CostItem } from "@/lib/costs";
 import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
 import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
+import { localNowIso } from "@/lib/local-time";
 
 /**
  * ด่านเดียวที่ RSC ใช้เปิดหน้า — คืน db + user + familyId + role ที่ผ่าน authz แล้ว
@@ -146,7 +147,8 @@ export async function remindersFor(db: Db, ids: string[]) {
 export async function listAppointments(db: Db, familyId: string, when: "upcoming" | "past" = "upcoming") {
   // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง (react-hooks/purity)
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
+  // เทียบกับเวลาไทย ไม่ใช่ UTC — ดูเหตุผลใน src/lib/local-time.ts
+  const nowIso = localNowIso(now);
   const items = await db
     .select()
     .from(appointments)
@@ -317,7 +319,7 @@ export async function getDashboard(db: Db, familyId: string) {
   // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง
   // (react-hooks/purity ห้ามเรียกฟังก์ชัน impure ใน render แม้จะเป็น server component)
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
+  const nowIso = localNowIso(now);
 
   const [pregnancyRows, apptRows, logRows, memberCount] = await db.batch([
     // join รูปหน้าปกมาด้วยในคิวรีเดียว — ถ้ารูปถูกลบไปแล้ว join ไม่เจอ การ์ดก็กลับไปเป็นแบบไม่มีรูปเอง
@@ -372,7 +374,7 @@ export async function getDashboard(db: Db, familyId: string) {
  */
 export async function getLayoutData(db: Db, familyId: string) {
   const now = Date.now();
-  const horizonIso = new Date(now + 24 * 3600_000).toISOString();
+  const horizonIso = localNowIso(now + 24 * 3600_000);
 
   const [familyRows, apptRows] = await db.batch([
     db.select().from(families).where(eq(families.id, familyId)),
@@ -389,7 +391,7 @@ export async function getLayoutData(db: Db, familyId: string) {
       .where(
         and(
           eq(appointments.familyId, familyId),
-          gte(appointments.apptDatetime, new Date(now).toISOString()),
+          gte(appointments.apptDatetime, localNowIso(now)),
           lt(appointments.apptDatetime, horizonIso),
         ),
       )
@@ -557,7 +559,7 @@ export async function getVisitData(db: Db, familyId: string) {
       .where(
         and(
           eq(appointments.familyId, familyId),
-          lt(appointments.apptDatetime, new Date().toISOString()),
+          lt(appointments.apptDatetime, localNowIso()),
         ),
       )
       .orderBy(desc(appointments.apptDatetime))

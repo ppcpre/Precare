@@ -6,6 +6,7 @@
  * ของที่ยิงไปหาเครื่องผู้ใช้จริงและผิดแล้วน่ารำคาญมาก
  */
 import { sendPush, type PushResult } from "../../src/lib/push";
+import { localNowIso } from "../../src/lib/local-time";
 
 export interface CronEnv {
   DB: D1Database;
@@ -20,13 +21,11 @@ const HORIZON_DAYS = 8;
 /**
  * เวลา "ตอนนี้" ในแบบเดียวกับที่ appt_datetime เก็บไว้
  *
- * นัดหมายเก็บเป็นเวลาที่โรงพยาบาลแบบไม่มี timezone (ดู components/appointments/form.tsx)
- * ส่วน worker วิ่งด้วยเวลา UTC เสมอ ถ้าเทียบตรงๆ จะเพี้ยนไป 7 ชั่วโมง
- * คือเตือนเช้าเกินไปครึ่งวัน ซึ่งแย่กว่าไม่เตือนเลย
+ * ใช้ตัวเดียวกับฝั่งแอป (src/lib/local-time.ts) — เดิมแยกกันคนละชุด
+ * แล้วฝั่งแอปลืมใช้ ทำให้นัดที่ผ่านไปแล้วยังขึ้นว่า "กำลังจะถึง" ได้ถึง 7 ชั่วโมง
+ * ขณะที่ตัวจับเวลาคิดถูกมาตลอด
  */
-export const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
-export const bangkokNow = (now: number) =>
-  new Date(now + BANGKOK_OFFSET_MS).toISOString().slice(0, 19);
+export { BANGKOK_OFFSET_MS, localNowIso as bangkokNow } from "../../src/lib/local-time";
 
 export interface DueRow {
   /** id ของ "ครั้งที่จะเตือน" ไม่ใช่ id ของนัด — นัดเดียวมีได้หลายครั้ง */
@@ -105,7 +104,7 @@ export async function runReminders(
     return { due: 0, sent: 0, removed: 0, skipped: "no-key" };
   }
 
-  const nowLocal = bangkokNow(now);
+  const nowLocal = localNowIso(now);
 
   /**
    * เก็บกวาดครั้งที่เลยเวลานัดไปแล้วแต่ไม่เคยถูกยิง

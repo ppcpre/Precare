@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { getVisitData, countOpenQuestions, getDashboard, requireFamilyContext } from "@/lib/queries";
+import { localNowIso } from "@/lib/local-time";
 import { buildVisitSummary } from "@/lib/visit";
 import { formatDuration } from "@/lib/kicks";
 import { thaiDateFull } from "@/lib/format";
@@ -40,7 +41,9 @@ export default async function VisitPage() {
 
   const s = buildVisitSummary({
     since: data.since,
-    today: new Date().toISOString().slice(0, 10),
+    // วันที่ตามเวลาไทย — worker รันด้วย UTC ถ้าใช้ตรงๆ ช่วงเที่ยงคืนถึงเจ็ดโมงเช้า
+    // สรุปจะลงวันที่ของเมื่อวาน
+    today: localNowIso().slice(0, 10),
     logs: data.logs,
     sessions: data.sessions,
   });

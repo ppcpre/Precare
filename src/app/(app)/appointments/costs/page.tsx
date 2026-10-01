@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ChevronLeft, ChevronRight, TrendingUp, Wallet, X } from "lucide-react";
 import { requireFamilyContext, listAppointmentCosts, listCareGroups } from "@/lib/queries";
 import { byGroup, byMonth, estimateRemaining, totalsOf, type CostItem } from "@/lib/costs";
+import { localNowIso } from "@/lib/local-time";
 import { baht } from "@/lib/money";
 import { monthKeyLabel, monthKeyShort } from "@/lib/format";
 import { can } from "@/lib/authz";
@@ -284,7 +285,9 @@ function MonthArrow({ to, dir }: { to?: string; dir: "prev" | "next" }) {
 function GroupView({ all }: { all: CostItem[] }) {
   const buckets = byGroup(all);
   const grand = totalsOf(all);
-  const nowIso = new Date().toISOString();
+  // เวลาไทย ไม่ใช่ UTC — ไม่งั้นนัดที่ผ่านไปแล้ววันนี้จะถูกนับเป็นนัดในอนาคต
+  // แล้วค่าใช้จ่ายที่ประมาณการจะเกินจริงไปหนึ่งนัดเสมอในช่วงเช้า
+  const nowIso = localNowIso();
 
   return (
     <div className="flex flex-col gap-3">
