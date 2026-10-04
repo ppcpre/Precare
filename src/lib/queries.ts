@@ -321,7 +321,7 @@ export async function getDashboard(db: Db, familyId: string) {
   const now = Date.now();
   const nowIso = localNowIso(now);
 
-  const [pregnancyRows, apptRows, logRows, memberCount] = await db.batch([
+  const [pregnancyRows, apptRows, logRows, memberCount, foodToday] = await db.batch([
     // join รูปหน้าปกมาด้วยในคิวรีเดียว — ถ้ารูปถูกลบไปแล้ว join ไม่เจอ การ์ดก็กลับไปเป็นแบบไม่มีรูปเอง
     db
       .select({
@@ -350,6 +350,16 @@ export async function getDashboard(db: Db, familyId: string) {
       .select({ n: sql<number>`count(*)` })
       .from(familyMembers)
       .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active"))),
+    // ยอดอาหารของวันนี้ — รวมใน batch เดิม ไม่ใช่คิวรีแยก เพื่อไม่ให้หน้าแรกช้าลง
+    db
+      .select({
+        kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+        sugarG: sql<number>`coalesce(sum(${foodLogs.sugarG}), 0)`,
+        proteinG: sql<number>`coalesce(sum(${foodLogs.proteinG}), 0)`,
+        items: sql<number>`count(*)`,
+      })
+      .from(foodLogs)
+      .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, nowIso.slice(0, 10)))),
   ]);
 
   const profile = pregnancyRows[0] ?? null;
@@ -365,6 +375,7 @@ export async function getDashboard(db: Db, familyId: string) {
     nextAppointment: apptRows[0] ?? null,
     recentLogs: logRows.map((r) => ({ ...r, symptoms: parseSymptoms(r.symptoms) })),
     memberCount: memberCount[0]?.n ?? 0,
+    food: foodToday[0] ?? { kcal: 0, sugarG: 0, proteinG: 0, items: 0 },
   };
 }
 
@@ -517,6 +528,37 @@ export async function getFoodDay(db: Db, familyId: string, eatenOn: string) {
     totals.proteinG += i.proteinG ?? 0;
   }
   return { items, totals, missing };
+}
+
+/**
+ * ยอดรวมรายวันย้อนหลัง — เอาไปวาดกราฟ
+ *
+ * รวมในฐานข้อมูลไม่ใช่ใน JS เพราะคนที่บันทึกทุกมื้อทุกวันจะมีหลายพันแถว
+ * ดึงมาทั้งหมดแล้ววนรวมเองกิน CPU เกิน 10ms ที่ worker มีให้ (Error 1102)
+ *
+ * คืนเฉพาะวันที่มีบันทึก — วันที่ขาดไปคือวันที่ไม่ได้บันทึก ซึ่งต่างจาก
+ * "วันที่กิน 0 แคล" คนละเรื่องกัน ฝั่งกราฟเป็นคนเติมช่องว่างเอง
+ */
+export async function getFoodDailyTotals(db: Db, familyId: string, from: string, to: string) {
+  return db
+    .select({
+      eatenOn: foodLogs.eatenOn,
+      kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+      carbG: sql<number>`coalesce(sum(${foodLogs.carbG}), 0)`,
+      sugarG: sql<number>`coalesce(sum(${foodLogs.sugarG}), 0)`,
+      proteinG: sql<number>`coalesce(sum(${foodLogs.proteinG}), 0)`,
+      items: sql<number>`count(*)`,
+    })
+    .from(foodLogs)
+    .where(
+      and(
+        eq(foodLogs.familyId, familyId),
+        gte(foodLogs.eatenOn, from),
+        lt(foodLogs.eatenOn, to),
+      ),
+    )
+    .groupBy(foodLogs.eatenOn)
+    .orderBy(asc(foodLogs.eatenOn));
 }
 
 /**

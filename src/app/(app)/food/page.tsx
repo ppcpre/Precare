@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ChartColumn } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FoodForm } from "@/components/food/food-form";
-import { FoodItemActions } from "@/components/food/item-actions";
+import { FoodItemRow } from "@/components/food/item-row";
 import { getFoodDay, listRecentFoods, requireFamilyContext } from "@/lib/queries";
 import { localNowIso } from "@/lib/local-time";
 import { SLOT_LABEL } from "@/lib/nutrition";
@@ -51,9 +53,18 @@ export default async function FoodPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <header className="flex items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold text-ink-900">นับแคล</h1>
-        <span className="text-xs text-ink-400">{thaiDate(today)}</span>
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h1 className="text-xl font-semibold text-ink-900">นับแคล</h1>
+          <span className="truncate text-xs text-ink-400">{thaiDate(today)}</span>
+        </div>
+        <Link
+          href="/food/history"
+          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
+        >
+          <ChartColumn size={17} strokeWidth={1.9} />
+          ย้อนหลัง
+        </Link>
       </header>
 
       <Card className="flex flex-col gap-3 border-peach-300 bg-peach-100">
@@ -86,26 +97,7 @@ export default async function FoodPage() {
               <section key={slot} className="flex flex-col gap-1.5">
                 <h2 className="text-xs font-medium text-ink-600">{SLOT_LABEL[slot]}</h2>
                 {items.map((i) => (
-                  <div key={i.id} className="flex items-center gap-2 rounded-sm bg-cream-50 px-3 py-2">
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[13px] text-ink-900">{i.name}</span>
-                        {i.portion && <span className="shrink-0 text-[11px] text-ink-400">{i.portion}</span>}
-                        {i.source === "ai" && (
-                          <span className="shrink-0 text-[10px] text-warning">AI</span>
-                        )}
-                      </span>
-                      <span className="text-[11px] text-ink-600">
-                        {i.kcal == null && i.carbG == null && i.proteinG == null
-                          ? "ยังไม่มีตัวเลข"
-                          : `คาร์บ ${i.carbG ?? "—"} · น้ำตาล ${i.sugarG ?? "—"} · โปรตีน ${i.proteinG ?? "—"} ก.`}
-                      </span>
-                    </div>
-                    <b className="shrink-0 text-[13px] text-ink-900">
-                      {i.kcal == null ? "—" : i.kcal.toLocaleString("th-TH")}
-                    </b>
-                    {canWrite && <FoodItemActions id={i.id} name={i.name} />}
-                  </div>
+                  <FoodItemRow key={i.id} item={i} canWrite={canWrite} />
                 ))}
               </section>
             );

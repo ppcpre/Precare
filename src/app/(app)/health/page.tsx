@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Footprints, HeartPulse, Plus } from "lucide-react";
+import { Footprints, HeartPulse, Plus, Utensils } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LogCard } from "@/components/health/log-card";
@@ -48,6 +48,15 @@ export default async function HealthPage() {
               แสดงตลอด ไม่รอสัปดาห์ 28 — หน้า /kicks อธิบายเองอยู่แล้วว่าทำไม
               ยังนับไม่ได้ และบอกทางไปหาหมอถ้าลูกดิ้นน้อยลง การซ่อนปุ่มไว้
               ทำให้คนไม่รู้ว่ามีของนี้ ซึ่งแย่กว่าเห็นแล้วกดไปเจอคำอธิบาย */}
+          {/* ทางเข้านับแคล — มีในแถบล่างอยู่แล้ว แต่คนที่กำลังบันทึกสุขภาพ
+              คือคนที่กำลังคิดถึงเรื่องเดียวกัน จึงวางไว้ตรงนี้ด้วย */}
+          <Link
+            href="/food"
+            className="flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
+          >
+            <Utensils size={17} strokeWidth={1.9} />
+            นับแคล
+          </Link>
           <Link
             href="/kicks"
             className="flex min-h-11 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"

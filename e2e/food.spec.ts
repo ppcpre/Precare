@@ -26,9 +26,10 @@ test("เพิ่มเมนูแล้วยอดรวมทั้งว�
   await completeOnboarding(page, "ครอบครัวนับแคล");
 
   await test.step("เมนู นับแคล อยู่ในแถบล่าง แทนที่โปรไฟล์", async () => {
-    // เมนูล่างกับเมนูเดสก์ท็อปเรนเดอร์พร้อมกันทั้งคู่ (ซ่อนอีกอันด้วย CSS)
-    // จึงต้องเจาะไปที่แถบเมนูหลักตัวที่เห็นอยู่ ไม่ใช่ค้นทั้งหน้า
-    const nav = page.getByRole("navigation", { name: "เมนูหลัก" }).first();
+    // เมนูล่าง (มือถือ) กับ sidebar (จอกว้าง) เรนเดอร์พร้อมกันทั้งคู่ แล้วซ่อน
+    // อีกอันด้วย CSS — และคนละ element คนละ role (nav กับ aside) จึงยึดที่
+    // aria-label ตัวที่มองเห็นอยู่ เทสต์เดียวใช้ได้ทั้งสองขนาดจอ
+    const nav = page.locator('[aria-label="เมนูหลัก"]:visible');
     await expect(nav.getByRole("link", { name: "นับแคล" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "โปรไฟล์", exact: true })).toHaveCount(0);
     // โปรไฟล์ต้องยังเข้าได้จากรูปมุมขวาบน ไม่งั้นตั้งค่าอะไรไม่ได้เลย
@@ -52,6 +53,18 @@ test("เพิ่มเมนูแล้วยอดรวมทั้งว�
     await expect(page.getByTestId("food-totals")).toContainText("770");
   });
 
+  /**
+   * แก้ตัวเลขทีหลังต้องได้ — เลขที่ AI ประมาณให้ผิดได้ และคนมักรู้หลังกดบันทึกแล้ว
+   * ถ้าแก้ไม่ได้ ทางเดียวคือลบแล้วพิมพ์ใหม่ ซึ่งคนจะปล่อยเลขผิดไว้แล้วยอดรวมผิดตลอด
+   */
+  await test.step("แก้ตัวเลขของรายการที่บันทึกแล้ว ยอดรวมต้องเปลี่ยนตาม", async () => {
+    await page.getByRole("button", { name: "แก้ตัวเลขของ ชาเย็น" }).click();
+    await page.getByLabel("พลังงาน ของ ชาเย็น").fill("120");
+    await page.getByRole("button", { name: "บันทึกตัวเลขใหม่" }).click();
+    // 590 + 120 = 710 (เดิม 770)
+    await expect(page.getByTestId("food-totals")).toContainText("710", { timeout: 30_000 });
+  });
+
   await test.step("ลบรายการหนึ่ง ยอดรวมต้องลดลงตาม", async () => {
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "ลบ ชาเย็น" }).click();
@@ -68,5 +81,33 @@ test("เพิ่มเมนูแล้วยอดรวมทั้งว�
     await expect(page.getByLabel("พลังงาน", { exact: true })).toHaveValue("590");
     await expect(page.getByLabel("โปรตีน", { exact: true })).toHaveValue("28");
     await expect(page.getByText("ใช้ค่าที่เคยบันทึกไว้")).toBeVisible();
+  });
+
+  await test.step("หน้าแรกมีการ์ดสรุปอาหารวันนี้ และกดเข้าหน้านับแคลได้", async () => {
+    await gotoApp(page, "/dashboard");
+    const card = page.getByText("อาหารวันนี้").locator("..").locator("..");
+    await expect(card).toContainText("590");
+    await card.getByRole("link", { name: /บันทึกเพิ่ม/ }).click();
+    await expect(page).toHaveURL(/\/food$/);
+  });
+
+  /**
+   * กราฟย้อนหลัง — จุดที่พลาดง่ายคือขอบท้ายของช่วง ถ้า query ใช้ `<` กับวันนี้
+   * บันทึกของวันนี้จะหายไปจากกราฟทั้งหมดโดยไม่มีอะไรฟ้อง
+   */
+  await test.step("กราฟย้อนหลังนับบันทึกของวันนี้ด้วย และสลับมุมมองได้", async () => {
+    await page.getByRole("link", { name: "ย้อนหลัง" }).click();
+    await expect(page).toHaveURL(/\/food\/history$/);
+
+    for (const range of ["รายวัน", "รายสัปดาห์", "รายเดือน"]) {
+      await page.getByRole("button", { name: range }).click();
+      await expect(page.getByText(/เฉลี่ย/)).toContainText("590");
+      await expect(page.getByText("ยังไม่มีบันทึกในช่วงนี้")).toHaveCount(0);
+    }
+
+    await test.step("เปลี่ยนสารอาหารแล้วกราฟเปลี่ยนตาม", async () => {
+      await page.getByRole("button", { name: "โปรตีน" }).click();
+      await expect(page.getByText(/เฉลี่ย/)).toContainText("28");
+    });
   });
 });

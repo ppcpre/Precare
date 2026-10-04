@@ -168,3 +168,58 @@ export function RecentLogsCard({ logs }: { logs: WeeklyLogView[] }) {
     </Card>
   );
 }
+
+/**
+ * การ์ดสรุปอาหารของวันนี้ — กดเข้าไปบันทึกต่อได้
+ *
+ * โชว์แค่สามค่า (พลังงาน น้ำตาล โปรตีน) ไม่ใช่ทั้งสี่ เพราะคาร์บกับน้ำตาล
+ * เป็นเรื่องเดียวกันในสายตาคนใช้ และหน้าแรกมีการ์ดเยอะอยู่แล้ว
+ * อยากเห็นครบกดเข้าไปในหน้านับแคลได้
+ */
+export function FoodTodayCard({
+  food,
+}: {
+  food: { kcal: number; sugarG: number; proteinG: number; items: number };
+}) {
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-ink-600">อาหารวันนี้</span>
+        <Link
+          prefetch={false}
+          href="/food"
+          className="-my-3 flex min-h-11 items-center gap-0.5 py-3 text-[13px] font-medium text-brown-700"
+        >
+          {food.items === 0 ? "เริ่มบันทึก" : "บันทึกเพิ่ม"}
+          <ChevronRight size={14} strokeWidth={2} />
+        </Link>
+      </div>
+
+      {food.items === 0 ? (
+        <p className="py-2 text-sm text-ink-400">ยังไม่ได้บันทึกอาหารวันนี้</p>
+      ) : (
+        <>
+          <div className="flex items-end justify-between gap-2">
+            <span className="flex items-baseline gap-1">
+              <b className="text-2xl leading-none text-peach-700">
+                {food.kcal.toLocaleString("th-TH")}
+              </b>
+              <span className="text-[11px] text-ink-600">kcal</span>
+            </span>
+            <span className="flex gap-3 text-[13px] text-ink-600">
+              <span>
+                น้ำตาล <b className="text-ink-900">{food.sugarG}</b> ก.
+              </span>
+              <span>
+                โปรตีน <b className="text-ink-900">{food.proteinG}</b> ก.
+              </span>
+            </span>
+          </div>
+          <span className="text-[11px] text-ink-400">
+            {food.items} รายการ · ค่าประมาณจากชื่อเมนู
+          </span>
+        </>
+      )}
+    </Card>
+  );
+}

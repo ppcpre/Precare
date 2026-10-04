@@ -14,6 +14,22 @@ export function daysAgo(n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * สามวันที่สำหรับทดสอบการจัดกลุ่มตามเดือน/วัน — สองใบเดือนเดียวกัน อีกใบคนละเดือน
+ *
+ * ห้ามใช้ daysAgo(2) กับ daysAgo(4) แล้วสมมติว่าอยู่เดือนเดียวกัน: จริงเฉพาะ
+ * ตอนรันหลังวันที่ 5 ของเดือน วันที่ 4 ต.ค. 2026 daysAgo(4) ตกไปเป็น ก.ย.
+ * หัวเดือนกลายเป็นสามกลุ่ม แล้ว CI แดงทั้งที่โค้ดของแอปไม่ได้เปลี่ยนอะไรเลย
+ */
+export function groupingDates() {
+  const now = new Date();
+  // ต้นเดือนให้ถอยไปสิบวันก่อน เพื่อให้ยังเหลือที่ถอยอีกสองวันในเดือนเดียวกัน
+  const anchor = now.getDate() >= 5 ? now : new Date(now.getTime() - 10 * 86_400_000);
+  const minus = (d: number) =>
+    new Date(anchor.getTime() - d * 86_400_000).toISOString().slice(0, 10);
+  return { recent: minus(0), sameMonth: minus(2), otherMonth: minus(40) };
+}
+
 export function daysAhead(n: number) {
   const d = new Date();
   d.setDate(d.getDate() + n);
@@ -131,12 +147,30 @@ function hydrated(page: Page) {
   return page
     .waitForFunction(
       () => {
-        const el = document.querySelector("button, input");
-        if (!el) return false;
-        const key = Object.keys(el).find((k) => k.startsWith("__reactProps"));
-        if (!key) return false;
-        const props = (el as unknown as Record<string, Record<string, unknown>>)[key];
-        return Boolean(props.onClick ?? props.onChange ?? props.onSubmit);
+        /**
+         * ดูทุก element ที่ควรมี handler ไม่ใช่แค่ตัวแรก
+         *
+         * เดิมเช็ค querySelector("button, input") ตัวเดียว ซึ่งพังสองแบบ:
+         * หน้าแรกที่อายุครรภ์ 24 สัปดาห์ไม่มีปุ่มหรือช่องกรอกเลยแม้แต่อันเดียว
+         * (ปุ่มอธิบายวิธีวัดโผล่แค่สัปดาห์ <= 22) จึงรอจนหมดเวลาแล้วฟ้องว่า
+         * หน้าไม่ hydrate ทั้งที่ hydrate ไปแล้ว — และถ้าตัวแรกเป็นปุ่มที่
+         * ไม่มี handler ของตัวเอง ก็ได้ผลเดียวกัน
+         *
+         * ลิงก์นับด้วยเพราะ next/link ผูก onClick ของตัวเองตอน hydrate
+         * ทุกหน้าในแอปมีลิงก์อยู่แล้วอย่างน้อยในแถบเมนู
+         */
+        const bound = (el: Element) => {
+          const key = Object.keys(el).find((k) => k.startsWith("__reactProps"));
+          if (!key) return false;
+          const props = (el as unknown as Record<string, Record<string, unknown>>)[key];
+          return Boolean(props.onClick ?? props.onChange ?? props.onSubmit);
+        };
+
+        // ปุ่มกับช่องกรอกมาก่อน เพราะนั่นคือสิ่งที่เทสต์กำลังจะไปแตะ
+        const controls = [...document.querySelectorAll("button, input")];
+        if (controls.length > 0) return controls.some(bound);
+        // ไม่มีเลยก็ยอมรับลิงก์ — ไม่งั้นหน้าที่อ่านอย่างเดียวรอจนหมดเวลาเปล่าๆ
+        return [...document.querySelectorAll("a[href]")].some(bound);
       },
       undefined,
       { timeout: HYDRATE_TIMEOUT },

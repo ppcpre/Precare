@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   completeOnboarding,
-  daysAgo,
+  groupingDates,
   gotoApp,
   makePng,
   pickFiles,
@@ -139,10 +139,11 @@ test("รูปหลายวันต้องแยกหัววันจ�
     await page.waitForURL(/\/album$/, { timeout: 45_000 });
   };
 
-  // สามวันในเดือนเดียวกัน + อีกใบคนละเดือน
-  await upload(daysAgo(2), "รูปวันล่าสุด");
-  await upload(daysAgo(4), "รูปอีกวัน");
-  await upload(daysAgo(40), "รูปเดือนก่อน");
+  // สองวันในเดือนเดียวกัน + อีกใบคนละเดือน (ดู groupingDates ว่าทำไมไม่ใช้ daysAgo)
+  const d = groupingDates();
+  await upload(d.recent, "รูปวันล่าสุด");
+  await upload(d.sameMonth, "รูปอีกวัน");
+  await upload(d.otherMonth, "รูปเดือนก่อน");
 
   await test.step("หัวเดือน 2 กลุ่ม หัววัน 3 กลุ่ม ไม่ยุบรวมกัน", async () => {
     // นับจากโครงสร้างหัวข้อ ไม่ใช่จากข้อความ "N รูป" ซึ่งโผล่ทั้งหัวเดือนและหัววัน

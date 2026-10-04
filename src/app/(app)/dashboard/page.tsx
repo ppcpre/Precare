@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Plus, Eye } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
-import { NextAppointmentCard, RecentLogsCard } from "@/components/dashboard/cards";
+import { NextAppointmentCard, RecentLogsCard, FoodTodayCard } from "@/components/dashboard/cards";
 import { WeeklyBabyCard } from "@/components/dashboard/weekly";
 import { weeklyContent } from "@/data/weekly-content";
 import {
@@ -89,6 +89,7 @@ export default async function DashboardPage() {
         <div className="flex flex-col gap-3">
           <NextAppointmentCard appt={data.nextAppointment} now={now} openQuestions={openQuestions} />
           <RecentLogsCard logs={data.recentLogs} />
+          <FoodTodayCard food={data.food} />
         </div>
       </div>
 
