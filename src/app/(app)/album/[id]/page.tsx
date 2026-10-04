@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Calendar, Download, Share2, User as UserIcon, Users, X } from "lucide-react";
-import { RoleBadge, Badge } from "@/components/ui/badge";
+import { AlertCircle, Calendar, User as UserIcon, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { PhotoActions } from "@/components/album/photo-actions";
 import { PhotoTypeBadge } from "@/components/album/type-picker";
 import { DownloadLink, ShareButton } from "@/components/album/share-button";

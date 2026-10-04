@@ -27,6 +27,7 @@ const PAGES = [
   "/appointments/new",
   "/appointments/costs",
   "/album",
+  "/food",
   "/kicks",
   "/labor",
   "/visit",

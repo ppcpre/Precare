@@ -11,7 +11,7 @@ import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import type { AlbumPhotoType } from "@/db/schema";
 import {
-  appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers,
+  appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
   photos, pregnancyProfiles, storageObjects, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
@@ -488,6 +488,59 @@ export async function listAppointmentReceipts(db: Db, familyId: string, appointm
       ),
     )
     .orderBy(asc(photos.createdAt));
+}
+
+/**
+ * อาหารของวันหนึ่ง พร้อมยอดรวม
+ *
+ * รวมยอดใน JS ไม่ใช่ SQL เพราะต้องแยกตามมื้อในหน้าจออยู่แล้ว การ SUM ใน SQL
+ * จะได้คิวรีเพิ่มมาอีกชุดเพื่อเลขที่บวกเองได้จากข้อมูลชุดเดิม
+ *
+ * ค่าที่เป็น null (AI อ่านไม่ได้ / ผู้ใช้ยังไม่กรอก) ไม่นับเข้ายอดรวม และนับ
+ * จำนวนรายการที่ยังไม่มีตัวเลขไว้บอกผู้ใช้ ไม่งั้นยอดรวมจะดูน้อยกว่าความจริง
+ * โดยไม่มีใครรู้ว่าทำไม
+ */
+export async function getFoodDay(db: Db, familyId: string, eatenOn: string) {
+  const items = await db
+    .select()
+    .from(foodLogs)
+    .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, eatenOn)))
+    .orderBy(asc(foodLogs.createdAt));
+
+  const totals = { kcal: 0, carbG: 0, sugarG: 0, proteinG: 0 };
+  let missing = 0;
+  for (const i of items) {
+    if (i.kcal == null && i.carbG == null && i.proteinG == null) missing++;
+    totals.kcal += i.kcal ?? 0;
+    totals.carbG += i.carbG ?? 0;
+    totals.sugarG += i.sugarG ?? 0;
+    totals.proteinG += i.proteinG ?? 0;
+  }
+  return { items, totals, missing };
+}
+
+/**
+ * เมนูที่เคยบันทึก — เอาไปทำชิป "เคยกิน" ให้กดซ้ำได้โดยไม่ต้องเรียก AI ใหม่
+ *
+ * วิธีเดียวกับอาการในบันทึกสุขภาพ: ไม่ต้องมีตารางเก็บ "เมนูของฉัน" แยก
+ * เพราะบันทึกเก่าคือรายการนั้นอยู่แล้ว และค่าที่ได้คือค่าที่ผู้ใช้ยืนยันแล้ว
+ * ซึ่งคงที่กว่าการให้ AI เดาใหม่ทุกครั้ง
+ */
+export async function listRecentFoods(db: Db, familyId: string, limit = 8) {
+  const rows = await db
+    .select()
+    .from(foodLogs)
+    .where(eq(foodLogs.familyId, familyId))
+    .orderBy(desc(foodLogs.createdAt))
+    .limit(60);
+
+  const seen = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const key = `${r.name}|${r.portion ?? ""}`;
+    if (!seen.has(key)) seen.set(key, r);
+    if (seen.size >= limit) break;
+  }
+  return [...seen.values()];
 }
 
 /** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */

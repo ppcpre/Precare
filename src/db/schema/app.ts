@@ -243,6 +243,52 @@ export const appointmentReminders = sqliteTable(
 /** เลือกเวลาเตือนได้มากสุดกี่ครั้งต่อนัด — บังคับทั้งใน UI, zod และ action */
 export const MAX_REMINDERS = 3;
 
+/** มื้ออาหารที่บันทึกได้ — เรียงตามลำดับเวลาของวัน */
+export const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export type MealSlot = (typeof MEAL_SLOTS)[number];
+
+/**
+ * อาหารที่กินในแต่ละวัน — หนึ่งแถวต่อหนึ่งเมนู ไม่ใช่หนึ่งแถวต่อหนึ่งมื้อ
+ *
+ * ไม่แยกเป็นตาราง "มื้อ" กับ "รายการในมื้อ" เพราะมื้อไม่มีข้อมูลของตัวเองเลย
+ * นอกจากชื่อมื้อ ซึ่งเก็บเป็นคอลัมน์ในแถวนี้ได้ การแยกสองตารางจะได้ join
+ * เพิ่มมาโดยไม่ได้อะไรกลับมา
+ *
+ * ค่าทางโภชนาการเป็น null ได้ทุกตัว — AI อ่านไม่ได้ หรือผู้ใช้ยังไม่อยากกรอก
+ * ก็ต้องบันทึกว่า "กินอะไรไป" ได้อยู่ดี ซึ่งมีค่ากว่าการบังคับให้กรอกเลขมั่วๆ
+ */
+export const foodLogs = sqliteTable(
+  "food_logs",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    /** วันที่กิน (YYYY-MM-DD) ตามเวลาไทย — ไม่ใช่เวลาที่กดบันทึก */
+    eatenOn: text("eaten_on").notNull(),
+    slot: text("slot", { enum: MEAL_SLOTS }).notNull(),
+    name: text("name").notNull(),
+    /** "1 จาน" "1 แก้ว" — เก็บเป็นข้อความเพราะหน่วยของอาหารไทยไม่เป็นมาตรฐาน */
+    portion: text("portion"),
+
+    kcal: integer("kcal"),
+    carbG: integer("carb_g"),
+    sugarG: integer("sugar_g"),
+    proteinG: integer("protein_g"),
+
+    /**
+     * ตัวเลขมาจากไหน และผู้ใช้ยืนยันหรือยัง
+     *
+     * แยกสองอย่างเพราะ "AI เดาให้แล้วผู้ใช้กดบันทึกโดยไม่แก้" กับ "ผู้ใช้กรอกเอง"
+     * เชื่อถือได้ไม่เท่ากัน และหน้าจอต้องบอกความต่างนั้นให้เห็น
+     */
+    source: text("source", { enum: ["ai", "user"] }).notNull().default("user"),
+    confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(false),
+
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_food_family_date").on(t.familyId, t.eatenOn)],
+);
+
 export const PHOTO_TYPES = ["ultrasound", "family", "document", "other", "receipt"] as const;
 
 /** ประเภทที่อัปผ่านอัลบั้มได้ — ใบเสร็จเข้าได้ทางเดียวคือแนบกับนัด */

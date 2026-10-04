@@ -46,6 +46,8 @@ const ACTION_RULES = {
   "photos.ts": ["editorAction"],
   "costs.ts": ["editorAction"],
   "kicks.ts": ["editorAction"],
+  // อาหารเป็นบันทึกของครอบครัว แก้ได้เฉพาะคนที่มีสิทธิ์เขียน
+  "food.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],
