@@ -547,7 +547,17 @@ export async function getFoodDailyTotals(db: Db, familyId: string, from: string,
       carbG: sql<number>`coalesce(sum(${foodLogs.carbG}), 0)`,
       sugarG: sql<number>`coalesce(sum(${foodLogs.sugarG}), 0)`,
       proteinG: sql<number>`coalesce(sum(${foodLogs.proteinG}), 0)`,
-      items: sql<number>`count(*)`,
+      /**
+       * นับแยกต่อสารอาหาร ไม่ใช่ count(*) รวม
+       *
+       * เมนูที่ไม่มีตัวเลขบันทึกได้ (ตั้งใจ) ถ้านับวันนั้นเป็น "วันที่บันทึก"
+       * ทั้งที่ sum ได้ 0 กราฟจะโชว์วันที่กินศูนย์แคล ซึ่งผิดและไม่มีอะไรฟ้อง
+       * count(col) ของ SQL ไม่นับ NULL จึงได้จำนวนเมนูที่มีค่านั้นจริงๆ
+       */
+      nKcal: sql<number>`count(${foodLogs.kcal})`,
+      nCarbG: sql<number>`count(${foodLogs.carbG})`,
+      nSugarG: sql<number>`count(${foodLogs.sugarG})`,
+      nProteinG: sql<number>`count(${foodLogs.proteinG})`,
     })
     .from(foodLogs)
     .where(

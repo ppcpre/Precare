@@ -1,17 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { bucketize, RANGES, RANGE_LABEL, type DailyTotal, type Range } from "@/lib/food-history";
+import {
+  bucketize,
+  RANGES,
+  RANGE_LABEL,
+  type DailyTotal,
+  type Metric,
+  type Range,
+} from "@/lib/food-history";
 import { cn } from "@/lib/cn";
 
-const METRICS = [
+const CHOICES = [
   { key: "kcal", label: "พลังงาน", unit: "kcal", bar: "bg-peach-500" },
   { key: "carbG", label: "คาร์บ", unit: "ก.", bar: "bg-brown-300" },
   { key: "sugarG", label: "น้ำตาล", unit: "ก.", bar: "bg-danger" },
   { key: "proteinG", label: "โปรตีน", unit: "ก.", bar: "bg-sage-500" },
-] as const;
-
-type MetricKey = (typeof METRICS)[number]["key"];
+] as const satisfies readonly { key: Metric; label: string; unit: string; bar: string }[];
 
 /**
  * กราฟแท่งย้อนหลัง — รายวัน / รายสัปดาห์ / รายเดือน
@@ -25,21 +30,21 @@ type MetricKey = (typeof METRICS)[number]["key"];
  */
 export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: string }) {
   const [range, setRange] = useState<Range>("day");
-  const [metric, setMetric] = useState<MetricKey>("kcal");
+  const [metric, setMetric] = useState<Metric>("kcal");
 
-  const buckets = useMemo(() => bucketize(rows, range, today), [rows, range, today]);
-  const m = METRICS.find((x) => x.key === metric)!;
+  const buckets = useMemo(() => bucketize(rows, range, today, metric), [rows, range, today, metric]);
+  const m = CHOICES.find((x) => x.key === metric)!;
 
-  const values = buckets.map((b) => b[metric]).filter((v): v is number => v != null);
+  const values = buckets.map((b) => b.value).filter((v): v is number => v != null);
   const max = Math.max(1, ...values);
   const logged = buckets.filter((b) => b.days > 0);
+  const totalDays = logged.reduce((s, b) => s + b.days, 0);
+  // ถ่วงด้วยจำนวนวันของแต่ละช่อง ไม่ใช่เฉลี่ยของเฉลี่ย ซึ่งให้น้ำหนักช่องที่มี
+  // ข้อมูลวันเดียวเท่ากับช่องที่มีเจ็ดวัน
   const avg =
-    values.length === 0
+    totalDays === 0
       ? null
-      : Math.round(
-          logged.reduce((s, b) => s + (b[metric] ?? 0) * b.days, 0) /
-            logged.reduce((s, b) => s + b.days, 0),
-        );
+      : Math.round(logged.reduce((s, b) => s + (b.value ?? 0) * b.days, 0) / totalDays);
 
   const unitOf = (b: (typeof buckets)[number]) =>
     range === "day" ? "" : ` (เฉลี่ยจาก ${b.days} วัน)`;
@@ -66,7 +71,7 @@ export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: s
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {METRICS.map((x) => (
+        {CHOICES.map((x) => (
           <button
             key={x.key}
             type="button"
@@ -92,14 +97,14 @@ export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: s
         <>
           <p className="text-[11px] text-ink-600">
             เฉลี่ย <b className="text-ink-900">{avg?.toLocaleString("th-TH")}</b> {m.unit} ต่อวัน
-            {" · "}บันทึกไว้ {logged.reduce((s, b) => s + b.days, 0)} วัน
+            {" · "}บันทึกไว้ {totalDays} วัน
           </p>
 
           {/* แท่งสูงเป็น % ของค่าสูงสุดในช่วง — ไม่มีเป้าหมายให้เทียบ
               จึงเทียบกับตัวเองซึ่งเป็นสิ่งเดียวที่บอกแนวโน้มได้จริง */}
           <ul className="flex h-40 items-end gap-1" aria-label={`${m.label}${RANGE_LABEL[range]}`}>
             {buckets.map((b) => {
-              const v = b[metric];
+              const v = b.value;
               return (
                 <li
                   key={b.key}

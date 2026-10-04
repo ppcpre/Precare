@@ -17,25 +17,36 @@ export const RANGE_LABEL: Record<Range, string> = {
 /** จำนวนช่องที่แสดงต่อมุมมอง — พอให้เห็นแนวโน้มแต่ยังอ่านออกบนจอมือถือ */
 export const BUCKETS: Record<Range, number> = { day: 14, week: 8, month: 6 };
 
+export const METRICS = ["kcal", "carbG", "sugarG", "proteinG"] as const;
+export type Metric = (typeof METRICS)[number];
+
 export interface DailyTotal {
   eatenOn: string;
   kcal: number;
   carbG: number;
   sugarG: number;
   proteinG: number;
-  items: number;
+  /** จำนวนเมนูที่มีค่านั้นจริง (ไม่ใช่จำนวนเมนูทั้งหมด — ดู getFoodDailyTotals) */
+  nKcal: number;
+  nCarbG: number;
+  nSugarG: number;
+  nProteinG: number;
 }
+
+const COUNT_OF: Record<Metric, keyof DailyTotal> = {
+  kcal: "nKcal",
+  carbG: "nCarbG",
+  sugarG: "nSugarG",
+  proteinG: "nProteinG",
+};
 
 export interface Bucket {
   /** คีย์ของช่อง — วันที่เริ่มช่อง (YYYY-MM-DD) */
   key: string;
   label: string;
-  /** ค่าเฉลี่ยต่อวัน เฉพาะวันที่มีบันทึก (null = ไม่มีบันทึกในช่องนี้) */
-  kcal: number | null;
-  carbG: number | null;
-  sugarG: number | null;
-  proteinG: number | null;
-  /** จำนวนวันที่มีบันทึกในช่อง — ต้องโชว์ ไม่งั้นค่าเฉลี่ยอ่านผิดได้ */
+  /** ค่าเฉลี่ยต่อวันของสารอาหารที่เลือก (null = ไม่มีวันไหนในช่องนี้มีค่านี้) */
+  value: number | null;
+  /** จำนวนวันที่มีค่านี้ — ต้องโชว์ ไม่งั้นค่าเฉลี่ยอ่านผิดได้ */
   days: number;
 }
 
@@ -75,10 +86,18 @@ const labelOf = (range: Range, key: string): string => {
 /**
  * สร้างช่องทั้งหมดของมุมมอง (รวมช่องที่ไม่มีบันทึก) แล้วเฉลี่ยค่าในแต่ละช่อง
  *
- * หารด้วย "จำนวนวันที่มีบันทึก" ไม่ใช่จำนวนวันในปฏิทิน เพราะสัปดาห์ที่บันทึก
+ * หารด้วย "จำนวนวันที่มีค่านี้" ไม่ใช่จำนวนวันในปฏิทิน เพราะสัปดาห์ที่บันทึก
  * แค่สองวันถ้าหารเจ็ด จะกลายเป็นว่ากินน้อยจนน่ากลัว ซึ่งไม่เป็นความจริง
+ *
+ * คิดทีละสารอาหารเพราะ "วันที่บันทึก" ของแต่ละค่าไม่เท่ากัน — คนกรอกแคล
+ * แต่เว้นโปรตีนว่างได้ ถ้าใช้ตัวหารร่วมกัน ค่าที่กรอกน้อยกว่าจะถูกเฉลี่ยต่ำเกินจริง
  */
-export function bucketize(rows: DailyTotal[], range: Range, today: string): Bucket[] {
+export function bucketize(
+  rows: DailyTotal[],
+  range: Range,
+  today: string,
+  metric: Metric,
+): Bucket[] {
   const keyOf = (iso: string) =>
     range === "day" ? iso : range === "week" ? mondayOf(iso) : monthOf(iso);
 
@@ -94,34 +113,26 @@ export function bucketize(rows: DailyTotal[], range: Range, today: string): Buck
     for (let i = 0; i < BUCKETS[range]; i++) keys.push(toIso(dayMs(start) + i * step));
   }
 
-  const sums = new Map<string, { kcal: number; carbG: number; sugarG: number; proteinG: number; days: number }>();
+  const countKey = COUNT_OF[metric];
+  const sums = new Map<string, { total: number; days: number }>();
   for (const r of rows) {
-    // นับเป็น "วันที่มีบันทึก" เฉพาะวันที่มีเมนูจริง ไม่ใช่แถวผลรวมที่เป็นศูนย์หมด
-    if (r.items === 0) continue;
+    // วันที่ไม่มีเมนูไหนมีค่านี้เลย ไม่นับเป็น "วันที่บันทึก" ของสารอาหารนี้
+    // ไม่งั้นวันที่บันทึกแต่ไม่ได้ใส่ตัวเลข จะกลายเป็นวันที่กินศูนย์
+    if (r[countKey] === 0) continue;
     const k = keyOf(r.eatenOn);
-    const acc = sums.get(k) ?? { kcal: 0, carbG: 0, sugarG: 0, proteinG: 0, days: 0 };
-    acc.kcal += r.kcal;
-    acc.carbG += r.carbG;
-    acc.sugarG += r.sugarG;
-    acc.proteinG += r.proteinG;
+    const acc = sums.get(k) ?? { total: 0, days: 0 };
+    acc.total += r[metric];
     acc.days += 1;
     sums.set(k, acc);
   }
 
   return keys.map((key) => {
     const a = sums.get(key);
-    if (!a || a.days === 0) {
-      return { key, label: labelOf(range, key), kcal: null, carbG: null, sugarG: null, proteinG: null, days: 0 };
-    }
-    const avg = (v: number) => Math.round(v / a.days);
     return {
       key,
       label: labelOf(range, key),
-      kcal: avg(a.kcal),
-      carbG: avg(a.carbG),
-      sugarG: avg(a.sugarG),
-      proteinG: avg(a.proteinG),
-      days: a.days,
+      value: a ? Math.round(a.total / a.days) : null,
+      days: a?.days ?? 0,
     };
   });
 }
