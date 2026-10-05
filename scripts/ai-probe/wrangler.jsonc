@@ -1,0 +1,8 @@
+{
+  // worker ชั่วคราวสำหรับวัดพฤติกรรมโมเดล ไม่ deploy ที่ไหน ใช้กับ `wrangler dev --remote`
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "precare-ai-probe",
+  "main": "worker.ts",
+  "compatibility_date": "2026-08-01",
+  "ai": { "binding": "AI", "remote": true }
+}
