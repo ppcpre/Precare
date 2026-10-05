@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { localNowIso } from "@/lib/local-time";
+import { isValidDay, localNowIso, localToday, shiftDay } from "@/lib/local-time";
+import { eatenOnInput } from "@/lib/validation";
 
 /**
  * เวลานัดหมายเก็บเป็น "เวลาที่โรงพยาบาล" แบบไม่มี timezone (ดู components/appointments/form.tsx)
@@ -36,5 +37,61 @@ describe("เวลาปัจจุบันแบบเดียวกับ�
 
   it("ยาวเท่ากับรูปแบบที่เก็บเสมอ เทียบสตริงจึงเชื่อถือได้", () => {
     expect(localNowIso(Date.UTC(2026, 0, 5, 0, 0, 0))).toHaveLength("2026-01-05T07:00:00".length);
+  });
+});
+
+describe("วันตามปฏิทินไทย", () => {
+  it("เลื่อนวันข้ามเดือนและข้ามปีได้", () => {
+    expect(shiftDay("2026-10-05", -1)).toBe("2026-10-04");
+    expect(shiftDay("2026-10-01", -1)).toBe("2026-09-30");
+    expect(shiftDay("2026-01-01", -1)).toBe("2025-12-31");
+    expect(shiftDay("2026-12-31", 1)).toBe("2027-01-01");
+  });
+
+  /** 2028 เป็นปีอธิกสุรทิน ถ้าคิดวันด้วยการบวกเดือนตรงๆ จะพลาดตรงนี้ */
+  it("ปีอธิกสุรทินถูกต้อง", () => {
+    expect(shiftDay("2028-02-28", 1)).toBe("2028-02-29");
+    expect(shiftDay("2028-03-01", -1)).toBe("2028-02-29");
+  });
+
+  /**
+   * ตอน 06:00 ของเมืองไทยคือ 23:00 ของวันก่อนหน้าใน UTC
+   * ถ้าใช้ toISOString() ตรงๆ จะได้วันที่ผิดไปหนึ่งวันทุกเช้า
+   */
+  it("วันนี้คิดตามเวลาไทย ไม่ใช่ UTC", () => {
+    const sixAmBangkok = Date.parse("2026-10-05T06:00:00+07:00");
+    expect(localToday(sixAmBangkok)).toBe("2026-10-05");
+    expect(new Date(sixAmBangkok).toISOString().slice(0, 10)).toBe("2026-10-04");
+  });
+
+  it("ค่าที่ไม่ใช่วันจริงถูกปฏิเสธ", () => {
+    expect(isValidDay("2026-10-05")).toBe(true);
+    expect(isValidDay("2026-13-01")).toBe(false);
+    expect(isValidDay("2026-02-30")).toBe(false);
+    expect(isValidDay("5/10/2026")).toBe(false);
+    expect(isValidDay(undefined)).toBe(false);
+  });
+});
+
+describe("วันที่ของบันทึกอาหาร", () => {
+  const today = localToday();
+
+  it("วันนี้และย้อนหลังผ่าน — คนลืมบันทึกเป็นเรื่องปกติ", () => {
+    expect(eatenOnInput.safeParse(today).success).toBe(true);
+    expect(eatenOnInput.safeParse(shiftDay(today, -1)).success).toBe(true);
+    expect(eatenOnInput.safeParse(shiftDay(today, -400)).success).toBe(true);
+  });
+
+  /** กันที่ schema ไม่ใช่แค่ max= ของช่องวันที่ — ยิง action ตรงได้ */
+  it("วันอนาคตไม่ผ่าน ไม่ว่าจะพรุ่งนี้หรือปีหน้า", () => {
+    for (const d of [shiftDay(today, 1), shiftDay(today, 365)]) {
+      const r = eatenOnInput.safeParse(d);
+      expect(r.success).toBe(false);
+      if (!r.success) expect(r.error.issues[0].message).toBe("บันทึกล่วงหน้าไม่ได้");
+    }
+  });
+
+  it("วันที่ไม่มีจริงไม่ผ่าน แม้รูปแบบจะถูก", () => {
+    expect(eatenOnInput.safeParse("2026-02-30").success).toBe(false);
   });
 });

@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, gotoApp, inviteMember, signUp, uniqueEmail } from "./helpers";
+import {
+  completeOnboarding,
+  daysAgo,
+  gotoApp,
+  inviteMember,
+  signUp,
+  uniqueEmail,
+} from "./helpers";
 
 /**
  * Regression — บันทึกอาหารและนับรวมทั้งวัน
@@ -96,7 +103,7 @@ test("เพิ่มเมนูแล้วยอดรวมทั้งว�
    * บันทึกของวันนี้จะหายไปจากกราฟทั้งหมดโดยไม่มีอะไรฟ้อง
    */
   await test.step("กราฟย้อนหลังนับบันทึกของวันนี้ด้วย และสลับมุมมองได้", async () => {
-    await page.getByRole("link", { name: "ย้อนหลัง" }).click();
+    await page.getByRole("link", { name: "ย้อนหลัง", exact: true }).click();
     await expect(page).toHaveURL(/\/food\/history$/);
 
     for (const range of ["รายวัน", "รายสัปดาห์", "รายเดือน"]) {
@@ -163,10 +170,72 @@ test("สองคนในครอบครัวเดียวกัน ย�
   });
 
   await test.step("กราฟย้อนหลังผูกกับคนที่เลือก ไม่หลุดกลับไปเป็นของตัวเอง", async () => {
-    await page.getByRole("link", { name: "ย้อนหลัง" }).click();
+    await page.getByRole("link", { name: "ย้อนหลัง", exact: true }).click();
     await expect(page).toHaveURL(/\/food\/history\?u=/);
     await expect(page.getByText(/เฉลี่ย/)).toContainText("900");
   });
 
   await member.ctx.close();
 });
+
+/**
+ * Regression — บันทึกย้อนหลัง
+ *
+ * คนลืมบันทึกเป็นเรื่องปกติ ถ้าลงได้แค่วันนี้ มื้อที่ลืมก็หายไปเลย แล้วกราฟ
+ * จะโชว์วันที่ดูเหมือนกินน้อยทั้งที่จริงคือลืมจด ซึ่งเป็นการอ่านผิดที่อันตราย
+ * กว่าการไม่มีกราฟ
+ */
+test("บันทึกย้อนหลังได้ ลงวันที่ถูก และไม่ปนกับวันนี้", async ({ page }) => {
+  // ห้ามใส่คำว่า "ย้อนหลัง" ในชื่อคนหรือชื่อครอบครัว — ชื่อโผล่ใน aria-label
+  // ของลิงก์โปรไฟล์และหัวแอป แล้วจะชนกับ selector ของลิงก์ "ย้อนหลัง"
+  // (พลาดแบบเดียวกับ appt-time.spec.ts ที่ชื่อผู้ใช้ชนกับคำว่า "เวลา")
+  await signUp(page, uniqueEmail("foodback"), "แม่เผลอลืมจด");
+  await completeOnboarding(page, "ครอบครัวเผลอลืมจด");
+
+  const yesterday = daysAgo(1);
+
+  await test.step("วันนี้บันทึกหนึ่งเมนู", async () => {
+    await gotoApp(page, "/food");
+    await addFood(page, "ข้าวมันไก่", [590, 72, 6, 28]);
+    await expect(page.getByTestId("food-totals")).toContainText("590", { timeout: 30_000 });
+  });
+
+  await test.step("ถอยไปเมื่อวาน หน้าเปล่าและบอกวันที่ให้ชัด", async () => {
+    await page.getByRole("button", { name: /ดูวันก่อนหน้า/ }).click();
+    await expect(page).toHaveURL(new RegExp(`d=${yesterday}`));
+    await expect(page.getByText(/ยังไม่ได้บันทึกอะไร วันที่/)).toBeVisible({ timeout: 30_000 });
+    // หัวข้อฟอร์มต้องบอกว่ากำลังลงวันไหน ไม่งั้นกรอกไปลงวันนี้โดยไม่รู้ตัว
+    await expect(page.getByRole("heading", { name: /ย้อนหลังวันที่/ })).toBeVisible();
+  });
+
+  await test.step("เพิ่มเมนูของเมื่อวาน ยอดขึ้นที่วันนั้น", async () => {
+    await addFood(page, "ก๋วยเตี๋ยว", [420, 60, 8, 20]);
+    await expect(page.getByTestId("food-totals")).toContainText("420", { timeout: 30_000 });
+    await expect(page.getByTestId("food-list")).toContainText("ก๋วยเตี๋ยว");
+    // ของวันนี้ต้องไม่หลุดมาอยู่ในรายการของเมื่อวาน
+    // (ยึดที่รายการของวัน ไม่ใช่ทั้งหน้า — ชิป "เคยกิน" เป็นเมนูข้ามวันโดยตั้งใจ)
+    await expect(page.getByTestId("food-list")).not.toContainText("ข้าวมันไก่");
+  });
+
+  await test.step("กลับมาวันนี้ ยอดของวันนี้ไม่เปลี่ยน", async () => {
+    await page.getByRole("button", { name: "วันนี้" }).click();
+    await expect(page.getByTestId("food-totals")).toContainText("590", { timeout: 30_000 });
+    await expect(page.getByTestId("food-list")).not.toContainText("ก๋วยเตี๋ยว");
+  });
+
+  await test.step("ไปข้างหน้าไม่ได้ — วันอนาคตยังไม่เกิดขึ้น", async () => {
+    await expect(page.getByRole("button", { name: /ดูวันถัดไป/ })).toHaveCount(0);
+    await expect(page.getByLabel("วันที่ของบันทึก")).toHaveAttribute("max", await nowDay(page));
+  });
+
+  await test.step("กราฟรายวันกดที่แท่งแล้วไปที่วันนั้นเพื่อแก้ได้", async () => {
+    await page.getByRole("link", { name: "ย้อนหลัง", exact: true }).click();
+    await page.getByRole("link", { name: new RegExp("เปิดวันนี้เพื่อแก้") }).last().click();
+    await expect(page).toHaveURL(/\/food(\?|$)/);
+  });
+});
+
+/** วันนี้ตามที่หน้าเว็บคิด — เทียบกับ max ของช่องวันที่ */
+async function nowDay(page: import("@playwright/test").Page) {
+  return page.getByLabel("วันที่ของบันทึก").inputValue();
+}

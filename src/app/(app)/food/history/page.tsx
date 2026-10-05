@@ -71,7 +71,12 @@ export default async function FoodHistoryPage({
       </header>
 
       <Card className="flex flex-col gap-3">
-        <FoodHistoryChart rows={rows} today={today} />
+        <FoodHistoryChart
+          rows={rows}
+          today={today}
+          userId={viewing}
+          isMine={target?.isMe ?? true}
+        />
       </Card>
 
       <p className="px-1 text-[11px] leading-relaxed text-ink-400">

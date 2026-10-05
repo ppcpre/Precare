@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   bucketize,
   RANGES,
@@ -28,7 +29,17 @@ const CHOICES = [
  * ข้อมูลทั้งหมด (6 เดือน) ส่งมาครั้งเดียวแล้วจัดกลุ่มในเครื่อง การสลับมุมมอง
  * จึงไม่ต้องยิง request ใหม่ — ค่าที่ส่งมาเป็นผลรวมรายวันแล้ว ไม่ใช่ทุกแถว
  */
-export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: string }) {
+export function FoodHistoryChart({
+  rows,
+  today,
+  userId,
+  isMine,
+}: {
+  rows: DailyTotal[];
+  today: string;
+  userId: string;
+  isMine: boolean;
+}) {
   const [range, setRange] = useState<Range>("day");
   const [metric, setMetric] = useState<Metric>("kcal");
 
@@ -48,6 +59,14 @@ export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: s
 
   const unitOf = (b: (typeof buckets)[number]) =>
     range === "day" ? "" : ` (เฉลี่ยจาก ${b.days} วัน)`;
+
+  const dayHref = (key: string) => {
+    const q = new URLSearchParams();
+    if (key !== today) q.set("d", key);
+    if (!isMine) q.set("u", userId);
+    const s = q.toString();
+    return s ? `/food?${s}` : "/food";
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,23 +124,40 @@ export function FoodHistoryChart({ rows, today }: { rows: DailyTotal[]; today: s
           <ul className="flex h-40 items-end gap-1" aria-label={`${m.label}${RANGE_LABEL[range]}`}>
             {buckets.map((b) => {
               const v = b.value;
+              const bar =
+                v == null ? (
+                  <span className="h-1 w-full rounded-sm bg-cream-200" />
+                ) : (
+                  <span
+                    className={cn("w-full rounded-sm", m.bar)}
+                    style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
+                  />
+                );
+              const label =
+                v == null
+                  ? `${b.label}: ไม่มีบันทึก`
+                  : `${b.label}: ${v.toLocaleString("th-TH")} ${m.unit}${unitOf(b)}`;
+
               return (
-                <li
-                  key={b.key}
-                  className="flex h-full flex-1 flex-col justify-end gap-1"
-                  aria-label={
-                    v == null
-                      ? `${b.label}: ไม่มีบันทึก`
-                      : `${b.label}: ${v.toLocaleString("th-TH")} ${m.unit}${unitOf(b)}`
-                  }
-                >
-                  {v == null ? (
-                    <span className="h-1 rounded-sm bg-cream-200" />
+                <li key={b.key} className="flex h-full flex-1 flex-col justify-end">
+                  {/**
+                   * มุมมองรายวันแต่ละแท่งคือวันเดียว กดแล้วไปที่วันนั้นได้เลย
+                   * — เห็นวันที่ดูเหมือนกินน้อยแล้วอยากไปเติมของที่ลืมจด
+                   * มุมมองสัปดาห์/เดือนกดไม่ได้ เพราะหนึ่งแท่งคือหลายวัน
+                   * ไม่รู้ว่าจะพาไปวันไหน
+                   */}
+                  {range === "day" ? (
+                    <Link
+                      href={dayHref(b.key)}
+                      aria-label={`${label} · เปิดวันนี้เพื่อแก้`}
+                      className="flex h-full flex-col justify-end"
+                    >
+                      {bar}
+                    </Link>
                   ) : (
-                    <span
-                      className={cn("rounded-sm", m.bar)}
-                      style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
-                    />
+                    <span aria-label={label} className="flex h-full flex-col justify-end">
+                      {bar}
+                    </span>
                   )}
                 </li>
               );

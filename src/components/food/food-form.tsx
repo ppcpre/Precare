@@ -31,9 +31,14 @@ const toInt = (v: string) => (v.trim() === "" ? null : Math.round(Number(v)));
 export function FoodForm({
   slot: initialSlot,
   recent,
+  eatenOn,
+  isToday,
 }: {
   slot: MealSlot;
   recent: RecentFood[];
+  /** วันของบันทึก — ส่งมาเสมอ เพื่อให้วันย้อนหลังลงวันถูก ไม่ใช่ลงวันนี้ */
+  eatenOn: string;
+  isToday: boolean;
 }) {
   const router = useRouter();
   const [slot, setSlot] = useState<MealSlot>(initialSlot);
@@ -204,6 +209,9 @@ export function FoodForm({
         disabled={add.isPending || name.trim() === ""}
         onClick={() =>
           add.execute({
+            // ไม่ส่งวันเมื่อเป็นวันนี้ ให้ฝั่งเซิร์ฟเวอร์คิดเองจากเวลาไทย —
+            // นาฬิกาเครื่องผู้ใช้อาจตั้งไว้ผิดวัน หรือข้ามวันระหว่างกรอกอยู่
+            eatenOn: isToday ? undefined : eatenOn,
             slot,
             name,
             portion: portion || null,

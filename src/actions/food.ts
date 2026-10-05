@@ -7,7 +7,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { MEAL_SLOTS, foodLogs } from "@/db/schema";
 import { editorAction, AppError } from "@/lib/safe-action";
 import { estimateNutrition } from "@/lib/nutrition";
-import { localNowIso } from "@/lib/local-time";
+import { localToday } from "@/lib/local-time";
+import { eatenOnInput } from "@/lib/validation";
 
 const newId = () => crypto.randomUUID();
 
@@ -47,7 +48,8 @@ export const addFoodLog = editorAction
   .metadata({ name: "addFoodLog" })
   .inputSchema(
     z.object({
-      eatenOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "วันที่ไม่ถูกต้อง").optional(),
+      // ย้อนหลังได้ ล่วงหน้าไม่ได้ — กฎอยู่ใน lib/validation.ts พร้อมเหตุผลและเทสต์
+      eatenOn: eatenOnInput.optional(),
       slot: z.enum(MEAL_SLOTS),
       name: z.string().trim().min(1, "ใส่ชื่อเมนูก่อน").max(NAME_MAX),
       portion: z.string().trim().max(PORTION_MAX).nullable().optional(),
@@ -69,7 +71,7 @@ export const addFoodLog = editorAction
        */
       userId: ctx.user.id,
       // ไม่ส่งวันมา = วันนี้ตามเวลาไทย ไม่ใช่ UTC (ดู src/lib/local-time.ts)
-      eatenOn: eatenOn ?? localNowIso().slice(0, 10),
+      eatenOn: eatenOn ?? localToday(),
       portion: portion || null,
       // กดบันทึกคือการยืนยัน ไม่ว่าตัวเลขจะมาจาก AI หรือพิมพ์เอง
       confirmed: true,

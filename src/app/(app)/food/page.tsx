@@ -11,7 +11,8 @@ import {
   requireFamilyContext,
 } from "@/lib/queries";
 import { PersonTabs } from "@/components/food/person-tabs";
-import { localNowIso } from "@/lib/local-time";
+import { DayNav } from "@/components/food/day-nav";
+import { isValidDay, localNowIso, localToday } from "@/lib/local-time";
 import { SLOT_LABEL } from "@/lib/nutrition";
 import { MEAL_SLOTS, type MealSlot } from "@/db/schema";
 import { can } from "@/lib/authz";
@@ -30,7 +31,7 @@ function slotOfHour(hour: number): MealSlot {
 export default async function FoodPage({
   searchParams,
 }: {
-  searchParams: Promise<{ u?: string }>;
+  searchParams: Promise<{ u?: string; d?: string }>;
 }) {
   let ctx;
   try {
@@ -44,20 +45,28 @@ export default async function FoodPage({
 
   // วันนี้ตามเวลาไทย ไม่ใช่ UTC — worker รันด้วย UTC เสมอ
   const nowLocal = localNowIso();
-  const today = nowLocal.slice(0, 10);
+  const today = localToday();
+  const q = await searchParams;
 
-  const people = await getFoodDayByMember(ctx.db, ctx.familyId, today, ctx.user.id);
+  /**
+   * วันที่กำลังดู — ย้อนหลังได้ (ลืมบันทึกเป็นเรื่องปกติ) แต่ล่วงหน้าไม่ได้
+   * ค่าพิลึกหรือวันอนาคตที่ใส่มาทาง URL ตกกลับมาเป็นวันนี้ ไม่ใช่หน้าพัง
+   */
+  const day = isValidDay(q.d) && q.d <= today ? q.d : today;
+  const isToday = day === today;
+
+  const people = await getFoodDayByMember(ctx.db, ctx.familyId, day, ctx.user.id);
   /**
    * ?u= ต้องเป็นคนที่อยู่ในแถบจริง ไม่ใช่ id อะไรก็ได้ที่ใส่มาใน URL
    * ไม่งั้นจะอ่านบันทึกของคนนอกครอบครัวได้ด้วยการเดา id
    */
-  const asked = (await searchParams).u;
+  const asked = q.u;
   const target = people.find((p) => p.userId === asked) ?? people.find((p) => p.isMe);
   const viewing = target?.userId ?? ctx.user.id;
   const isMine = viewing === ctx.user.id;
 
-  const [day, recent] = await Promise.all([
-    getFoodDay(ctx.db, ctx.familyId, viewing, today),
+  const [entries, recent] = await Promise.all([
+    getFoodDay(ctx.db, ctx.familyId, viewing, day),
     isMine ? listRecentFoods(ctx.db, ctx.familyId, ctx.user.id) : Promise.resolve([]),
   ]);
   // เพิ่ม/แก้ได้เฉพาะมื้อของตัวเอง — ของคนอื่นดูได้อย่างเดียว
@@ -75,42 +84,46 @@ export default async function FoodPage({
 
   return (
     <div className="flex flex-col gap-3">
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-baseline gap-2">
+      <header className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-semibold text-ink-900">นับแคล</h1>
-          <span className="truncate text-xs text-ink-400">{thaiDate(today)}</span>
+          <Link
+            href={isMine ? "/food/history" : `/food/history?u=${viewing}`}
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
+          >
+            <ChartColumn size={17} strokeWidth={1.9} />
+            ย้อนหลัง
+          </Link>
         </div>
-        <Link
-          href={isMine ? "/food/history" : `/food/history?u=${viewing}`}
-          className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
-        >
-          <ChartColumn size={17} strokeWidth={1.9} />
-          ย้อนหลัง
-        </Link>
+        <DayNav day={day} today={today} userId={viewing} isMine={isMine} />
       </header>
 
       {/* คนเดียวในครอบครัวไม่ต้องมีแถบเลือกคน — มีแต่จะเปลืองที่และทำให้สงสัยว่า
           จะเลือกอะไร (ครอบครัวส่วนใหญ่เริ่มจากคนเดียวก่อนเชิญคนอื่น) */}
-      {people.length > 1 && <PersonTabs people={people} selected={viewing} />}
+      {people.length > 1 && (
+        <PersonTabs people={people} selected={viewing} day={day} today={today} />
+      )}
 
       <Card className="flex flex-col gap-3 border-peach-300 bg-peach-100">
         {/* สี่ค่าเรียง 2×2 — สี่คอลัมน์แถวเดียวบีบจนเลขอ่านยากบนจอมือถือ */}
         <div data-testid="food-totals" className="grid grid-cols-2 gap-2">
-          {stat("พลังงาน", day.totals.kcal, "kcal", "text-peach-700")}
-          {stat("คาร์บ", day.totals.carbG, "ก.", "text-brown-700")}
-          {stat("น้ำตาล", day.totals.sugarG, "ก.", "text-danger")}
-          {stat("โปรตีน", day.totals.proteinG, "ก.", "text-sage-700")}
+          {stat("พลังงาน", entries.totals.kcal, "kcal", "text-peach-700")}
+          {stat("คาร์บ", entries.totals.carbG, "ก.", "text-brown-700")}
+          {stat("น้ำตาล", entries.totals.sugarG, "ก.", "text-danger")}
+          {stat("โปรตีน", entries.totals.proteinG, "ก.", "text-sage-700")}
         </div>
         <p className="text-[11px] leading-relaxed text-ink-400">
           ค่าประมาณจากชื่อเมนู ไม่ใช่การวัดจริง ใช้ดูแนวโน้มได้ แต่ไม่ใช่คำแนะนำทางการแพทย์
-          {day.missing > 0 && ` · ${day.missing} รายการยังไม่มีตัวเลข จึงไม่ถูกนับรวม`}
+          {entries.missing > 0 && ` · ${entries.missing} รายการยังไม่มีตัวเลข จึงไม่ถูกนับรวม`}
         </p>
       </Card>
 
-      {day.items.length === 0 ? (
+      {entries.items.length === 0 ? (
         <Card className="flex flex-col gap-1.5">
           <span className="font-medium text-ink-900">
-            {isMine ? "ยังไม่ได้บันทึกอะไรวันนี้" : `${target?.name} ยังไม่ได้บันทึกอะไรวันนี้`}
+            {isMine
+              ? `ยังไม่ได้บันทึกอะไร${isToday ? "วันนี้" : ` วันที่ ${thaiDate(day)}`}`
+              : `${target?.name} ยังไม่ได้บันทึกอะไร${isToday ? "วันนี้" : ` วันที่ ${thaiDate(day)}`}`}
           </span>
           <span className="text-[13px] leading-relaxed text-ink-600">
             {isMine
@@ -119,9 +132,9 @@ export default async function FoodPage({
           </span>
         </Card>
       ) : (
-        <Card className="flex flex-col gap-3">
+        <Card data-testid="food-list" className="flex flex-col gap-3">
           {MEAL_SLOTS.map((slot) => {
-            const items = day.items.filter((i) => i.slot === slot);
+            const items = entries.items.filter((i) => i.slot === slot);
             if (items.length === 0) return null;
             return (
               <section key={slot} className="flex flex-col gap-1.5">
@@ -137,8 +150,26 @@ export default async function FoodPage({
 
       {canWrite ? (
         <Card className="flex flex-col gap-3">
-          <h2 className="font-medium text-ink-900">เพิ่มเมนูของฉัน</h2>
-          <FoodForm slot={slotOfHour(Number(nowLocal.slice(11, 13)))} recent={recent} />
+          <h2 className="font-medium text-ink-900">
+            เพิ่มเมนูของฉัน
+            {!isToday && (
+              <span className="font-normal text-ink-600"> · ย้อนหลังวันที่ {thaiDate(day)}</span>
+            )}
+          </h2>
+          <FoodForm
+            eatenOn={day}
+            isToday={isToday}
+            /**
+             * วันนี้เดามื้อจากเวลา แต่วันย้อนหลังเวลาไม่ได้บอกอะไร — เดาเป็น
+             * มื้อแรกที่ยังไม่มีรายการแทน ซึ่งตรงกับการไล่จดทั้งวันจากเช้าไปเย็น
+             */
+            slot={
+              isToday
+                ? slotOfHour(Number(nowLocal.slice(11, 13)))
+                : (MEAL_SLOTS.find((sl) => !entries.items.some((i) => i.slot === sl)) ?? "snack")
+            }
+            recent={recent}
+          />
         </Card>
       ) : (
         <p className="rounded-sm bg-cream-100 px-3 py-2.5 text-[13px] leading-relaxed text-ink-600">

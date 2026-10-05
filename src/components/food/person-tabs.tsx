@@ -29,25 +29,33 @@ export interface PersonTab {
  * อันไหนคือแท็บที่เพิ่มเมนูได้
  *
  * เปลี่ยนคนด้วย ?u= ใน URL ไม่ใช่ state ในหน่วยความจำ — กดย้อนกลับจากหน้ากราฟ
- * แล้วต้องยังอยู่ที่คนเดิม และส่งลิงก์ให้กันได้
+ * แล้วต้องยังอยู่ที่คนเดิม และส่งลิงก์ให้กันได้ (วันที่เลือกไว้ติดไปด้วยที่ ?d=)
  */
 export function PersonTabs({
   people,
   selected,
+  day,
+  today,
 }: {
   people: PersonTab[];
   selected: string;
+  day: string;
+  today: string;
 }) {
   const router = useRouter();
 
   /**
-   * ประกอบ URL เองแทนการอ่าน useSearchParams — หน้านี้ไม่มี query อื่นให้รักษาไว้
+   * ประกอบ URL เองแทนการอ่าน useSearchParams — รู้ทั้งคนและวันจากฝั่ง server แล้ว
    * และ useSearchParams ลากทั้งต้นไม้ของ client component ไปเป็น client-side
    * rendering ถ้าไม่ครอบ Suspense (ดู node_modules/next/dist/docs — use-search-params)
    */
   const go = (userId: string) => {
+    const q = new URLSearchParams({ u: userId });
+    // สลับคนต้องอยู่วันเดิม ไม่ใช่เด้งกลับมาวันนี้ — คนที่ไล่ดูย้อนหลังอยาก
+    // เทียบของแต่ละคนในวันเดียวกัน
+    if (day !== today) q.set("d", day);
     // scroll: false — สลับคนแล้วหน้าไม่ควรกระโดดกลับไปบนสุด
-    router.push(`/food?u=${encodeURIComponent(userId)}`, { scroll: false });
+    router.push(`/food?${q}`, { scroll: false });
   };
 
   return (

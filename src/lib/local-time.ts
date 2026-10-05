@@ -21,3 +21,28 @@ export const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
  */
 export const localNowIso = (now: number = Date.now()) =>
   new Date(now + BANGKOK_OFFSET_MS).toISOString().slice(0, 19);
+
+/** วันนี้ตามเวลาไทยในรูปแบบ YYYY-MM-DD */
+export const localToday = (now: number = Date.now()) => localNowIso(now).slice(0, 10);
+
+/**
+ * เลื่อนวัน n วันจาก `YYYY-MM-DD` — บวก/ลบได้ ข้ามเดือนข้ามปีเอง
+ *
+ * คิดด้วย UTC ล้วนโดยตั้งใจ: ค่าที่รับเข้ามาเป็น "วันตามปฏิทินไทย" ที่ไม่มีเวลา
+ * ถ้าแปลงเป็นเวลาท้องถิ่นของเครื่องก่อน เครื่องที่ตั้ง timezone อื่นจะได้วันเพี้ยน
+ */
+export const shiftDay = (iso: string, n: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * `YYYY-MM-DD` ที่เป็นวันจริง — กันค่าที่ส่งมาทาง URL หรือฟอร์ม
+ *
+ * เช็คด้วยการแปลงกลับแล้วเทียบ ไม่ใช่แค่ `Date.parse` ไม่เป็น NaN เพราะ
+ * `2026-02-30` ไม่ใช่ NaN — มันเลื่อนไปเป็น 2026-03-02 เงียบๆ
+ * ถ้าปล่อยผ่าน คนกรอกวันที่ 30 ก.พ. จะได้บันทึกไปอยู่อีกวันโดยไม่มีใครรู้
+ */
+export const isValidDay = (v: string | undefined): v is string => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const t = Date.parse(`${v}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === v;
+};

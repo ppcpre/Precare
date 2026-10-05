@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { weeklyLogs, appointments } from "@/db/schema";
 import { MOODS, MAX_REMINDERS } from "@/db/schema";
+import { isValidDay, localToday } from "@/lib/local-time";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง");
 
@@ -90,3 +91,18 @@ export const inviteInput = z.object({
 });
 
 export const idInput = z.object({ id: z.string().min(1) });
+
+/**
+ * วันที่ของบันทึกอาหาร — ย้อนหลังได้ ล่วงหน้าไม่ได้
+ *
+ * อยู่ที่ schema ไม่ใช่แค่ `max=` ของช่องวันที่ เพราะ attribute นั้นกันได้แค่คนที่
+ * กรอกผ่านหน้าจอ Server Action คือ endpoint จริงที่ยิงตรงได้ และบันทึกวันอนาคต
+ * จะทำให้กราฟมีแท่งโผล่ไปข้างหน้า แล้วค่าเฉลี่ยของวันที่ยังไม่มาถึงถูกคิดด้วย
+ *
+ * `isValidDay` ไม่ใช่แค่ regex เพราะ 2026-02-30 ผ่าน regex แต่ไม่ใช่วันจริง
+ * (Date เลื่อนให้เป็น 2026-03-02 เงียบๆ)
+ */
+export const eatenOnInput = z
+  .string()
+  .refine(isValidDay, "วันที่ไม่ถูกต้อง")
+  .refine((d) => d <= localToday(), "บันทึกล่วงหน้าไม่ได้");
