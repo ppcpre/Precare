@@ -32,7 +32,7 @@ export default async function KicksPage() {
   const [active, sessions, dash] = await Promise.all([
     getActiveKickSession(ctx.db, ctx.familyId),
     listKickSessions(ctx.db, ctx.familyId),
-    getDashboard(ctx.db, ctx.familyId),
+    getDashboard(ctx.db, ctx.familyId, ctx.user.id),
   ]);
 
   const canEdit = can.writeRecords(ctx.role);

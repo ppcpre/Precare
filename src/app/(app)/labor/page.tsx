@@ -36,7 +36,7 @@ export default async function LaborPage() {
   const [active, sessions, dash] = await Promise.all([
     getActiveLaborSession(ctx.db, ctx.familyId),
     listLaborSessions(ctx.db, ctx.familyId),
-    getDashboard(ctx.db, ctx.familyId),
+    getDashboard(ctx.db, ctx.familyId, ctx.user.id),
   ]);
 
   const canEdit = can.writeRecords(ctx.role);

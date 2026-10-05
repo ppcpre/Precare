@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, gotoApp, signUp, uniqueEmail } from "./helpers";
+import { completeOnboarding, gotoApp, inviteMember, signUp, uniqueEmail } from "./helpers";
 
 /**
  * Regression — บันทึกอาหารและนับรวมทั้งวัน
@@ -110,4 +110,63 @@ test("เพิ่มเมนูแล้วยอดรวมทั้งว�
       await expect(page.getByText(/เฉลี่ย/)).toContainText("28");
     });
   });
+});
+
+/**
+ * Regression — ยอดของแต่ละคนต้องไม่ปนกัน
+ *
+ * ตอนแรกฟีเจอร์นี้รวมทุกแถวใน family_id ทั้งครอบครัว ยอดที่เห็นจึงเป็นของ
+ * ทุกคนบวกกัน ซึ่งไม่มีความหมายเลยสำหรับการนับแคล และหน้าจอไม่ได้บอกไว้ด้วย
+ * เทสต์นี้แดงกับโค้ดตอนนั้น ซึ่งคือตัวพิสูจน์ว่าบั๊กมีจริง
+ */
+test("สองคนในครอบครัวเดียวกัน ยอดไม่ปนกัน แต่เห็นของกันได้", async ({ page, browser }) => {
+  await signUp(page, uniqueEmail("foodown"), "ปุ้ย");
+  await completeOnboarding(page, "ครอบครัวนับแคลร่วม");
+
+  const member = await inviteMember(page, browser, uniqueEmail("foodmate"), "สมชาย");
+
+  await test.step("แต่ละคนบันทึกของตัวเอง", async () => {
+    await gotoApp(page, "/food");
+    await addFood(page, "ข้าวมันไก่", [590, 72, 6, 28]);
+    await expect(page.getByTestId("food-totals")).toContainText("590", { timeout: 30_000 });
+
+    await gotoApp(member.page, "/food");
+    await addFood(member.page, "ข้าวขาหมู", [900, 105, 30, 34]);
+    await expect(member.page.getByTestId("food-totals")).toContainText("900", { timeout: 30_000 });
+  });
+
+  await test.step("ยอดของตัวเองต้องไม่รวมของอีกคน", async () => {
+    await gotoApp(page, "/food");
+    await expect(page.getByTestId("food-totals")).toContainText("590");
+    // 1,490 คือยอดที่ปนกัน ซึ่งเป็นอาการของบั๊กเดิม
+    await expect(page.getByTestId("food-totals")).not.toContainText("1,490");
+    await expect(page.getByText("ข้าวขาหมู")).toHaveCount(0);
+  });
+
+  await test.step("แถบเลือกคนใช้ชื่อจริง ของตัวเองมีป้าย ฉัน และเห็นยอดของอีกคน", async () => {
+    const bar = page.getByRole("tablist", { name: "เลือกคนที่จะดู" });
+    await expect(bar.getByRole("tab", { name: /ปุ้ย.*ฉัน/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(bar.getByRole("tab", { name: /สมชาย/ })).toContainText("900");
+  });
+
+  await test.step("กดดูของอีกคนได้ แต่ไม่มีปุ่มแก้หรือลบ และเพิ่มเมนูไม่ได้", async () => {
+    await page.getByRole("tab", { name: /สมชาย/ }).click();
+    await expect(page.getByText("ข้าวขาหมู")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("food-totals")).toContainText("900");
+    await expect(page.getByRole("button", { name: "ลบ ข้าวขาหมู" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "แก้ตัวเลขของ ข้าวขาหมู" })).toHaveCount(0);
+    await expect(page.getByLabel("ชื่อเมนู")).toHaveCount(0);
+    await expect(page.getByText(/ดูได้อย่างเดียว/)).toBeVisible();
+  });
+
+  await test.step("กราฟย้อนหลังผูกกับคนที่เลือก ไม่หลุดกลับไปเป็นของตัวเอง", async () => {
+    await page.getByRole("link", { name: "ย้อนหลัง" }).click();
+    await expect(page).toHaveURL(/\/food\/history\?u=/);
+    await expect(page.getByText(/เฉลี่ย/)).toContainText("900");
+  });
+
+  await member.ctx.close();
 });

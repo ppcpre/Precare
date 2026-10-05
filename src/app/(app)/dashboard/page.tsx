@@ -33,9 +33,9 @@ export default async function DashboardPage() {
     throw e;
   }
 
-  const { db, familyId, role } = ctx;
+  const { db, familyId, role, user } = ctx;
   const [data, activeKick, kickSessions, openQuestions, activeLabor, mediaBase] = await Promise.all([
-    getDashboard(db, familyId),
+    getDashboard(db, familyId, user.id),
     getActiveKickSession(db, familyId),
     listKickSessions(db, familyId, 10),
     countOpenQuestions(db, familyId),

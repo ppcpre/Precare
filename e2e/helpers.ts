@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { deflateSync } from "node:zlib";
 
 /** อีเมลไม่ซ้ำต่อรัน — เทสต์เขียนลง D1 ตัวเดียวกัน ถ้าใช้อีเมลตายตัวจะชนกันเอง */
@@ -246,6 +246,32 @@ export async function logIn(page: Page, email: string) {
   await page.getByLabel("อีเมล", { exact: true }).fill(email);
   await page.getByLabel("รหัสผ่าน", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
+}
+
+/**
+ * เชิญคนเข้าครอบครัวแล้วให้เขากดรับจริง — คืน page ของสมาชิกใหม่
+ *
+ * ผ่าน browser context แยก เพราะ session ของสองคนต้องไม่ปนกัน
+ * ผู้เรียกต้องปิด ctx เองเมื่อใช้เสร็จ
+ */
+export async function inviteMember(
+  owner: Page,
+  browser: Browser,
+  email: string,
+  name: string,
+): Promise<{ page: Page; ctx: BrowserContext }> {
+  await gotoApp(owner, "/family/invite");
+  await owner.getByLabel("อีเมลผู้ถูกเชิญ").fill(email);
+  await owner.getByRole("button", { name: "สร้างลิงก์เชิญ" }).click();
+  const url = (await owner.getByText(/\/invite\//).first().innerText()).trim();
+
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await signUp(page, email, name);
+  await page.goto(new URL(url.startsWith("http") ? url : `http://x${url}`).pathname);
+  await page.getByRole("button", { name: /รับคำเชิญ|เข้าร่วม/ }).first().click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+  return { page, ctx };
 }
 
 /** ผ่าน onboarding wizard ให้จบ แล้วมีครรภ์อายุ ~24 สัปดาห์ */

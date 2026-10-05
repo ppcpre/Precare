@@ -4,7 +4,13 @@ import { ChartColumn } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FoodForm } from "@/components/food/food-form";
 import { FoodItemRow } from "@/components/food/item-row";
-import { getFoodDay, listRecentFoods, requireFamilyContext } from "@/lib/queries";
+import {
+  getFoodDay,
+  getFoodDayByMember,
+  listRecentFoods,
+  requireFamilyContext,
+} from "@/lib/queries";
+import { PersonTabs } from "@/components/food/person-tabs";
 import { localNowIso } from "@/lib/local-time";
 import { SLOT_LABEL } from "@/lib/nutrition";
 import { MEAL_SLOTS, type MealSlot } from "@/db/schema";
@@ -21,7 +27,11 @@ function slotOfHour(hour: number): MealSlot {
   return "snack";
 }
 
-export default async function FoodPage() {
+export default async function FoodPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ u?: string }>;
+}) {
   let ctx;
   try {
     ctx = await requireFamilyContext("viewer");
@@ -35,11 +45,23 @@ export default async function FoodPage() {
   // วันนี้ตามเวลาไทย ไม่ใช่ UTC — worker รันด้วย UTC เสมอ
   const nowLocal = localNowIso();
   const today = nowLocal.slice(0, 10);
+
+  const people = await getFoodDayByMember(ctx.db, ctx.familyId, today, ctx.user.id);
+  /**
+   * ?u= ต้องเป็นคนที่อยู่ในแถบจริง ไม่ใช่ id อะไรก็ได้ที่ใส่มาใน URL
+   * ไม่งั้นจะอ่านบันทึกของคนนอกครอบครัวได้ด้วยการเดา id
+   */
+  const asked = (await searchParams).u;
+  const target = people.find((p) => p.userId === asked) ?? people.find((p) => p.isMe);
+  const viewing = target?.userId ?? ctx.user.id;
+  const isMine = viewing === ctx.user.id;
+
   const [day, recent] = await Promise.all([
-    getFoodDay(ctx.db, ctx.familyId, today),
-    listRecentFoods(ctx.db, ctx.familyId),
+    getFoodDay(ctx.db, ctx.familyId, viewing, today),
+    isMine ? listRecentFoods(ctx.db, ctx.familyId, ctx.user.id) : Promise.resolve([]),
   ]);
-  const canWrite = can.writeRecords(ctx.role);
+  // เพิ่ม/แก้ได้เฉพาะมื้อของตัวเอง — ของคนอื่นดูได้อย่างเดียว
+  const canWrite = can.writeRecords(ctx.role) && isMine;
 
   const stat = (label: string, value: number, unit: string, color: string) => (
     <div className="flex flex-col gap-0.5 rounded-sm bg-white/80 px-3 py-2.5">
@@ -59,13 +81,17 @@ export default async function FoodPage() {
           <span className="truncate text-xs text-ink-400">{thaiDate(today)}</span>
         </div>
         <Link
-          href="/food/history"
+          href={isMine ? "/food/history" : `/food/history?u=${viewing}`}
           className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-brown-700 hover:bg-cream-100"
         >
           <ChartColumn size={17} strokeWidth={1.9} />
           ย้อนหลัง
         </Link>
       </header>
+
+      {/* คนเดียวในครอบครัวไม่ต้องมีแถบเลือกคน — มีแต่จะเปลืองที่และทำให้สงสัยว่า
+          จะเลือกอะไร (ครอบครัวส่วนใหญ่เริ่มจากคนเดียวก่อนเชิญคนอื่น) */}
+      {people.length > 1 && <PersonTabs people={people} selected={viewing} />}
 
       <Card className="flex flex-col gap-3 border-peach-300 bg-peach-100">
         {/* สี่ค่าเรียง 2×2 — สี่คอลัมน์แถวเดียวบีบจนเลขอ่านยากบนจอมือถือ */}
@@ -83,9 +109,13 @@ export default async function FoodPage() {
 
       {day.items.length === 0 ? (
         <Card className="flex flex-col gap-1.5">
-          <span className="font-medium text-ink-900">ยังไม่ได้บันทึกอะไรวันนี้</span>
+          <span className="font-medium text-ink-900">
+            {isMine ? "ยังไม่ได้บันทึกอะไรวันนี้" : `${target?.name} ยังไม่ได้บันทึกอะไรวันนี้`}
+          </span>
           <span className="text-[13px] leading-relaxed text-ink-600">
-            พิมพ์ชื่อเมนูที่กิน แล้วให้ AI ช่วยประมาณพลังงานและสารอาหารให้
+            {isMine
+              ? "พิมพ์ชื่อเมนูที่กิน แล้วให้ AI ช่วยประมาณพลังงานและสารอาหารให้"
+              : "เห็นได้ทันทีเมื่อเขาบันทึก"}
           </span>
         </Card>
       ) : (
@@ -107,12 +137,14 @@ export default async function FoodPage() {
 
       {canWrite ? (
         <Card className="flex flex-col gap-3">
-          <h2 className="font-medium text-ink-900">เพิ่มเมนู</h2>
+          <h2 className="font-medium text-ink-900">เพิ่มเมนูของฉัน</h2>
           <FoodForm slot={slotOfHour(Number(nowLocal.slice(11, 13)))} recent={recent} />
         </Card>
       ) : (
-        <p className="rounded-sm bg-cream-100 px-3 py-2.5 text-[13px] text-ink-600">
-          คุณมีสิทธิ์ดูอย่างเดียวในครอบครัวนี้ จึงเพิ่มรายการอาหารไม่ได้
+        <p className="rounded-sm bg-cream-100 px-3 py-2.5 text-[13px] leading-relaxed text-ink-600">
+          {!isMine
+            ? `รายการอาหารของ ${target?.name} ดูได้อย่างเดียว · เพิ่มหรือแก้ได้เฉพาะมื้อของตัวเอง`
+            : "คุณมีสิทธิ์ดูอย่างเดียวในครอบครัวนี้ จึงเพิ่มรายการอาหารไม่ได้"}
         </p>
       )}
     </div>

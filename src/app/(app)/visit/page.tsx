@@ -36,7 +36,7 @@ export default async function VisitPage() {
   const [data, openQuestions, dash] = await Promise.all([
     getVisitData(ctx.db, ctx.familyId),
     countOpenQuestions(ctx.db, ctx.familyId),
-    getDashboard(ctx.db, ctx.familyId),
+    getDashboard(ctx.db, ctx.familyId, ctx.user.id),
   ]);
 
   const s = buildVisitSummary({

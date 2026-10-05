@@ -11,9 +11,9 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import {
-  getAppointmentById, getDashboard, getLayoutData, getLogFormDefaults,
-  getPregnancy, getWeeklyLogById, listAppointments, listMembers,
-  listPendingInvites, listWeeklyLogs,
+  getAppointmentById, getDashboard, getFoodDay, getFoodDayByMember, getLayoutData,
+  getLogFormDefaults, getPregnancy, getWeeklyLogById, listAppointments, listMembers,
+  listPendingInvites, listRecentFoods, listWeeklyLogs,
 } from "@/lib/queries";
 
 const db = drizzle(env.DB, { schema });
@@ -24,8 +24,8 @@ const iso = (offsetDays: number) =>
   new Date(Date.now() + offsetDays * 86400_000).toISOString();
 
 beforeEach(async () => {
-  for (const t of ["family_invites", "appointments", "weekly_logs", "pregnancy_profiles",
-                   "family_members", "families", "user"]) {
+  for (const t of ["food_logs", "family_invites", "appointments", "weekly_logs",
+                   "pregnancy_profiles", "family_members", "families", "user"]) {
     await env.DB.exec(`DELETE FROM ${t}`);
   }
 
@@ -139,7 +139,7 @@ describe("getDashboard", () => {
       { id: "l2", familyId: FAM, recordedBy: "u1", week: 23, logDate: "2026-08-05" },
     ]);
 
-    const d = await getDashboard(db, FAM);
+    const d = await getDashboard(db, FAM, "u1");
     expect(d.ga?.weeks).toBe(24);
     expect(d.nextAppointment?.id).toBe("a1");
     expect(d.recentLogs).toHaveLength(2);
@@ -149,7 +149,7 @@ describe("getDashboard", () => {
 
   it("ยังไม่ตั้ง LMP -> ga เป็น null ไม่ throw", async () => {
     await db.update(schema.pregnancyProfiles).set({ lmpDate: null, dueDate: null });
-    const d = await getDashboard(db, FAM);
+    const d = await getDashboard(db, FAM, "u1");
     expect(d.ga).toBeNull();
     expect(d.daysLeft).toBeNull();
   });
@@ -227,5 +227,85 @@ describe("getAppointmentById / getPregnancy", () => {
     const p = await getPregnancy(db, FAM);
     expect(p.profile?.lmpDate).toBe("2026-03-10");
     expect(p.ga?.weeks).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * บันทึกอาหารแยกตามคน — บั๊กเดิมคือกรองแค่ familyId แล้วยอดของทุกคนบวกกัน
+ *
+ * เทสต์ชุดนี้คือด่านที่กันบั๊กนั้นไม่ให้กลับมา และมันเคยแดงจริงกับโค้ดตอนนั้น
+ * (หน้าจอไม่ฟ้องอะไรเลยเวลาผิด เห็นแค่ตัวเลขที่ใหญ่เกินจริง)
+ */
+describe("food logs แยกตามคน", () => {
+  const DAY = "2026-10-05";
+
+  beforeEach(async () => {
+    await db.insert(schema.foodLogs).values([
+      { id: "fa", familyId: FAM, userId: "u1", createdBy: "u1", eatenOn: DAY,
+        slot: "lunch", name: "ข้าวมันไก่", kcal: 590, carbG: 72, sugarG: 6, proteinG: 28 },
+      { id: "fb", familyId: FAM, userId: "u2", createdBy: "u2", eatenOn: DAY,
+        slot: "lunch", name: "ข้าวขาหมู", kcal: 900, carbG: 105, sugarG: 30, proteinG: 34 },
+      { id: "fc", familyId: FAM, userId: "u2", createdBy: "u2", eatenOn: DAY,
+        slot: "dinner", name: "ส้มตำ", kcal: 120, carbG: 20, sugarG: 12, proteinG: 4 },
+      { id: "fd", familyId: OTHER, userId: "u3", createdBy: "u3", eatenOn: DAY,
+        slot: "lunch", name: "ของบ้านอื่น", kcal: 700, carbG: 80, sugarG: 10, proteinG: 20 },
+    ]);
+  });
+
+  it("ยอดของแต่ละคนไม่ปนกัน", async () => {
+    const mine = await getFoodDay(db, FAM, "u1", DAY);
+    expect(mine.items).toHaveLength(1);
+    expect(mine.totals.kcal).toBe(590);
+
+    const theirs = await getFoodDay(db, FAM, "u2", DAY);
+    expect(theirs.items).toHaveLength(2);
+    expect(theirs.totals.kcal).toBe(1020);
+  });
+
+  it("ของครอบครัวอื่นไม่หลุดเข้ามา แม้จะส่ง userId ของคนนอก", async () => {
+    const d = await getFoodDay(db, FAM, "u3", DAY);
+    expect(d.items).toHaveLength(0);
+    expect(d.totals.kcal).toBe(0);
+  });
+
+  it("แถบเลือกคนมีสมาชิกทุกคน ยอดของใครของมัน และตัวเองอยู่หน้าสุด", async () => {
+    const people = await getFoodDayByMember(db, FAM, DAY, "u2");
+    expect(people).toHaveLength(2);
+    expect(people[0]).toMatchObject({ userId: "u2", isMe: true, kcal: 1020, items: 2 });
+    expect(people[1]).toMatchObject({ userId: "u1", isMe: false, kcal: 590, items: 1 });
+    expect(people.every((p) => p.active)).toBe(true);
+  });
+
+  it("สมาชิกที่ยังไม่บันทึกอะไรก็ยังมีชิป ยอดเป็นศูนย์และ items เป็นศูนย์", async () => {
+    await env.DB.exec("DELETE FROM food_logs WHERE id = 'fa'");
+    const people = await getFoodDayByMember(db, FAM, DAY, "u1");
+    expect(people[0]).toMatchObject({ userId: "u1", isMe: true, kcal: 0, items: 0 });
+  });
+
+  /**
+   * คนที่ถูกนำออกจากครอบครัวแล้ว แถวอาหารยังอยู่ (ผูกกับ family_id ไม่ได้ลบตามคน)
+   * ถ้าไม่โชว์ชิป ข้อมูลจะหายไปจากสายตาทั้งที่ยังอยู่ในฐาน
+   */
+  it("คนที่ถูกนำออกไปแล้วแต่ยังมีบันทึกของวันนั้น ยังมีชิปและทำเครื่องหมายว่าไม่ active", async () => {
+    await db
+      .update(schema.familyMembers)
+      .set({ status: "removed" })
+      .where(eq(schema.familyMembers.id, "m2"));
+
+    const people = await getFoodDayByMember(db, FAM, DAY, "u1");
+    expect(people).toHaveLength(2);
+    expect(people.find((p) => p.userId === "u2")).toMatchObject({ active: false, kcal: 1020 });
+  });
+
+  it("ชื่อซ้ำกันถูกทำเครื่องหมาย ambiguous ทั้งคู่ ไม่ใช่แค่คนที่สอง", async () => {
+    await db.update(schema.user).set({ name: "ญาญ่า" }).where(eq(schema.user.id, "u1"));
+    await db.update(schema.user).set({ name: "ญาญ่า" }).where(eq(schema.user.id, "u2"));
+    const people = await getFoodDayByMember(db, FAM, DAY, "u1");
+    expect(people.every((p) => p.ambiguous)).toBe(true);
+  });
+
+  it("ชิป เคยกิน เป็นเมนูของตัวเอง ไม่ใช่ของคนอื่นในบ้าน", async () => {
+    const mine = await listRecentFoods(db, FAM, "u1");
+    expect(mine.map((r) => r.name)).toEqual(["ข้าวมันไก่"]);
   });
 });

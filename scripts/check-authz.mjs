@@ -7,6 +7,8 @@
  *   1) ทุกหน้าในโซนแอปต้องมีด่านตรวจสิทธิ์
  *   2) หน้า/action ที่กำหนดไว้ว่าต้อง owner หรือ editor ต้องใช้ระดับนั้นจริง
  *   3) ห้ามมี action ที่แตะข้อมูล family แต่ใช้แค่ authAction (ล็อกอินก็พอ)
+ *   4) ตารางที่แถวเป็นของคนใดคนหนึ่งในครอบครัว ต้องกรองด้วย user.id ด้วย
+ *      ไม่ใช่ familyId อย่างเดียว — ไม่งั้นสมาชิกคนหนึ่งแก้ของอีกคนได้
  *
  * รันอัตโนมัติผ่าน `npm run lint`
  */
@@ -112,6 +114,37 @@ for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
     const after = src.slice(stmt.index, stmt.index + 700);
     if (!after.includes("familyId") && !after.includes("user.id")) {
       fail.push(`${f}: ${stmt[1]}(${stmt[2].trim()}) ไม่ได้กรองด้วย familyId หรือ user.id`);
+    }
+  }
+}
+
+/**
+ * 4) ตารางที่แถวเป็น "ของคนใดคนหนึ่ง" ไม่ใช่ของครอบครัวร่วมกัน
+ *
+ * editorAction กันได้แค่ viewer ไม่ได้กันสมาชิกคนหนึ่งไปแก้ของอีกคน
+ * ซึ่งเจ้าตัวจะไม่รู้เลยว่าเลขเปลี่ยน และยอดของเขาก็ผิดไปตลอด
+ * การซ่อนปุ่มใน UI ไม่นับเป็นด่าน เพราะยิง action ตรงๆ ได้
+ */
+const PER_USER_TABLES = ["foodLogs"];
+for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
+  const src = readFileSync(join(actionsDir, f), "utf8");
+  for (const t of PER_USER_TABLES) {
+    for (const stmt of src.matchAll(
+      new RegExp(`ctx\\.db\\s*\\n?\\s*\\.(update|delete)\\(${t}\\)`, "g"),
+    )) {
+      const after = src.slice(stmt.index, stmt.index + 700);
+      if (!after.includes(`${t}.userId, ctx.user.id`)) {
+        fail.push(`${f}: ${stmt[1]}(${t}) ไม่ได้กรองด้วย ${t}.userId, ctx.user.id`);
+      }
+    }
+    // เจ้าของแถวต้องมาจาก session ไม่ใช่จาก input ที่ client ส่งมาได้
+    for (const stmt of src.matchAll(
+      new RegExp(`ctx\\.db\\.insert\\(${t}\\)`, "g"),
+    )) {
+      const after = src.slice(stmt.index, stmt.index + 900);
+      if (!after.includes("userId: ctx.user.id")) {
+        fail.push(`${f}: insert(${t}) ไม่ได้ตั้ง userId: ctx.user.id`);
+      }
     }
   }
 }

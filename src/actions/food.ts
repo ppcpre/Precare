@@ -61,6 +61,13 @@ export const addFoodLog = editorAction
       ...rest,
       id: newId(),
       familyId: ctx.familyId,
+      /**
+       * เจ้าของมื้อคือคนที่ล็อกอินอยู่ ไม่รับมาจาก input
+       *
+       * ถ้ารับจาก input จะเขียนเข้าแท็บของคนอื่นได้ด้วยการยิง action ตรงๆ
+       * ซึ่งไม่มีใครเห็นและไม่มีอะไรบอกว่าใครเป็นคนใส่
+       */
+      userId: ctx.user.id,
       // ไม่ส่งวันมา = วันนี้ตามเวลาไทย ไม่ใช่ UTC (ดู src/lib/local-time.ts)
       eatenOn: eatenOn ?? localNowIso().slice(0, 10),
       portion: portion || null,
@@ -89,8 +96,16 @@ export const updateFoodLog = editorAction
     const res = await ctx.db
       .update(foodLogs)
       .set({ ...rest, confirmed: true, source: "user" })
-      .where(and(eq(foodLogs.id, id), eq(foodLogs.familyId, ctx.familyId)));
-    if (!res.meta.changes) throw new AppError("ไม่พบรายการนี้");
+      .where(
+        and(
+          eq(foodLogs.id, id),
+          eq(foodLogs.familyId, ctx.familyId),
+          // แก้ได้แค่ของตัวเอง — editorAction กันได้แค่ viewer ไม่ได้กัน
+          // สมาชิกคนหนึ่งไปแก้มื้อของอีกคน ซึ่งเจ้าตัวจะไม่รู้เลยว่าเลขเปลี่ยน
+          eq(foodLogs.userId, ctx.user.id),
+        ),
+      );
+    if (!res.meta.changes) throw new AppError("แก้ได้เฉพาะรายการอาหารของตัวเอง");
     revalidatePath("/food");
     revalidatePath("/health");
     return { ok: true };
@@ -102,8 +117,14 @@ export const deleteFoodLog = editorAction
   .action(async ({ parsedInput, ctx }) => {
     const res = await ctx.db
       .delete(foodLogs)
-      .where(and(eq(foodLogs.id, parsedInput.id), eq(foodLogs.familyId, ctx.familyId)));
-    if (!res.meta.changes) throw new AppError("ไม่พบรายการนี้");
+      .where(
+        and(
+          eq(foodLogs.id, parsedInput.id),
+          eq(foodLogs.familyId, ctx.familyId),
+          eq(foodLogs.userId, ctx.user.id),
+        ),
+      );
+    if (!res.meta.changes) throw new AppError("ลบได้เฉพาะรายการอาหารของตัวเอง");
     revalidatePath("/food");
     revalidatePath("/health");
     return { ok: true };

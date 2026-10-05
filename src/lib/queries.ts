@@ -315,7 +315,7 @@ export async function listPendingInvites(db: Db, familyId: string) {
  * ใช้ batch() ยิงพร้อมกันแทนการ await ทีละอัน — บนมือถือที่ latency สูง
  * การรอ 4 รอบต่อกันเห็นผลชัดกว่าที่คิด
  */
-export async function getDashboard(db: Db, familyId: string) {
+export async function getDashboard(db: Db, familyId: string, meId: string) {
   // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง
   // (react-hooks/purity ห้ามเรียกฟังก์ชัน impure ใน render แม้จะเป็น server component)
   const now = Date.now();
@@ -350,7 +350,12 @@ export async function getDashboard(db: Db, familyId: string) {
       .select({ n: sql<number>`count(*)` })
       .from(familyMembers)
       .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active"))),
-    // ยอดอาหารของวันนี้ — รวมใน batch เดิม ไม่ใช่คิวรีแยก เพื่อไม่ให้หน้าแรกช้าลง
+    /**
+     * ยอดอาหารของวันนี้ **ของคนที่เปิดหน้าอยู่** — รวมใน batch เดิม ไม่ใช่คิวรีแยก
+     *
+     * ต้องกรองด้วย user_id ไม่ใช่ family_id อย่างเดียว ไม่งั้นการ์ดหน้าแรกจะโชว์
+     * ยอดของทุกคนในบ้านบวกกัน แล้วคนอ่านจะเข้าใจว่าเป็นของตัวเอง
+     */
     db
       .select({
         kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
@@ -359,7 +364,13 @@ export async function getDashboard(db: Db, familyId: string) {
         items: sql<number>`count(*)`,
       })
       .from(foodLogs)
-      .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, nowIso.slice(0, 10)))),
+      .where(
+        and(
+          eq(foodLogs.familyId, familyId),
+          eq(foodLogs.userId, meId),
+          eq(foodLogs.eatenOn, nowIso.slice(0, 10)),
+        ),
+      ),
   ]);
 
   const profile = pregnancyRows[0] ?? null;
@@ -511,11 +522,18 @@ export async function listAppointmentReceipts(db: Db, familyId: string, appointm
  * จำนวนรายการที่ยังไม่มีตัวเลขไว้บอกผู้ใช้ ไม่งั้นยอดรวมจะดูน้อยกว่าความจริง
  * โดยไม่มีใครรู้ว่าทำไม
  */
-export async function getFoodDay(db: Db, familyId: string, eatenOn: string) {
+export async function getFoodDay(db: Db, familyId: string, userId: string, eatenOn: string) {
   const items = await db
     .select()
     .from(foodLogs)
-    .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, eatenOn)))
+    .where(
+      and(
+        eq(foodLogs.familyId, familyId),
+        // ขาด user_id ที่นี่คือบั๊กเดิม — ยอดของทุกคนในบ้านจะบวกกันเงียบๆ
+        eq(foodLogs.userId, userId),
+        eq(foodLogs.eatenOn, eatenOn),
+      ),
+    )
     .orderBy(asc(foodLogs.createdAt));
 
   const totals = { kcal: 0, carbG: 0, sugarG: 0, proteinG: 0 };
@@ -539,7 +557,13 @@ export async function getFoodDay(db: Db, familyId: string, eatenOn: string) {
  * คืนเฉพาะวันที่มีบันทึก — วันที่ขาดไปคือวันที่ไม่ได้บันทึก ซึ่งต่างจาก
  * "วันที่กิน 0 แคล" คนละเรื่องกัน ฝั่งกราฟเป็นคนเติมช่องว่างเอง
  */
-export async function getFoodDailyTotals(db: Db, familyId: string, from: string, to: string) {
+export async function getFoodDailyTotals(
+  db: Db,
+  familyId: string,
+  userId: string,
+  from: string,
+  to: string,
+) {
   return db
     .select({
       eatenOn: foodLogs.eatenOn,
@@ -563,6 +587,7 @@ export async function getFoodDailyTotals(db: Db, familyId: string, from: string,
     .where(
       and(
         eq(foodLogs.familyId, familyId),
+        eq(foodLogs.userId, userId),
         gte(foodLogs.eatenOn, from),
         lt(foodLogs.eatenOn, to),
       ),
@@ -572,17 +597,84 @@ export async function getFoodDailyTotals(db: Db, familyId: string, from: string,
 }
 
 /**
+ * วันนี้แต่ละคนในครอบครัวกินไปเท่าไร — ข้อมูลของแถบเลือกคน
+ *
+ * ตัวเลขอยู่บนชิปของแต่ละคน ทำให้ "เห็นของทุกคน" จบในหน้าเดียว ไม่ต้องกดไล่
+ *
+ * รวมคนที่ถูกนำออกจากครอบครัวไปแล้วแต่ยังมีบันทึกของวันนั้นด้วย ไม่งั้นข้อมูล
+ * จะหายไปจากสายตาทั้งที่ยังอยู่ในฐาน (แถวผูกกับ family_id ไม่ได้ถูกลบตามคน)
+ */
+export async function getFoodDayByMember(db: Db, familyId: string, eatenOn: string, meId: string) {
+  const [memberRows, totalRows] = await db.batch([
+    db
+      .select({
+        userId: familyMembers.userId,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+      })
+      .from(familyMembers)
+      .innerJoin(user, eq(user.id, familyMembers.userId))
+      .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active")))
+      .orderBy(asc(familyMembers.joinedAt)),
+    db
+      .select({
+        userId: foodLogs.userId,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+        items: sql<number>`count(*)`,
+      })
+      .from(foodLogs)
+      .innerJoin(user, eq(user.id, foodLogs.userId))
+      .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, eatenOn)))
+      .groupBy(foodLogs.userId),
+  ]);
+
+  const totals = new Map(totalRows.map((r) => [r.userId, r]));
+  const rows = memberRows.map((m) => ({
+    userId: m.userId,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    kcal: totals.get(m.userId)?.kcal ?? 0,
+    items: totals.get(m.userId)?.items ?? 0,
+    isMe: m.userId === meId,
+    active: true,
+  }));
+
+  const known = new Set(memberRows.map((m) => m.userId));
+  for (const t of totalRows) {
+    if (known.has(t.userId)) continue;
+    rows.push({ ...t, isMe: t.userId === meId, active: false });
+  }
+
+  // ตัวเองหน้าสุดเสมอ — ป้ายเป็นชื่อทุกอัน ลำดับจึงเป็นตัวช่วยหาของตัวเอง
+  rows.sort((a, b) => Number(b.isMe) - Number(a.isMe));
+
+  /**
+   * ชื่อซ้ำกันได้จริงในครอบครัวเดียว และป้ายเป็นชื่อล้วนจะแยกไม่ออกด้วยตา
+   * เติมอักษรแรกของอีเมลต่อท้ายเฉพาะชื่อที่ซ้ำ ไม่ใช่ทุกคน
+   */
+  const seen = new Map<string, number>();
+  for (const r of rows) seen.set(r.name, (seen.get(r.name) ?? 0) + 1);
+  return rows.map((r) => ({ ...r, ambiguous: (seen.get(r.name) ?? 0) > 1 }));
+}
+
+/**
  * เมนูที่เคยบันทึก — เอาไปทำชิป "เคยกิน" ให้กดซ้ำได้โดยไม่ต้องเรียก AI ใหม่
  *
  * วิธีเดียวกับอาการในบันทึกสุขภาพ: ไม่ต้องมีตารางเก็บ "เมนูของฉัน" แยก
  * เพราะบันทึกเก่าคือรายการนั้นอยู่แล้ว และค่าที่ได้คือค่าที่ผู้ใช้ยืนยันแล้ว
  * ซึ่งคงที่กว่าการให้ AI เดาใหม่ทุกครั้ง
  */
-export async function listRecentFoods(db: Db, familyId: string, limit = 8) {
+export async function listRecentFoods(db: Db, familyId: string, userId: string, limit = 8) {
   const rows = await db
     .select()
     .from(foodLogs)
-    .where(eq(foodLogs.familyId, familyId))
+    // เมนูของคนอื่นไม่ใช่ "สิ่งที่เราเคยกิน" จึงไม่เอามาเป็นชิปของเรา
+    .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.userId, userId)))
     .orderBy(desc(foodLogs.createdAt))
     .limit(60);
 

@@ -283,10 +283,26 @@ export const foodLogs = sqliteTable(
     source: text("source", { enum: ["ai", "user"] }).notNull().default("user"),
     confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(false),
 
+    /**
+     * เจ้าของมื้อ — ไม่ใช่คนที่กดบันทึก
+     *
+     * แคลของสองคนรวมกันไม่มีความหมาย ยอดทุกอย่างในฟีเจอร์นี้จึงต้องกรองด้วย
+     * คอลัมน์นี้เสมอ ไม่ใช่ด้วย family_id อย่างเดียว (บั๊กเดิมคือกรองแค่
+     * family_id แล้วยอดของทุกคนในบ้านบวกกันโดยไม่มีอะไรบอก)
+     *
+     * แยกจาก created_by ไว้ตั้งแต่ตอนนี้ แม้ตอนนี้สองค่าจะเท่ากันเสมอ
+     * เพราะกรอกแทนกันไม่ได้ — ถ้าวันหนึ่งเปิดให้กรอกแทน จะได้ไม่ต้อง migrate อีก
+     */
+    userId: text("user_id").notNull().references(() => user.id),
     createdBy: text("created_by").notNull().references(() => user.id),
     createdAt: text("created_at").notNull().default(nowIso),
   },
-  (t) => [index("idx_food_family_date").on(t.familyId, t.eatenOn)],
+  (t) => [
+    index("idx_food_family_user_date").on(t.familyId, t.userId, t.eatenOn),
+    // แถบเลือกคนถามว่า "วันนี้แต่ละคนกินไปเท่าไร" ซึ่งไม่มี user_id ใน where
+    // จึงใช้ index ตัวบนไม่ได้ และเป็นคิวรีที่วิ่งทุกครั้งที่เปิดหน้านับแคล
+    index("idx_food_family_date").on(t.familyId, t.eatenOn),
+  ],
 );
 
 export const PHOTO_TYPES = ["ultrasound", "family", "document", "other", "receipt"] as const;
