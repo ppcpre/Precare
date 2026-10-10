@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ChevronRight, MapPin, Scale, Activity, Stethoscope, User as UserIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { TimeBadge, daysFromNow } from "@/components/ui/badge";
+import { TimeBadge } from "@/components/ui/badge";
+import { daysFromNow, isPastAppt } from "@/lib/appt-days";
 import { MoodFace } from "@/components/mood";
 import { dayOf, dayMonth, isHighBp, monthShort, timeOf } from "@/lib/format";
 import type { Appointment, WeeklyLogView } from "@/types";
@@ -42,7 +43,10 @@ export function NextAppointmentCard({
         <>
           <div className="flex items-center justify-between">
             <span className="text-sm text-ink-600">นัดหมายถัดไป</span>
-            <TimeBadge days={daysFromNow(appt.apptDatetime, now)} />
+            <TimeBadge
+              days={daysFromNow(appt.apptDatetime, now)}
+              past={isPastAppt(appt.apptDatetime, now)}
+            />
           </div>
           <Link href="/appointments" prefetch={false} className="flex items-start gap-3">
             <DateBlock iso={appt.apptDatetime} />

@@ -5,7 +5,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
-import { daysFromNow } from "@/components/ui/badge";
+import { bucketOf, daysFromNow, isPastAppt } from "@/lib/appt-days";
 import { listAppointmentCosts, listAppointments, requireFamilyContext } from "@/lib/queries";
 import { CostEntryButton } from "@/components/costs/entry-button";
 import { can } from "@/lib/authz";
@@ -13,15 +13,6 @@ import { cn } from "@/lib/cn";
 import type { Appointment } from "@/types";
 
 export const metadata = { title: "นัดหมายแพทย์ · Pre Care" };
-
-/** จัดกลุ่มตามความใกล้ ตาม screen-blueprint §6.4 */
-function bucketOf(days: number) {
-  if (days < 0) return "ผ่านมาแล้ว";
-  if (days <= 1) return "วันนี้";
-  if (days <= 7) return "สัปดาห์นี้";
-  if (days <= 30) return "เดือนนี้";
-  return "ในอนาคต";
-}
 
 export default async function AppointmentsPage({
   searchParams,
@@ -49,13 +40,12 @@ export default async function AppointmentsPage({
   ]);
   const canWrite = can.writeRecords(ctx.role);
 
-  const groups = new Map<string, { appt: Appointment; days: number }[]>();
+  const groups = new Map<string, { appt: Appointment; days: number; isPast: boolean }[]>();
   for (const a of items) {
     const days = daysFromNow(a.apptDatetime, now);
-    const k = bucketOf(days);
-    const arr = groups.get(k) ?? [];
-    arr.push({ appt: a, days });
-    groups.set(k, arr);
+    const arr = groups.get(bucketOf(days)) ?? [];
+    arr.push({ appt: a, days, isPast: isPastAppt(a.apptDatetime, now) });
+    groups.set(bucketOf(days), arr);
   }
 
   const tabCls = (on: boolean) =>
@@ -114,8 +104,14 @@ export default async function AppointmentsPage({
         [...groups].map(([bucket, list]) => (
           <section key={bucket} className="flex flex-col gap-3">
             <h2 className="sticky top-0 z-10 bg-cream-50 py-1 text-sm text-ink-600">{bucket}</h2>
-            {list.map(({ appt, days }) => (
-              <AppointmentCard key={appt.id} appt={appt} days={days} canEdit={canWrite} />
+            {list.map(({ appt, days, isPast }) => (
+              <AppointmentCard
+                key={appt.id}
+                appt={appt}
+                days={days}
+                past={isPast}
+                canEdit={canWrite}
+              />
             ))}
           </section>
         ))

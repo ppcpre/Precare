@@ -13,13 +13,20 @@ const REMIND_LABEL = (m: number) =>
 export function AppointmentCard({
   appt,
   days,
+  past,
   canEdit,
 }: {
   appt: Appointment;
   days: number;
+  /**
+   * เลยเวลานัดไปแล้วหรือยัง — คำนวณจากฝั่ง server ไม่ใช่เดาจาก days
+   *
+   * นัดเช้านี้ตอนบ่ายมี days = 0 (ยังเป็นวันนี้) แต่เลยเวลาไปแล้ว
+   * ถ้าดูจาก days อย่างเดียวการ์ดจะยังสดใสเหมือนนัดที่กำลังจะถึง
+   */
+  past: boolean;
   canEdit: boolean;
 }) {
-  const past = days < 0;
   /**
    * ทางเข้าใบเสร็จอยู่บนการ์ดของนัดที่ถึงวันแล้ว
    *

@@ -22,17 +22,18 @@ export function RoleBadge({ role }: { role: Role }) {
 /**
  * Badge บอกเวลาที่เหลือ 4 ระดับ — เกณฑ์ตาม screen-blueprint §6.4
  *
- * รับ `days` ที่คำนวณมาแล้ว ไม่เรียก Date.now() เองใน render
+ * รับค่าที่คำนวณมาแล้ว ไม่เรียก Date.now() เองใน render
  * เพราะ React Compiler ถือว่า component ต้อง pure (eslint react-hooks/purity)
- * ให้ฝั่ง server component คำนวณด้วย daysFromNow() แล้วส่งเข้ามา
+ * ให้ฝั่ง server component คำนวณด้วย daysFromNow()/isPastAppt() แล้วส่งเข้ามา
+ *
+ * `past` แยกจาก `days` เพราะนัดเช้านี้ตอนบ่ายยังเป็น "วันนี้" (days = 0)
+ * แต่เลยเวลาไปแล้ว ถ้าใช้ days อย่างเดียวจะบอกว่ากำลังจะถึงทั้งที่ผ่านไปแล้ว
  */
-export function daysFromNow(iso: string, now: number) {
-  return Math.ceil((new Date(iso).getTime() - now) / 86400_000);
-}
-
-export function TimeBadge({ days }: { days: number }) {
-  if (days < 0) return <span className={cn(BASE, "bg-cream-100 text-ink-400")}>ผ่านมาแล้ว</span>;
-  if (days <= 1) return <span className={cn(BASE, "bg-brown-700 text-white")}>วันนี้</span>;
+export function TimeBadge({ days, past }: { days: number; past?: boolean }) {
+  if (past || days < 0) {
+    return <span className={cn(BASE, "bg-cream-100 text-ink-400")}>ผ่านมาแล้ว</span>;
+  }
+  if (days === 0) return <span className={cn(BASE, "bg-brown-700 text-white")}>วันนี้</span>;
   if (days <= 3) return <span className={cn(BASE, "bg-warning text-ink-900")}>อีก {days} วัน</span>;
   if (days <= 30) return <span className={cn(BASE, "bg-cream-200 text-ink-600")}>อีก {days} วัน</span>;
   return (

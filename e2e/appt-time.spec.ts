@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, gotoApp, signUp, uniqueEmail } from "./helpers";
+import { completeOnboarding, daysAgo, gotoApp, signUp, uniqueEmail } from "./helpers";
 
 /**
  * Regression — นัดที่ผ่านไปแล้ววันนี้ ต้องไม่ค้างในแท็บ "กำลังจะถึง"
@@ -45,5 +45,41 @@ test("นัดที่ผ่านไปสองชั่วโมงต้�
   await test.step("หน้าแรกต้องไม่โชว์นัดที่ผ่านไปแล้วว่าเป็นนัดถัดไป", async () => {
     await page.goto("/dashboard");
     await expect(page.getByText("นัดที่ผ่านไปแล้ว")).toHaveCount(0);
+  });
+});
+
+/**
+ * Regression — นัดของเมื่อวาน ต้องไม่ขึ้นป้าย "วันนี้"
+ *
+ * ของเดิมนับวันด้วย Math.ceil((appt - now) / 86400000) ซึ่งคืน -0 สำหรับนัดที่
+ * ผ่านไปแล้วไม่ถึง 24 ชั่วโมง และ `-0 < 0` เป็น false นัดเมื่อวานจึงตกไปเข้า
+ * เงื่อนไข "วันนี้" ทั้งป้ายบนการ์ดและหัวกลุ่ม (เจอจริงเช้าวันที่ 10 ต.ค. 69)
+ *
+ * บวกกับการที่ `new Date("2026-10-09T08:00:00")` ตีความตาม timezone ของเครื่อง
+ * ซึ่งบน worker คือ UTC เวลานัดจึงเลื่อนไปอีก 7 ชั่วโมง
+ */
+test("นัดของเมื่อวานต้องขึ้นว่าผ่านมาแล้ว ไม่ใช่วันนี้", async ({ page }) => {
+  await signUp(page, uniqueEmail("apptday"), "แม่ดูป้ายวัน");
+  await completeOnboarding(page, "ครอบครัวดูป้ายวัน");
+
+  await gotoApp(page, "/appointments/new");
+  await page.getByLabel("วันที่", { exact: true }).fill(daysAgo(1));
+  await page.getByLabel("เวลา", { exact: true }).fill("08:00");
+  await page.getByLabel("หัวข้อนัด").fill("นัดของเมื่อวาน");
+  await page.getByRole("button", { name: "บันทึกนัดหมาย" }).click();
+  await page.waitForURL(/\/appointments(\?|$)/, { timeout: 30_000 });
+
+  await page.goto("/appointments?tab=past");
+  const card = page.getByText("นัดของเมื่อวาน").locator("xpath=ancestor::*[self::div][3]");
+  await expect(page.getByText("นัดของเมื่อวาน")).toBeVisible({ timeout: 30_000 });
+
+  await test.step("ป้ายบนการ์ดต้องเป็น ผ่านมาแล้ว", async () => {
+    await expect(card.getByText("ผ่านมาแล้ว").first()).toBeVisible();
+    await expect(card.getByText("วันนี้")).toHaveCount(0);
+  });
+
+  await test.step("หัวกลุ่มต้องไม่ใช่ วันนี้", async () => {
+    await expect(page.getByRole("heading", { name: "วันนี้" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "ผ่านมาแล้ว" })).toBeVisible();
   });
 });
