@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, Pill, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import { Fab } from "@/components/ui/fab";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
@@ -59,6 +60,17 @@ export default async function AppointmentsPage({
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-ink-900">นัดหมายแพทย์</h1>
         <div className="flex shrink-0 items-center gap-2">
+          {/* ทางเข้ายา/วิตามิน — อยู่ที่หน้านัดหมายเพราะเป็นเรื่องเดียวกันในหัวคนใช้
+              (สิ่งที่หมอสั่งให้ทำต่อที่บ้าน) และแถบเมนูล่างเต็มห้าช่องแล้ว
+              เป็นไอคอนล้วนเพราะหัวข้อนี้มีปุ่มสามอันแล้ว ข้อความอีกอันจะล้นบนมือถือ */}
+          <Link
+            href="/medications"
+            prefetch={false}
+            aria-label="ยาและวิตามิน"
+            className="flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
+          >
+            <Pill size={20} strokeWidth={1.9} />
+          </Link>
           <CostEntryButton items={costItems} />
         {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join
             ไม่ได้ merge class ที่ชนกัน ตัวปุ่มมี inline-flex เป็น base อยู่แล้ว
@@ -118,14 +130,7 @@ export default async function AppointmentsPage({
       )}
 
       {canWrite && (
-        <Link
-          prefetch={false}
-          href="/appointments/new"
-          aria-label="เพิ่มนัดหมาย"
-          className="fixed bottom-20 right-4 flex size-14 items-center justify-center rounded-full bg-brown-700 text-white shadow-[0_4px_12px_rgba(43,36,32,0.18)] md:hidden"
-        >
-          <Plus size={26} strokeWidth={2} />
-        </Link>
+        <Fab href="/appointments/new" label="เพิ่มนัดหมาย" />
       )}
     </div>
   );

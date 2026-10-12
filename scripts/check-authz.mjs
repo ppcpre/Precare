@@ -50,6 +50,8 @@ const ACTION_RULES = {
   "kicks.ts": ["editorAction"],
   // อาหารเป็นบันทึกของครอบครัว แก้ได้เฉพาะคนที่มีสิทธิ์เขียน
   "food.ts": ["editorAction"],
+  // ยา/วิตามินผูกกับคนในครอบครัว คนอื่นดูได้ แต่แก้ของตัวเองเท่านั้น
+  "medications.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],
@@ -125,7 +127,7 @@ for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
  * ซึ่งเจ้าตัวจะไม่รู้เลยว่าเลขเปลี่ยน และยอดของเขาก็ผิดไปตลอด
  * การซ่อนปุ่มใน UI ไม่นับเป็นด่าน เพราะยิง action ตรงๆ ได้
  */
-const PER_USER_TABLES = ["foodLogs"];
+const PER_USER_TABLES = ["foodLogs", "medications"];
 for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
   const src = readFileSync(join(actionsDir, f), "utf8");
   for (const t of PER_USER_TABLES) {

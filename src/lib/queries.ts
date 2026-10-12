@@ -4,7 +4,9 @@
  * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
  *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
  */
-import { and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import {
+  and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql,
+} from "drizzle-orm";
 import type { Db } from "@/db";
 import { getDb } from "@/db";
 import { getSessionUser } from "@/lib/session";
@@ -12,6 +14,7 @@ import { requireRole } from "@/lib/authz";
 import type { AlbumPhotoType } from "@/db/schema";
 import {
   appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
+  medicationDoses, medicationTimes, medications,
   photos, pregnancyProfiles, storageObjects, trackingSessions, user, visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
@@ -685,6 +688,80 @@ export async function listRecentFoods(db: Db, familyId: string, userId: string, 
     if (seen.size >= limit) break;
   }
   return [...seen.values()];
+}
+
+/**
+ * ยาที่ต้องกินในวันหนึ่ง — หนึ่งแถวต่อ "ยา × เวลา" ไม่ใช่ต่อยา
+ *
+ * ยาเม็ดเดียวที่กินสามเวลา คือสามรายการในหน้าจอ เพราะแต่ละครั้งติ๊กแยกกัน
+ *
+ * กรองช่วงวันที่ในคิวรี ไม่ใช่กรองใน JS — ยาที่จบไปแล้วหรือยังไม่เริ่มไม่ควร
+ * โผล่มาให้ติ๊ก และคนที่กินวิตามินหลายตัวจะมีแถวเยอะกว่าที่คิด
+ */
+export async function getMedicationsDay(
+  db: Db,
+  familyId: string,
+  userId: string,
+  day: string,
+) {
+  return db
+    .select({
+      medId: medications.id,
+      name: medications.name,
+      dose: medications.dose,
+      note: medications.note,
+      timeId: medicationTimes.id,
+      at: medicationTimes.at,
+      takenAt: medicationDoses.takenAt,
+    })
+    .from(medicationTimes)
+    .innerJoin(medications, eq(medications.id, medicationTimes.medicationId))
+    .leftJoin(
+      medicationDoses,
+      and(
+        eq(medicationDoses.medicationTimeId, medicationTimes.id),
+        eq(medicationDoses.dueOn, day),
+      ),
+    )
+    .where(
+      and(
+        eq(medications.familyId, familyId),
+        eq(medications.userId, userId),
+        eq(medications.active, true),
+        lte(medications.startOn, day),
+        or(isNull(medications.endOn), gte(medications.endOn, day)),
+      ),
+    )
+    .orderBy(asc(medicationTimes.at), asc(medications.name));
+}
+
+/** รายการยาทั้งหมดของคนนั้น รวมที่หยุดไว้ — สำหรับหน้าจัดการ */
+export async function listMedications(db: Db, familyId: string, userId: string) {
+  const rows = await db
+    .select({
+      id: medications.id,
+      name: medications.name,
+      dose: medications.dose,
+      note: medications.note,
+      startOn: medications.startOn,
+      endOn: medications.endOn,
+      active: medications.active,
+      at: medicationTimes.at,
+    })
+    .from(medications)
+    .leftJoin(medicationTimes, eq(medicationTimes.medicationId, medications.id))
+    .where(and(eq(medications.familyId, familyId), eq(medications.userId, userId)))
+    .orderBy(desc(medications.active), asc(medications.name), asc(medicationTimes.at));
+
+  // รวมเวลาหลายแถวของยาตัวเดียวกันเข้าด้วยกัน — join คืนมาแถวละเวลา
+  const byId = new Map<string, Omit<(typeof rows)[number], "at"> & { times: string[] }>();
+  for (const r of rows) {
+    const { at, ...rest } = r;
+    const cur = byId.get(r.id) ?? { ...rest, times: [] };
+    if (at) cur.times.push(at);
+    byId.set(r.id, cur);
+  }
+  return [...byId.values()];
 }
 
 /** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */

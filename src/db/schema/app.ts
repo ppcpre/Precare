@@ -243,6 +243,80 @@ export const appointmentReminders = sqliteTable(
 /** เลือกเวลาเตือนได้มากสุดกี่ครั้งต่อนัด — บังคับทั้งใน UI, zod และ action */
 export const MAX_REMINDERS = 3;
 
+/**
+ * ยา/วิตามินที่ต้องกินประจำ — ของ "คนใดคนหนึ่ง" ไม่ใช่ของครอบครัวร่วมกัน
+ *
+ * ผูกกับ user_id ด้วยเหตุผลเดียวกับบันทึกอาหาร: ยาของแม่กับของพ่อปนกันไม่ได้
+ * และคนอื่นในครอบครัวเห็นได้ (ช่วยเตือนกันได้) แต่แก้ของตัวเองเท่านั้น
+ */
+export const medications = sqliteTable(
+  "medications",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    name: text("name").notNull(),
+    /** "1 เม็ด" "2 ช้อนชา" — ข้อความอิสระ เพราะหน่วยของยาไม่เป็นมาตรฐาน */
+    dose: text("dose"),
+    note: text("note"),
+    /**
+     * ช่วงที่ต้องกิน — end_on ว่างได้ แปลว่ากินต่อเนื่องไม่มีกำหนด
+     * (วิตามินบำรุงครรภ์ส่วนใหญ่เป็นแบบนั้น ส่วนยาที่หมอสั่งมักมีวันจบ)
+     */
+    startOn: text("start_on").notNull(),
+    endOn: text("end_on"),
+    /** หยุดเตือนชั่วคราวโดยไม่ต้องลบประวัติทิ้ง */
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_meds_family_user").on(t.familyId, t.userId)],
+);
+
+/** เวลาที่ต้องกินในแต่ละวัน — แยกตารางเหมือน appointment_reminders */
+export const medicationTimes = sqliteTable(
+  "medication_times",
+  {
+    id: text("id").primaryKey(),
+    medicationId: text("medication_id")
+      .notNull()
+      .references(() => medications.id, { onDelete: "cascade" }),
+    /** HH:MM เวลาไทย — เก็บเป็นข้อความเพื่อให้เทียบสตริงกับเวลาท้องถิ่นได้ตรงๆ */
+    at: text("at").notNull(),
+  },
+  (t) => [uniqueIndex("uq_med_time").on(t.medicationId, t.at)],
+);
+
+/** เลือกเวลาได้มากสุดกี่ครั้งต่อหนึ่งรายการยา */
+export const MAX_MED_TIMES = 4;
+
+/**
+ * หนึ่งครั้งที่ถึงกำหนดกิน — สร้างเมื่อถูกเตือนหรือเมื่อผู้ใช้กดว่ากินแล้ว
+ *
+ * ไม่สร้างล่วงหน้าทั้งปี เพราะยาที่ไม่มีวันจบจะกลายเป็นแถวไม่รู้จบ
+ * แถวนี้ทำสองหน้าที่: กันเตือนซ้ำ (sent_at) และบันทึกว่ากินแล้ว (taken_at)
+ */
+export const medicationDoses = sqliteTable(
+  "medication_doses",
+  {
+    id: text("id").primaryKey(),
+    medicationTimeId: text("medication_time_id")
+      .notNull()
+      .references(() => medicationTimes.id, { onDelete: "cascade" }),
+    /** วันที่ของครั้งนี้ (YYYY-MM-DD ตามปฏิทินไทย) */
+    dueOn: text("due_on").notNull(),
+    sentAt: text("sent_at"),
+    takenAt: text("taken_at"),
+  },
+  (t) => [uniqueIndex("uq_dose_time_day").on(t.medicationTimeId, t.dueOn)],
+);
+
 /** มื้ออาหารที่บันทึกได้ — เรียงตามลำดับเวลาของวัน */
 export const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
 export type MealSlot = (typeof MEAL_SLOTS)[number];
