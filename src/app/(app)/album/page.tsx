@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Clock, Image as ImageIcon, Play, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import { Fab } from "@/components/ui/fab";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PhotoGroups } from "@/components/album/photo-groups";
 import { AlbumViewToggle } from "@/components/album/view-toggle";
@@ -149,13 +150,7 @@ export default async function AlbumPage({
       )}
 
       {canWrite && !usage.full && (
-        <Link
-          href="/album/upload"
-          aria-label="เพิ่มรูปหรือวิดีโอ"
-          className="fixed bottom-20 right-4 flex size-14 items-center justify-center rounded-full bg-brown-700 text-white shadow-[0_4px_12px_rgba(43,36,32,0.18)] md:hidden"
-        >
-          <Plus size={26} strokeWidth={2} />
-        </Link>
+        <Fab href="/album/upload" label="เพิ่มรูปหรือวิดีโอ" />
       )}
     </div>
   );

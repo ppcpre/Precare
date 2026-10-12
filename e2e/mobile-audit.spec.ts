@@ -28,6 +28,7 @@ const PAGES = [
   "/appointments/costs",
   "/album",
   "/food",
+  "/medications",
   "/food/history",
   "/kicks",
   "/labor",
@@ -163,4 +164,28 @@ test("มือถือ: bottom nav เผื่อ safe area และไม�
   );
   expect(mainPad, "ท้ายหน้าต้องเว้นเท่าความสูงจริงของแถบเมนู").toBeGreaterThanOrEqual(64 + INSET);
 
+  /**
+   * ปุ่มลอย (FAB) ต้องอยู่เหนือแถบเมนู ไม่ใช่จมอยู่ใต้มัน
+   *
+   * บั๊กที่เจอจริง: FAB ตั้ง bottom-20 (80px) ส่วนแถบเมนูสูง 64 + ขอบจอ
+   * บนเครื่องที่มีแถบลากล่างจึงสูง ~98px ปุ่มบวกเลยโดนแถบเมนูทับ
+   * ในเทสต์ที่ env() = 0 แถบสูงแค่ 64px ปุ่มที่ 80px ยังพ้น — ต้องตั้ง
+   * --safe-b เองเท่านั้นถึงจะเห็น
+   */
+  for (const path of ["/appointments", "/health", "/album"]) {
+    await page.goto(path);
+    await page.addStyleTag({ content: `:root { --safe-b: ${INSET}px; }` });
+
+    const fab = page.locator("a[aria-label]:visible").filter({ has: page.locator("svg") }).last();
+    const gap = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="เมนูหลัก"]')!.getBoundingClientRect();
+      const btn = [...document.querySelectorAll<HTMLElement>("a")]
+        .find((el) => getComputedStyle(el).position === "fixed")
+        ?.getBoundingClientRect();
+      return btn ? nav.top - btn.bottom : null;
+    });
+    expect(gap, `${path}: ไม่เจอปุ่มลอย`).not.toBeNull();
+    expect(gap!, `${path}: ปุ่มบวกต้องอยู่เหนือแถบเมนู ไม่ทับกัน`).toBeGreaterThanOrEqual(0);
+    await expect(fab).toBeVisible();
+  }
 });

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Footprints, HeartPulse, Plus, Utensils } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
+import { Fab } from "@/components/ui/fab";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LogCard } from "@/components/health/log-card";
 import { listWeeklyLogs, requireFamilyContext } from "@/lib/queries";
@@ -101,13 +102,7 @@ export default async function HealthPage() {
 
       {/* FAB ซ่อนทั้งปุ่มเมื่อ viewer */}
       {canWrite && (
-        <Link
-          href="/health/new"
-          aria-label="เพิ่มบันทึกสุขภาพ"
-          className="fixed bottom-20 right-4 flex size-14 items-center justify-center rounded-full bg-brown-700 text-white shadow-[0_4px_12px_rgba(43,36,32,0.18)] md:hidden"
-        >
-          <Plus size={26} strokeWidth={2} />
-        </Link>
+        <Fab href="/health/new" label="เพิ่มบันทึกสุขภาพ" />
       )}
     </div>
   );
