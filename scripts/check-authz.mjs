@@ -50,7 +50,7 @@ const ACTION_RULES = {
   "kicks.ts": ["editorAction"],
   // อาหารเป็นบันทึกของครอบครัว แก้ได้เฉพาะคนที่มีสิทธิ์เขียน
   "food.ts": ["editorAction"],
-  // ยา/วิตามินผูกกับคนในครอบครัว คนอื่นดูได้ แต่แก้ของตัวเองเท่านั้น
+  // ยา/วิตามินเป็นของคนคนเดียว — คนอื่นในครอบครัวไม่เห็นด้วยซ้ำ ไม่ใช่แค่แก้ไม่ได้
   "medications.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],

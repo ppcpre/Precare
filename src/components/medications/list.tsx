@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { Check, Pill } from "lucide-react";
+import { Check } from "lucide-react";
+import { Capsule } from "@/components/ui/capsule";
 import { setDoseTaken } from "@/actions/medications";
 import { cn } from "@/lib/cn";
 
@@ -62,7 +63,7 @@ export function MedicationList({
 
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="flex items-center gap-1.5">
-                <Pill size={14} strokeWidth={1.9} className="shrink-0 text-ink-400" />
+                <Capsule size={15} className="shrink-0 text-ink-400" />
                 <span className={cn("truncate text-[13px]", taken && "text-ink-600 line-through")}>
                   {d.name}
                 </span>

@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, Pill, Plus } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { Fab } from "@/components/ui/fab";
+import { Capsule } from "@/components/ui/capsule";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
@@ -69,7 +70,7 @@ export default async function AppointmentsPage({
             aria-label="ยาและวิตามิน"
             className="flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
           >
-            <Pill size={20} strokeWidth={1.9} />
+            <Capsule size={20} />
           </Link>
           <CostEntryButton items={costItems} />
         {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join

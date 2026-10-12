@@ -146,6 +146,29 @@ describe("ยิงเตือนกินยา", () => {
     expect(r).toMatchObject({ due: 1, sent: 0 });
   });
 
+  /**
+   * ด่านสำคัญที่สุดของฟีเจอร์นี้ — ยาที่คนหนึ่งกินบอกถึงโรคประจำตัวได้ตรงๆ
+   * การตั้งเตือนไม่ใช่การยินยอมให้ทั้งบ้านรู้
+   *
+   * ต่างจากเตือนนัดที่ยิงทั้งครอบครัวโดยตั้งใจ (นัดเป็นเรื่องที่ไปด้วยกัน)
+   * เทสต์นี้จึงต้องมีเครื่องของทั้งสองคนอยู่จริง ไม่ใช่มีแต่เครื่องเดียว
+   */
+  it("มีเครื่องของทั้งสองคน ยาของแม่ต้องเข้าเครื่องแม่เครื่องเดียว", async () => {
+    await seed([{ id: "mom", times: ["09:30"], userId: "u1" }]);
+    await addDevice("mom-phone", "u1");
+    await addDevice("dad-phone", "u2");
+
+    const hit: string[] = [];
+    const spy = async (o: { endpoint: string }): Promise<PushResult> => {
+      hit.push(o.endpoint);
+      return { ok: true };
+    };
+
+    const r = await runMedicationReminders(cronEnv(), { now: NOW, send: spy });
+    expect(r).toMatchObject({ due: 1, sent: 1 });
+    expect(hit).toEqual(["https://push.test/mom-phone"]);
+  });
+
   it("เครื่องที่ถอนการติดตั้งแล้วถูกลบทิ้ง", async () => {
     const gone = async (): Promise<PushResult> => ({ ok: false, status: 410, gone: true });
     const r = await runMedicationReminders(cronEnv(), { now: NOW, send: gone });
