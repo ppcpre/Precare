@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
+/**
+ * รหัสบิลด์ — ตัวเดียวกันทั้งฝั่ง server และ client ของ deploy ครั้งนั้น
+ *
+ * ใช้ commit sha ตอนรันบน CI เพื่อให้คาดเดาได้และตรงกับโค้ดที่ deploy จริง
+ * ส่วนบนเครื่องตัวเองใช้เวลาแทน เพราะ build ซ้ำโดยโค้ดไม่เปลี่ยนก็ควรเป็นคนละบิลด์
+ *
+ * มีไว้เพื่อให้แอปที่เปิดค้างอยู่รู้ตัวว่าเซิร์ฟเวอร์เปลี่ยนบิลด์ไปแล้ว
+ * (ดู src/components/build-watch.tsx)
+ */
+const BUILD_ID = process.env.GITHUB_SHA?.slice(0, 8) ?? `local-${Date.now().toString(36)}`;
+
 const nextConfig: NextConfig = {
+  generateBuildId: async () => BUILD_ID,
+  // ฝังรหัสเดียวกันลงไปในบันเดิลฝั่ง client เพื่อให้เทียบกับของเซิร์ฟเวอร์ได้
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   experimental: {
     // ค่า default ของ Server Action คือ 1 MB ซึ่งน้อยกว่ารูปชุดเดียวที่ย่อแล้ว
     // (10 ใบ x ~300 KB) การอัปโหลดจะถูกปฏิเสธก่อนถึง action ด้วยซ้ำ

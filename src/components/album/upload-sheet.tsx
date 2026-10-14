@@ -258,6 +258,25 @@ export function UploadSheet({
     });
   }
 
+  /**
+   * บอกเซิร์ฟเวอร์ว่าฝั่งเบราว์เซอร์พังตรงไหน — ส่งแค่รูปร่างของปัญหา
+   * ไม่ส่งชื่อไฟล์หรือเนื้อหา และพังเงียบๆ ถ้าส่งไม่ได้ ไม่รบกวนผู้ใช้ซ้ำสอง
+   */
+  function report(where: string, error: string) {
+    return fetch("/api/client-error", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        where,
+        error,
+        files: [
+          ...picked.map((p) => ({ kind: "photo", size: p.blob.size, type: p.blob.type })),
+          ...(video ? [{ kind: "video", size: video.file.size, type: video.mime }] : []),
+        ],
+      }),
+    }).catch(() => null);
+  }
+
   async function submit() {
     if (totalBytes - (video?.file.size ?? 0) > MAX_BATCH_BYTES) {
       setError(`รูปรวมกันใหญ่เกินไป ลองลดจำนวนรูปลง`);
@@ -278,7 +297,17 @@ export function UploadSheet({
         if (logId) fd.set("logId", logId);
         if (appointmentId) fd.set("appointmentId", appointmentId);
         const res = await photosAction.executeAsync(fd);
-        if (res?.serverError || res?.validationErrors) return;
+        if (res?.serverError || res?.validationErrors) {
+          /**
+           * รายงานกลับไปให้เห็นใน log ของเซิร์ฟเวอร์
+           *
+           * serverError ที่เป็นภาษาอังกฤษแปลว่า Next ตอบกลับมาไม่ใช่รูปแบบที่
+           * Server Action คาดไว้ ซึ่งแปลว่าปัญหาเกิดก่อนถึงโค้ดของเรา
+           * และเราจะไม่มีวันเห็นมันเลยถ้า client ไม่เป็นคนบอก
+           */
+          void report("photos-action", String(res.serverError ?? "validation"));
+          return;
+        }
       }
 
       if (video) {
@@ -307,6 +336,8 @@ export function UploadSheet({
       router.push(appointmentId ? `/appointments/${appointmentId}/edit` : "/album");
       router.refresh();
     } catch (e) {
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      void report("upload-throw", msg);
       setError(e instanceof Error ? e.message : "อัปโหลดไม่สำเร็จ");
     } finally {
       setUploadPct(null);
