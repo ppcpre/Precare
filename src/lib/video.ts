@@ -17,6 +17,7 @@
  * จะอัปได้อยู่ แต่ไม่มีหน้าปกและไม่รู้ความยาว และอาจเล่นไม่ได้บนบางเครื่อง
  * ดีกว่าปฏิเสธไปเลยแล้วคนอัปคลิปของตัวเองไม่ได้ทั้งที่ไฟล์ไม่ได้เสีย
  */
+import { encodeImage } from "@/lib/image";
 export const VIDEO_MIME = ["video/mp4", "video/quicktime"];
 
 /** ตัวเลือกของ input file — แอนดรอยด์บางเครื่องส่ง type ว่างมา ต้องมีนามสกุลด้วย */
@@ -177,16 +178,14 @@ function rawPoster(file: File, maxEdge: number): Promise<Blob> {
       const ctx = canvas.getContext("2d");
       if (!ctx) return fail("เบราว์เซอร์นี้สร้างหน้าปกไม่ได้");
       ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => {
+      // ผ่าน encodeImage เพราะ Safari เข้ารหัส webp ไม่ได้ (ดู src/lib/image.ts)
+      void encodeImage(canvas, 0.8)
+        .then(({ blob }) => {
           URL.revokeObjectURL(url);
           unmount(v);
-          if (blob) resolve(blob);
-          else reject(new Error("สร้างหน้าปกไม่ได้"));
-        },
-        "image/webp",
-        0.8,
-      );
+          resolve(blob);
+        })
+        .catch(() => fail("สร้างหน้าปกไม่ได้"));
     };
     v.onerror = () => fail(mediaError(v));
     mount(v);

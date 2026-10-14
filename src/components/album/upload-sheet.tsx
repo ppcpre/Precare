@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { Chip } from "@/components/ui/chip";
 import { addPhotos, addVideo } from "@/actions/photos";
-import { PHOTO_EDGE, formatBytesShort, resizeToWebp } from "@/lib/image";
+import { PHOTO_EDGE, formatBytesShort, resizeImage } from "@/lib/image";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_MS } from "@/lib/media-limits";
 import {
   VIDEO_ACCEPT,
@@ -36,7 +36,7 @@ const MAX_BATCH_BYTES = 16 * 1024 ** 2;
  * และโควตาเป็นก้อนเดียวกันทั้งแอป การให้เลือกทีละคลิปทำให้ทุกครั้ง
  * ที่เพิ่มคลิปเป็นการตัดสินใจ ไม่ใช่การกวาดเลือกทั้งอัลบั้มในเครื่อง
  */
-type Picked = { blob: Blob; url: string };
+type Picked = { blob: Blob; ext: "webp" | "jpg"; url: string };
 type Video = {
   file: File;
   mime: string;
@@ -153,10 +153,12 @@ export function UploadSheet({
     const out: Picked[] = [];
     for (const f of list) {
       try {
-        const blob = await resizeToWebp(f, PHOTO_EDGE);
-        out.push({ blob, url: URL.createObjectURL(blob) });
+        // ext มาจากชนิดที่เบราว์เซอร์เข้ารหัสได้จริง ไม่ใช่ที่เราอยากได้
+        // (Safari เข้ารหัส webp ไม่ได้ ดู src/lib/image.ts)
+        const { blob, ext } = await resizeImage(f, PHOTO_EDGE);
+        out.push({ blob, ext, url: URL.createObjectURL(blob) });
       } catch {
-        notes.push(`เปิดไฟล์ ${f.name} ไม่ได้ (รองรับ JPG, PNG, WebP)`);
+        notes.push(`เปิดไฟล์ ${f.name} ไม่ได้ (รองรับ JPG, PNG, WebP, HEIC)`);
       }
     }
     setPicked((cur) => [...cur, ...out]);
@@ -288,7 +290,7 @@ export function UploadSheet({
       if (picked.length) {
         const fd = new FormData();
         picked.forEach((p, i) =>
-          fd.append("files", new File([p.blob], `p${i}.webp`, { type: "image/webp" })),
+          fd.append("files", new File([p.blob], `p${i}.${p.ext}`, { type: p.blob.type })),
         );
         fd.set("takenAt", takenAt);
         fd.set("type", type);
@@ -320,7 +322,12 @@ export function UploadSheet({
         fd.set("caption", caption);
         if (video.durationMs != null) fd.set("durationMs", String(video.durationMs));
         if (video.poster) {
-          fd.append("poster", new File([video.poster], "poster.webp", { type: "image/webp" }));
+          fd.append(
+            "poster",
+            new File([video.poster], video.poster.type === "image/webp" ? "poster.webp" : "poster.jpg", {
+              type: video.poster.type,
+            }),
+          );
         }
         if (logId) fd.set("logId", logId);
         if (appointmentId) fd.set("appointmentId", appointmentId);
@@ -510,7 +517,19 @@ export function UploadSheet({
         <input
           ref={inputRef}
           type="file"
-          accept={`image/jpeg,image/png,image/webp,${VIDEO_ACCEPT}`}
+          /**
+           * image/* ไม่ใช่รายการชนิดแบบเจาะจง — เพราะ iOS ใช้ค่านี้ตัดสินว่า
+           * จะแปลงรูปให้หรือไม่
+           *
+           * กล้อง iPhone ถ่ายเป็น .HEIC เป็นค่าเริ่มต้น ถ้า accept ระบุชนิด
+           * เจาะจง (image/jpeg,image/png,...) iOS จะส่งไฟล์ HEIC ดิบมาเลย
+           * ไม่แปลงให้ แต่ถ้าเป็น image/* มันจะแปลงเป็น JPEG ให้อัตโนมัติ
+           *
+           * บั๊กที่เจอ 14 ต.ค. 69: อัปรูปจาก iPhone ไม่ได้ ขึ้น error ภาษาอังกฤษ
+           * ส่วนรูปโปรไฟล์อัปได้ เพราะช่องนั้นใช้ image/* อยู่แล้ว
+           * ชนิดที่ไม่รองรับยังถูกกรองอีกชั้นตอนย่อรูปและที่ฝั่ง server อยู่ดี
+           */
+          accept={`image/*,${VIDEO_ACCEPT}`}
           multiple
           className="hidden"
           onChange={(e) => {

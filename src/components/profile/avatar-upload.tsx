@@ -6,6 +6,7 @@ import { useAction } from "next-safe-action/hooks";
 import { Camera, Loader2 } from "lucide-react";
 import { Avatar } from "@/components/app-topbar";
 import { removeAvatar, uploadAvatar } from "@/actions/profile";
+import { resizeImage } from "@/lib/image";
 
 const MAX_EDGE = 512;
 
@@ -15,26 +16,6 @@ const MAX_EDGE = 512;
  * สำคัญกับโควตา: รูปจากมือถือใบละ 3–5 MB ถ้าส่งดิบๆ จะกิน 5 GB หมดเร็วมาก
  * ย่อเหลือด้านยาว 512px + webp คุณภาพ 0.85 เหลือราว 30–60 KB
  */
-async function resizeToWebp(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("เบราว์เซอร์นี้ไม่รองรับการย่อรูป");
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-
-  const blob = await new Promise<Blob | null>((res) =>
-    canvas.toBlob(res, "image/webp", 0.85),
-  );
-  if (!blob) throw new Error("ย่อรูปไม่สำเร็จ");
-  return blob;
-}
 
 export function AvatarUpload({
   name,
@@ -70,10 +51,11 @@ export function AvatarUpload({
     setError(null);
     setBusy(true);
     try {
-      const blob = await resizeToWebp(file);
+      // ใช้ตัวกลาง ไม่ใช่เขียนย่อเองซ้ำ — ตัวกลางรู้ว่า Safari เข้ารหัส webp ไม่ได้
+      const { blob, ext } = await resizeImage(file, MAX_EDGE);
       setPreview(URL.createObjectURL(blob));
       const fd = new FormData();
-      fd.append("file", new File([blob], "avatar.webp", { type: "image/webp" }));
+      fd.append("file", new File([blob], `avatar.${ext}`, { type: blob.type }));
       upload.execute(fd);
     } catch (e) {
       setError(e instanceof Error ? e.message : "อ่านไฟล์ไม่สำเร็จ");

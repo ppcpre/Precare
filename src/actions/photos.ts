@@ -55,6 +55,10 @@ async function assertAppointment(db: Db, familyId: string, id: string | null) {
  * client ย่อรูปเป็น webp ให้แล้ว แต่ฝั่งนี้ยังตรวจซ้ำทั้งชนิดและขนาด
  * เพราะ client แก้ได้ และโควตาเป็นเรื่องที่พลาดไม่ได้
  */
+/** นามสกุลจากชนิดไฟล์ — รายการเดียวกับ ALLOWED */
+const extOf = (type: string) =>
+  type === "image/jpeg" ? "jpg" : type === "image/png" ? "png" : "webp";
+
 export const addPhotos = editorAction
   .metadata({ name: "addPhotos" })
   .inputSchema(z.instanceof(FormData))
@@ -92,7 +96,14 @@ export const addPhotos = editorAction
       if (file.size > MAX_FILE_BYTES) throw new AppError(`มีไฟล์ที่ใหญ่เกินกำหนด`);
 
       const id = crypto.randomUUID();
-      const key = `family/${ctx.familyId}/photos/${id}.webp`;
+      /**
+       * นามสกุลตามชนิดไฟล์จริง ไม่ fix เป็น .webp
+       *
+       * Safari เข้ารหัส webp ไม่ได้ ฝั่ง client จึงส่ง jpeg มาแทน การตั้งชื่อ
+       * เป็น .webp ทั้งที่เนื้อในเป็น jpeg ทำให้ key โกหกเนื้อหา ซึ่งจะกลับมา
+       * กัดตอนมีอะไรอ่าน key เพื่อเดาชนิดไฟล์
+       */
+      const key = `family/${ctx.familyId}/photos/${id}.${extOf(file.type)}`;
       try {
         await putObject(ctx.db, env.PHOTOS_BUCKET, {
           bucketName: "photos",
@@ -215,14 +226,16 @@ export const addVideo = editorAction
      */
     let thumbKey: string | null = null;
     const poster = fd.get("poster");
-    if (poster instanceof File && poster.type === "image/webp" && poster.size > 0) {
-      thumbKey = `family/${ctx.familyId}/posters/${id}.webp`;
+    // รับทุกชนิดที่อนุญาต ไม่ใช่เฉพาะ webp — Safari ส่ง jpeg มาเพราะเข้ารหัส
+    // webp ไม่ได้ ถ้าเช็คแคบไว้ หน้าปกของคนใช้ iPhone จะถูกทิ้งเงียบๆ
+    if (poster instanceof File && ALLOWED.includes(poster.type) && poster.size > 0) {
+      thumbKey = `family/${ctx.familyId}/posters/${id}.${extOf(poster.type)}`;
       try {
         await putObject(ctx.db, env.PHOTOS_BUCKET, {
           bucketName: "photos",
           key: thumbKey,
           body: await poster.arrayBuffer(),
-          contentType: "image/webp",
+          contentType: poster.type,
           kind: "photo",
           familyId: ctx.familyId,
           uploadedBy: ctx.user.id,

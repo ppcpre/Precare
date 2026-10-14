@@ -43,6 +43,17 @@ test("เลือกไฟล์แล้วขึ้น preview อัปโ�
 
   await pickFiles(page, files);
 
+  /**
+   * iOS ใช้ค่า accept ตัดสินว่าจะแปลงรูปจากกล้องให้หรือไม่ — กล้อง iPhone
+   * ถ่ายเป็น .HEIC ถ้า accept ระบุชนิดเจาะจง iOS จะส่งไฟล์ HEIC ดิบมา
+   * ซึ่งย่อไม่ได้แล้วอัปโหลดพัง (เจอจริง 14 ต.ค. 69)
+   */
+  await test.step("ช่องเลือกไฟล์ต้องเป็น image/* เพื่อให้ iOS แปลง HEIC ให้", async () => {
+    const accept = await page.locator('input[type="file"]').first().getAttribute("accept");
+    expect(accept).toContain("image/*");
+    expect(accept).not.toContain("image/jpeg");
+  });
+
   await test.step("preview ต้องขึ้นครบทุกใบ", async () => {
     // จุดที่บั๊กเดิมพัง — ได้ FileList ว่างจึงไม่มี blob สักใบ
     await expect(page.locator('img[src^="blob:"]')).toHaveCount(2, { timeout: 30_000 });

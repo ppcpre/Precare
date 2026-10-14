@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { attachReceipt, rereadReceipt } from "@/actions/receipts";
 import { saveCosts } from "@/actions/costs";
 import { deletePhoto } from "@/actions/photos";
-import { PHOTO_EDGE, resizeToWebp } from "@/lib/image";
+import { PHOTO_EDGE, resizeImage } from "@/lib/image";
 import { formatBaht, parseBaht } from "@/lib/money";
 import type { ReceiptRead } from "@/lib/receipt";
 import type { ClaimStatus } from "@/db/schema";
@@ -107,10 +107,11 @@ export function AppointmentReceipts({
     setPreparing(true);
     try {
       // ย่อก่อนส่ง: รูปจากกล้องมือถือหลาย MB แต่ 1600px อ่านตัวเลขบนใบเสร็จได้ชัดพอ
-      const blob = await resizeToWebp(file, PHOTO_EDGE);
+      // Safari เข้ารหัส webp ไม่ได้ จึงต้องใช้ชนิดที่ได้จริง (ดู src/lib/image.ts)
+      const { blob, ext } = await resizeImage(file, PHOTO_EDGE);
       const fd = new FormData();
       fd.set("appointmentId", appointmentId);
-      fd.set("file", new File([blob], "receipt.webp", { type: "image/webp" }));
+      fd.set("file", new File([blob], `receipt.${ext}`, { type: blob.type }));
       attach.execute(fd);
     } catch {
       setNotice("เปิดรูปนี้ไม่ได้ (รองรับ JPG, PNG, WebP)");
@@ -194,7 +195,9 @@ export function AppointmentReceipts({
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            // image/* เพื่อให้ iOS แปลง .HEIC จากกล้อง iPhone เป็น JPEG ให้เอง
+            // (ถ้าระบุชนิดเจาะจง มันจะส่งไฟล์ HEIC ดิบมา แล้วย่อไม่ได้)
+            accept="image/*"
             className="hidden"
             onChange={onPick}
             aria-label="เลือกรูปใบเสร็จ"
