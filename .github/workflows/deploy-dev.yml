@@ -63,9 +63,11 @@ jobs:
 
       # กั้นก่อน deploy — บั๊กอัปโหลดรูปเคยผ่าน lint/typecheck/unit test
       # ครบทุกด่านแล้วขึ้น dev ไปทั้งที่กดใช้จริงไม่ได้เลย
-      - name: Install Playwright browser
+      # webkit ด้วย — คนใช้จริงอยู่บน iPhone และเอนจินนี้ต่างจาก Chromium จริง
+      # (Safari เข้ารหัส webp ไม่ได้ ซึ่งทำให้อัปรูปจาก iPhone พังมาแล้ว)
+      - name: Install Playwright browsers
         if: steps.probe.outputs.app == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       # ลองใหม่หนึ่งรอบด้วย "เซิร์ฟเวอร์ใหม่" ก่อนตัดสินว่าแดง
       #

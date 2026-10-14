@@ -68,9 +68,11 @@ jobs:
       # E2E รันกับ worker ที่ build ออกมาจริง ไม่ใช่ `next dev`
       # จับบั๊กชั้น DOM กับชั้น runtime ที่ unit test ใน workerd แตะไม่ถึง
       # (เคยหลุดขึ้น production มาแล้ว — ดู docs/tech-notes.md §3.6)
-      - name: Install Playwright browser
+      # webkit ด้วย — คนใช้จริงอยู่บน iPhone และเอนจินนี้ต่างจาก Chromium จริง
+      # (Safari เข้ารหัส webp ไม่ได้ ซึ่งทำให้อัปรูปจาก iPhone พังมาแล้ว)
+      - name: Install Playwright browsers
         if: steps.probe.outputs.app == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       # ลองใหม่หนึ่งรอบด้วย "เซิร์ฟเวอร์ใหม่" ก่อนตัดสินว่าแดง
       #
