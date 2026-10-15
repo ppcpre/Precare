@@ -63,7 +63,12 @@ export async function getAuth() {
         const res = await sendEmail(env, { ...mail, to: user.email });
         if (res.status !== "sent") {
           // ไม่ log อีเมลหรือ url — url คือกุญแจเข้าบัญชี
-          console.error(JSON.stringify({ tag: "reset-mail", status: res.status }));
+          console.error(
+            JSON.stringify({
+              tag: "reset-mail",
+              ...res,
+            }),
+          );
         }
       },
     },

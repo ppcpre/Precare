@@ -28,7 +28,14 @@ export type SendResult =
   | { status: "sent" }
   /** ยังไม่ได้ตั้ง secret — ไม่ใช่ข้อผิดพลาด ระบบต้องเดินต่อได้ */
   | { status: "not_configured" }
-  | { status: "failed"; code: number };
+  /**
+   * `code` คือ HTTP status ส่วน `reason` คือฟิลด์ `code` ของ Brevo เอง
+   * (เช่น `unauthorized`, `invalid_parameter`) ซึ่งเป็นค่าสั้นๆ ไม่มีข้อมูลผู้ใช้
+   *
+   * ต้องมีทั้งคู่ ไม่งั้นเวลาส่งไม่ออกจะบอกไม่ได้ว่าคีย์ผิดหรือผู้ส่งยังไม่ยืนยัน
+   * — เจอมาแล้วตอนตั้งค่าครั้งแรก log บอกแค่ "failed" แล้วต้องเดาเอง
+   */
+  | { status: "failed"; code: number; reason: string | null };
 
 /**
  * ประกอบ body ตามสัญญาของ Brevo — แยกออกมาเพื่อเทสต์ได้โดยไม่ต้องยิงเน็ตจริง
@@ -63,7 +70,17 @@ export async function sendEmail(
    * อีเมลของผู้ใช้เป็นข้อมูลส่วนบุคคล และลิงก์รีเซ็ตที่อยู่ในเนื้อหาคือกุญแจ
    * เข้าบัญชี — log ไว้เมื่อไหร่ก็เท่ากับเก็บกุญแจไว้ในที่ที่ไม่ได้ตั้งใจ
    */
-  return res.ok ? { status: "sent" } : { status: "failed", code: res.status };
+  if (res.ok) return { status: "sent" };
+
+  // อ่านเฉพาะฟิลด์ code ของ Brevo ไม่เอา message ทั้งก้อน เพราะอาจมีอีเมลผู้รับอยู่ในนั้น
+  let reason: string | null = null;
+  try {
+    const body = (await res.json()) as { code?: unknown };
+    if (typeof body.code === "string") reason = body.code.slice(0, 60);
+  } catch {
+    // ตอบไม่ใช่ JSON — ไม่เป็นไร รหัส HTTP ก็บอกอะไรได้แล้ว
+  }
+  return { status: "failed", code: res.status, reason };
 }
 
 /** เนื้อหาอีเมลรีเซ็ตรหัสผ่าน — ข้อความเดียว ใช้ทั้ง html และ text */

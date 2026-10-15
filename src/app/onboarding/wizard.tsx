@@ -25,6 +25,14 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: string }) {
   const [step, setStep] = useState(0);
   const [familyName, setFamilyName] = useState(defaultFamilyName);
+  /**
+   * ยังไม่เลือก = null ไม่ใช่ false
+   *
+   * ไม่ตั้งค่าเริ่มต้นให้ เพราะคำถามนี้เปลี่ยนหน้าตาของทั้งแอป การเดาแทนผู้ใช้
+   * แล้วผิด แปลว่าคนที่ไม่ได้ตั้งครรภ์ถูกบังคับให้กรอกวันคาดคลอดตั้งแต่ขั้นแรก
+   * (เจ้าของโปรเจกต์ทักมาว่าคนในครอบครัวที่แค่อยากบันทึกสุขภาพตัวเองใช้ไม่ถูก)
+   */
+  const [pregnant, setPregnant] = useState<boolean | null>(null);
   const [mode, setMode] = useState<"lmp" | "edd">("lmp");
   const [date, setDate] = useState("");
 
@@ -94,12 +102,51 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
         {step === 2 && (
           <div className="flex flex-1 flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <h1 className="text-2xl font-semibold text-ink-900">วันที่ตั้งครรภ์</h1>
+              <h1 className="text-2xl font-semibold text-ink-900">ตอนนี้กำลังตั้งครรภ์ไหม</h1>
               <p className="text-sm leading-relaxed text-ink-600">
-                ใช้คำนวณอายุครรภ์และวันคาดคลอด แก้ไขภายหลังได้
+                เลือกให้ตรงกับตัวคุณ — คนในครอบครัวที่ไม่ได้ตั้งครรภ์ก็ใช้แอปนี้
+                บันทึกสุขภาพของตัวเองได้
               </p>
             </div>
 
+            <div className="flex flex-col gap-2">
+              {[
+                { value: true, label: "กำลังตั้งครรภ์", hint: "กรอกวันที่เพื่อคำนวณอายุครรภ์" },
+                {
+                  value: false,
+                  label: "ยังไม่ได้ตั้งครรภ์",
+                  hint: "บันทึกสุขภาพ อาหาร ยา และนัดหมายได้ตามปกติ",
+                },
+              ].map((o) => (
+                <button
+                  key={String(o.value)}
+                  type="button"
+                  aria-pressed={pregnant === o.value}
+                  onClick={() => {
+                    setPregnant(o.value);
+                    // เปลี่ยนใจเป็น "ยังไม่ตั้งครรภ์" ต้องไม่หลงเหลือวันที่ที่เคยกรอกไว้
+                    if (!o.value) setDate("");
+                  }}
+                  className={`flex min-h-16 flex-col items-start justify-center gap-0.5 rounded-md border px-4 py-3 text-left ${
+                    pregnant === o.value
+                      ? "border-brown-700 bg-brown-100"
+                      : "border-cream-200 bg-white"
+                  }`}
+                >
+                  <span className="font-medium text-ink-900">{o.label}</span>
+                  <span className="text-xs text-ink-600">{o.hint}</span>
+                </button>
+              ))}
+            </div>
+
+            {pregnant === false && (
+              <Card className="bg-cream-100 text-sm leading-relaxed text-ink-600">
+                เพิ่มข้อมูลการตั้งครรภ์ภายหลังได้ที่หน้าโปรไฟล์ เมื่อไหร่ก็ได้
+              </Card>
+            )}
+
+            {pregnant === true && (
+            <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <span className="text-sm text-ink-600">คุณทราบข้อมูลไหน</span>
               <Segmented
@@ -144,6 +191,8 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
                 </div>
               </Card>
             )}
+            </div>
+            )}
           </div>
         )}
 
@@ -176,7 +225,9 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
               </Card>
             ) : (
               <Card className="bg-cream-100 text-sm leading-relaxed text-ink-600">
-                ยังไม่ได้ระบุวันที่ตั้งครรภ์ — ตั้งค่าภายหลังได้ที่หน้าโปรไฟล์
+                {pregnant
+                  ? "ยังไม่ได้ระบุวันที่ตั้งครรภ์ — ตั้งค่าภายหลังได้ที่หน้าโปรไฟล์"
+                  : "ยังไม่ได้ตั้งครรภ์ — เพิ่มข้อมูลภายหลังได้ที่หน้าโปรไฟล์"}
               </Card>
             )}
 
@@ -199,7 +250,12 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
         {step < TOTAL - 1 ? (
           <Button
             full
-            disabled={(step === 1 && !familyName.trim()) || (step === 2 && Boolean(date) && !dateValid)}
+            disabled={
+              (step === 1 && !familyName.trim()) ||
+              // ต้องตอบคำถามตั้งครรภ์ก่อน ไม่เดาแทน
+              (step === 2 && pregnant === null) ||
+              (step === 2 && Boolean(date) && !dateValid)
+            }
             onClick={() => setStep((s) => s + 1)}
           >
             {step === 0 ? "เริ่มเลย" : "ถัดไป"}
@@ -210,7 +266,7 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
           </Button>
         )}
 
-        {step === 2 && !date && (
+        {step === 2 && pregnant === true && !date && (
           <button
             type="button"
             onClick={() => setStep(3)}

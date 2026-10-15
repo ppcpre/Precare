@@ -42,6 +42,7 @@ describe("ส่งอีเมลผ่าน Brevo", () => {
     expect(await sendEmail(env, mail, f as unknown as typeof fetch)).toEqual({
       status: "failed",
       code: 401,
+      reason: null,
     });
   });
 
@@ -51,5 +52,14 @@ describe("ส่งอีเมลผ่าน Brevo", () => {
     expect(m.text).toContain("60 นาที");
     expect(m.text).toContain("ไม่ได้เป็นคนขอเอง");
     expect(m.html).toContain("https://precare.test/reset?token=abc");
+  });
+
+  /** ถ้าไม่เก็บเหตุผลไว้ เวลาส่งไม่ออกจะบอกไม่ได้ว่าคีย์ผิดหรือผู้ส่งยังไม่ยืนยัน */
+  it("เก็บรหัสเหตุผลของ Brevo ไว้ด้วย แต่ไม่เอาข้อความทั้งก้อน", async () => {
+    const body = JSON.stringify({ code: "unauthorized", message: "Key not found: mom@x.com" });
+    const f = vi.fn().mockResolvedValue(new Response(body, { status: 401 }));
+    const res = await sendEmail(env, mail, f as unknown as typeof fetch);
+    expect(res).toEqual({ status: "failed", code: 401, reason: "unauthorized" });
+    expect(JSON.stringify(res)).not.toContain("mom@x.com");
   });
 });

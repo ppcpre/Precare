@@ -279,6 +279,8 @@ export async function completeOnboarding(page: Page, familyName: string) {
   await page.getByRole("button", { name: "เริ่มเลย" }).click();
   await page.getByLabel("ชื่อครอบครัว").fill(familyName);
   await page.getByRole("button", { name: "ถัดไป" }).click();
+  // ขั้นนี้ต้องเลือกก่อนว่าตั้งครรภ์หรือไม่ — ช่องวันที่จะโผล่ก็ต่อเมื่อเลือกว่าตั้งครรภ์
+  await page.getByRole("button", { name: "กำลังตั้งครรภ์" }).click();
   await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(daysAgo(168));
   await page.getByRole("button", { name: "ถัดไป" }).click();
   await page.getByRole("button", { name: "เริ่มใช้ Pre Care" }).click();
