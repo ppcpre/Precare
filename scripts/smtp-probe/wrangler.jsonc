@@ -1,0 +1,8 @@
+{
+  // worker ชั่วคราวสำหรับตอบคำถามว่า SMTP จาก Workers ทำได้จริงไหม ไม่ deploy ที่ไหน
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "precare-smtp-probe",
+  "main": "worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"]
+}

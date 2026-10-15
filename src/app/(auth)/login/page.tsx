@@ -9,9 +9,9 @@ export const metadata = { title: "เข้าสู่ระบบ · Health Ca
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; stale?: string }>;
+  searchParams: Promise<{ next?: string; stale?: string; reset?: string }>;
 }) {
-  const { next, stale } = await searchParams;
+  const { next, stale, reset } = await searchParams;
 
   return (
     <div className="flex flex-col gap-7">
@@ -23,6 +23,13 @@ export default async function LoginPage({
 
       {/* มาจาก /signed-out — บอกว่าทำไมอยู่ๆ ก็หลุด ไม่ใช่ปล่อยให้งงว่าแอปพัง
           เหตุผลที่พบบ่อยที่สุดคือเพิ่งเปลี่ยนรหัสผ่านจากอีกเครื่อง */}
+      {/* เพิ่งตั้งรหัสใหม่เสร็จ — บอกให้รู้ว่าต้องเข้าด้วยรหัสใหม่ ไม่ใช่รหัสเดิม */}
+      {reset === "1" && (
+        <p className="rounded-sm bg-sage-100 px-3.5 py-3 text-xs leading-relaxed text-ink-900">
+          ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว เข้าสู่ระบบด้วยรหัสใหม่ได้เลย
+        </p>
+      )}
+
       {stale === "1" && (
         <p className="rounded-sm bg-cream-100 px-3.5 py-3 text-xs leading-relaxed text-ink-600">
           เครื่องนี้ถูกออกจากระบบแล้ว — เกิดขึ้นได้เมื่อมีการเปลี่ยนรหัสผ่าน
@@ -38,10 +45,10 @@ export default async function LoginPage({
         Phase 1 ยังไม่มี email service จึงรีเซ็ตรหัสผ่านไม่ได้
         เขียนให้เป็น "ทางออก" ไม่ใช่คำขอโทษ — account linking ทำให้กด Google แล้วเข้าบัญชีเดิมได้
       */}
-      <p className="rounded-sm bg-cream-100 px-3.5 py-3 text-xs leading-relaxed text-ink-600">
-        ลืมรหัสผ่าน? ตอนนี้ยังรีเซ็ตเองไม่ได้ — ถ้าอีเมลของคุณเป็น Gmail ให้กด
-        <span className="font-medium text-brown-700"> เข้าสู่ระบบด้วย Google </span>
-        ด้านบนได้เลย ระบบจะพาเข้าบัญชีเดิมให้อัตโนมัติ
+      <p className="text-center text-sm">
+        <Link href="/forgot" className="font-medium text-brown-700 hover:text-brown-900">
+          ลืมรหัสผ่าน?
+        </Link>
       </p>
 
       <p className="text-center text-sm text-ink-600">

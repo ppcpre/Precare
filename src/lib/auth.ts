@@ -3,11 +3,15 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
+import { resetPasswordMail, sendEmail } from "@/lib/email";
 
 /**
  * ต้องสร้าง instance ใหม่ทุก request — binding ของ Workers ผูกกับ request context
  * ห้าม cache ไว้ที่ module scope
  */
+/** อายุของลิงก์รีเซ็ตรหัสผ่าน (นาที) — ใช้ทั้งใน better-auth และในเนื้ออีเมล */
+export const RESET_TTL_MINUTES = 60;
+
 export async function getAuth() {
   const { env } = await getCloudflareContext({ async: true });
   const db = drizzle(env.DB, { schema });
@@ -30,9 +34,38 @@ export async function getAuth() {
 
     emailAndPassword: {
       enabled: true,
-      // Phase 1 ยังไม่มี email service จึงยืนยันอีเมลไม่ได้ — เปิดใน Phase 1.5
+      // ยังไม่บังคับยืนยันอีเมลตอนสมัคร — คนละเรื่องกับการรีเซ็ตรหัสผ่าน
+      // และถ้าบังคับตอนนี้ คนที่สมัครไว้แล้วจะเข้าไม่ได้ทั้งหมด
       requireEmailVerification: false,
       minPasswordLength: 8,
+
+      /** ลิงก์รีเซ็ตอยู่ได้ 1 ชั่วโมง — นานพอให้เปิดอีเมลทัน สั้นพอที่ลิงก์หลุดแล้วหมดอายุเร็ว */
+      resetPasswordTokenExpiresIn: RESET_TTL_MINUTES * 60,
+
+      /**
+       * รีเซ็ตแล้วถอน session ทุกเครื่อง — better-auth ปิดไว้เป็นค่าเริ่มต้น
+       *
+       * คนที่กดรีเซ็ตคือคนที่เข้าบัญชีตัวเองไม่ได้ ซึ่งบ่อยครั้งแปลว่ามีคนอื่น
+       * เข้าไปแล้ว ถ้าไม่ถอน session เครื่องของคนนั้นยังอยู่ในบัญชีต่อไป
+       * การตั้งรหัสใหม่ก็ไม่ได้ไล่ใครออกเลย
+       */
+      revokeSessionsOnPasswordReset: true,
+
+      /**
+       * ส่งลิงก์ตั้งรหัสใหม่
+       *
+       * ห้ามโยน error ออกไปเมื่อส่งไม่สำเร็จ — ฝั่งหน้าเว็บตอบข้อความเดียวกันเสมอ
+       * ไม่ว่าอีเมลนั้นจะมีบัญชีหรือไม่ ถ้าปล่อยให้ error ทะลุไป ความต่างของ
+       * คำตอบจะกลายเป็นเครื่องมือไล่เดาว่าใครเป็นสมาชิก
+       */
+      sendResetPassword: async ({ user, url }) => {
+        const mail = resetPasswordMail(url, RESET_TTL_MINUTES);
+        const res = await sendEmail(env, { ...mail, to: user.email });
+        if (res.status !== "sent") {
+          // ไม่ log อีเมลหรือ url — url คือกุญแจเข้าบัญชี
+          console.error(JSON.stringify({ tag: "reset-mail", status: res.status }));
+        }
+      },
     },
 
     // เปิด Google เฉพาะเมื่อตั้งค่าครบ — ไม่งั้นแอปพังทั้งใบเพราะ env ตัวเดียวหาย

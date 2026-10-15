@@ -26,6 +26,9 @@ import { getSessionCookie } from "better-auth/cookies";
 const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
+  // ลืมรหัสผ่าน/ตั้งรหัสใหม่ — คนที่เข้าไม่ได้ย่อมไม่มี session
+  "/forgot",
+  "/reset-password",
   "/invite",
   "/legal",
   "/manifest.webmanifest",
