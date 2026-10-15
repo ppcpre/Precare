@@ -63,3 +63,29 @@ describe("ส่งอีเมลผ่าน Brevo", () => {
     expect(JSON.stringify(res)).not.toContain("mom@x.com");
   });
 });
+
+describe("เลือกช่องทางส่ง", () => {
+  const gmailEnv = { GMAIL_USER: "app@gmail.com", GMAIL_APP_PASSWORD: "pw", ...env };
+
+  /** ตั้ง Gmail ไว้แล้วต้องไม่ยิงไป Brevo เลย — ไม่งั้นจ่ายโควตาสองที่โดยไม่ตั้งใจ */
+  it("มี Gmail ก็ใช้ Gmail ไม่แตะ Brevo", async () => {
+    const f = vi.fn();
+    const connect = vi.fn(() => {
+      throw new Error("ping");
+    });
+    const res = await sendEmail(
+      gmailEnv,
+      mail,
+      f as unknown as typeof fetch,
+      connect as never,
+    );
+    expect(f).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ status: "failed", reason: "smtp" });
+  });
+
+  it("ไม่มี Gmail ตกไปใช้ Brevo ตามเดิม", async () => {
+    const f = vi.fn().mockResolvedValue(new Response("{}", { status: 201 }));
+    expect(await sendEmail(env, mail, f as unknown as typeof fetch)).toEqual({ status: "sent" });
+    expect(f).toHaveBeenCalled();
+  });
+});

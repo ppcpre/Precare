@@ -8,14 +8,45 @@
  *
  * ไม่ต้องมีโดเมนของตัวเอง — Brevo ยืนยันแค่อีเมลผู้ส่งรายตัวได้
  */
+import { SmtpError, sendViaSmtp, type SmtpConnect } from "@/lib/smtp";
+
 const ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
+/**
+ * โหลด `connect` จาก cloudflare:sockets ตอนใช้งานจริงเท่านั้น
+ *
+ * import ตรงๆ ที่หัวไฟล์ไม่ได้ เพราะโมดูลนี้ถูกดึงเข้าไปในเทสต์ที่รันนอก workerd ด้วย
+ */
+async function loadSocketConnect(): Promise<SmtpConnect | null> {
+  try {
+    /**
+     * turbopackIgnore/webpackIgnore: ปล่อยให้ runtime เป็นคนหาเอง
+     *
+     * `cloudflare:sockets` มีอยู่จริงเฉพาะตอนรันบน workerd — ถ้าปล่อยให้
+     * bundler ไปตามหาตอน build มันจะหาไม่เจอแล้ว build ล้มทั้งแอป
+     * (เจอจริง: "Could not resolve cloudflare:sockets")
+     */
+    const mod = (await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ "cloudflare:sockets"
+    )) as { connect?: unknown };
+    return (mod.connect as SmtpConnect) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface EmailEnv {
+  /** บัญชี Gmail ของแอป (ไม่ใช่บัญชีส่วนตัว) + App Password */
+  GMAIL_USER?: string;
+  GMAIL_APP_PASSWORD?: string;
+
   BREVO_API_KEY?: string;
   /** อีเมลผู้ส่งที่ยืนยันกับ Brevo ไว้แล้ว */
   BREVO_SENDER?: string;
   BREVO_SENDER_NAME?: string;
 }
+
+const SENDER_NAME = "Pre Care";
 
 export interface Mail {
   to: string;
@@ -43,7 +74,7 @@ export type SendResult =
  */
 export function buildPayload(env: EmailEnv, mail: Mail) {
   return {
-    sender: { email: env.BREVO_SENDER, name: env.BREVO_SENDER_NAME ?? "Pre Care" },
+    sender: { email: env.BREVO_SENDER, name: env.BREVO_SENDER_NAME ?? SENDER_NAME },
     to: [{ email: mail.to }],
     subject: mail.subject,
     htmlContent: mail.html,
@@ -51,11 +82,40 @@ export function buildPayload(env: EmailEnv, mail: Mail) {
   };
 }
 
+/**
+ * ส่งอีเมลหนึ่งฉบับ — เลือกช่องทางจาก secret ที่ตั้งไว้
+ *
+ * Gmail มาก่อนเพราะส่งถึงปลายทางได้จริงกว่า: อีเมลออกจากเซิร์ฟเวอร์ของ Gmail
+ * และถูกเซ็นด้วย gmail.com ส่วนบริการส่งแทนที่ใช้อีเมลฟรีเป็นผู้ส่ง จะถูก
+ * Gmail/Yahoo/Outlook ปฏิเสธตั้งแต่ปี 2024 เพราะ SPF/DKIM ไม่ตรงกับโดเมน
+ *
+ * Brevo ยังเก็บไว้เป็นทางที่สอง — วันที่มีโดเมนของตัวเองแล้วจะกลับมาใช้ได้ทันที
+ * โดยไม่ต้องเขียนอะไรใหม่
+ */
 export async function sendEmail(
   env: EmailEnv,
   mail: Mail,
   fetchImpl: typeof fetch = fetch,
+  connectImpl?: SmtpConnect,
 ): Promise<SendResult> {
+  if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
+    const connect = connectImpl ?? (await loadSocketConnect());
+    if (!connect) return { status: "not_configured" };
+    try {
+      await sendViaSmtp(
+        { host: "smtp.gmail.com", port: 587, user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
+        { fromName: SENDER_NAME, to: mail.to, subject: mail.subject, html: mail.html, text: mail.text },
+        connect,
+      );
+      return { status: "sent" };
+    } catch (e) {
+      // ข้อความของ SmtpError ไม่มีอีเมลผู้รับอยู่แล้ว (ดู lib/smtp.ts)
+      const step = e instanceof SmtpError ? e.step : "smtp";
+      const code = e instanceof SmtpError ? e.code : 0;
+      return { status: "failed", code, reason: step };
+    }
+  }
+
   if (!env.BREVO_API_KEY || !env.BREVO_SENDER) return { status: "not_configured" };
 
   const res = await fetchImpl(ENDPOINT, {
