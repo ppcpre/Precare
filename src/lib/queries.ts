@@ -13,6 +13,7 @@ import { getSessionUser } from "@/lib/session";
 import { requireRole } from "@/lib/authz";
 import type { AlbumPhotoType } from "@/db/schema";
 import {
+  account,
   appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
   medicationDoses, medicationTimes, medications,
   photos, pregnancyProfiles, storageObjects, trackingSessions, user, visitQuestions, weeklyLogs,
@@ -762,6 +763,22 @@ export async function listMedications(db: Db, familyId: string, userId: string) 
     byId.set(r.id, cur);
   }
   return [...byId.values()];
+}
+
+/**
+ * บัญชีนี้ตั้งรหัสผ่านไว้หรือเปล่า
+ *
+ * คนที่สมัครด้วย Google ไม่มีรหัสผ่านเลย — เมนู "เปลี่ยนรหัสผ่าน" จึงไม่ควร
+ * โผล่ให้เห็นด้วยซ้ำ ไม่ใช่โผล่แล้วกดไปเจอหน้าที่กรอกยังไงก็ไม่ผ่าน
+ * (better-auth เก็บแถว provider_id = 'credential' เฉพาะบัญชีที่มีรหัสผ่าน)
+ */
+export async function hasPassword(db: Db, userId: string) {
+  const row = await db
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
+    .get();
+  return Boolean(row);
 }
 
 /** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */

@@ -6,7 +6,13 @@ import { ButtonLink } from "@/components/ui/button";
 import { RoleBadge } from "@/components/ui/badge";
 import { Avatar } from "@/components/app-topbar";
 import { SignOutRow } from "@/components/profile/sign-out";
-import { getFamily, getPregnancy, listMembers, requireFamilyContext } from "@/lib/queries";
+import {
+  getFamily,
+  getPregnancy,
+  hasPassword,
+  listMembers,
+  requireFamilyContext,
+} from "@/lib/queries";
 import { can } from "@/lib/authz";
 import { PushToggle } from "@/components/push-toggle";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -55,10 +61,11 @@ export default async function ProfilePage() {
   }
 
   const { db, familyId, role, user } = ctx;
-  const [family, members, preg] = await Promise.all([
+  const [family, members, preg, canChangePassword] = await Promise.all([
     getFamily(db, familyId),
     listMembers(db, familyId, user.id),
     getPregnancy(db, familyId),
+    hasPassword(db, user.id),
   ]);
 
   const canEditPregnancy = can.editPregnancy(role);
@@ -157,8 +164,14 @@ export default async function ProfilePage() {
         <Card className="gap-0 p-0">
           <Row icon={Mail} label="อีเมล" value={user.email} />
           <span className="h-px bg-cream-200" />
-          <Row icon={Lock} label="เปลี่ยนรหัสผ่าน" value="เร็วๆ นี้" />
-          <span className="h-px bg-cream-200" />
+          {/* คนที่สมัครด้วย Google ไม่มีรหัสผ่านให้เปลี่ยน — ไม่ต้องโชว์เมนูนี้เลย
+              ดีกว่าโชว์แล้วกดไปเจอหน้าที่ทำอะไรไม่ได้ */}
+          {canChangePassword && (
+            <>
+              <Row icon={Lock} label="เปลี่ยนรหัสผ่าน" href="/profile/password" />
+              <span className="h-px bg-cream-200" />
+            </>
+          )}
           <Row icon={Globe} label="ภาษา" value="ไทย" />
           <span className="h-px bg-cream-200" />
           <Row icon={Shield} label="ความเป็นส่วนตัวและข้อมูลของฉัน" href="/profile/privacy" />

@@ -34,7 +34,7 @@ const PAGE_RULES = {
 // หน้าที่ผูกกับ "ผู้ใช้" ไม่ใช่ "ครอบครัว" — ใช้ getSessionUser พอ
 // profile/privacy ต้องอยู่ในลิสต์นี้ เพราะคนที่ยังไม่มีครอบครัวก็ต้องลบบัญชี
 // และดาวน์โหลดข้อมูลของตัวเองได้ ถ้าใช้ requireFamilyContext จะถูกเด้งไป onboarding
-const SESSION_ONLY_PAGES = new Set(["profile/edit", "profile/privacy"]);
+const SESSION_ONLY_PAGES = new Set(["profile/edit", "profile/privacy", "profile/password"]);
 
 /** action ที่ต้องใช้ client ระดับไหน */
 const ACTION_RULES = {

@@ -9,9 +9,9 @@ export const metadata = { title: "เข้าสู่ระบบ · Health Ca
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; stale?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, stale } = await searchParams;
 
   return (
     <div className="flex flex-col gap-7">
@@ -20,6 +20,15 @@ export default async function LoginPage({
         <h1 className="text-[28px] font-semibold text-ink-900">Health Care</h1>
         <p className="text-sm text-ink-600">ดูแลสุขภาพของทั้งครอบครัว ไว้ในที่เดียว</p>
       </div>
+
+      {/* มาจาก /signed-out — บอกว่าทำไมอยู่ๆ ก็หลุด ไม่ใช่ปล่อยให้งงว่าแอปพัง
+          เหตุผลที่พบบ่อยที่สุดคือเพิ่งเปลี่ยนรหัสผ่านจากอีกเครื่อง */}
+      {stale === "1" && (
+        <p className="rounded-sm bg-cream-100 px-3.5 py-3 text-xs leading-relaxed text-ink-600">
+          เครื่องนี้ถูกออกจากระบบแล้ว — เกิดขึ้นได้เมื่อมีการเปลี่ยนรหัสผ่าน
+          หรือเข้าใช้งานครั้งล่าสุดนานเกินไป เข้าสู่ระบบใหม่ได้เลย
+        </p>
+      )}
 
       <GoogleButton label="เข้าสู่ระบบด้วย Google" next={next} />
       <OrDivider />
