@@ -51,3 +51,46 @@ test("กรอกส่วนสูง/น้ำหนัก แก้ได้
     await expect(history).toContainText("ยังไม่ได้กรอก → 160 ซม.");
   });
 });
+
+/**
+ * Regression — การ์ดน้ำหนักในหน้าสุขภาพ
+ *
+ * การ์ดนี้บอกคนท้องว่าน้ำหนักตัวเอง "อยู่ในช่วงที่คาดไว้" หรือไม่ ถ้าแสดงผิด
+ * จะทำให้กังวลโดยไม่จำเป็น หรือแย่กว่านั้นคือสบายใจทั้งที่ควรไปหาหมอ
+ */
+test("การ์ดน้ำหนักชวนให้กรอกข้อมูลที่ขาด แล้วแสดงผลเทียบเกณฑ์เมื่อข้อมูลครบ", async ({
+  page,
+}) => {
+  await signUp(page, uniqueEmail("wcard"), "แม่ดูกราฟ");
+  await completeOnboarding(page, "ครอบครัวดูกราฟ");
+
+  await test.step("ยังไม่มีส่วนสูง/น้ำหนัก = ชวนให้ใส่ ไม่ใช่คำนวณมั่ว", async () => {
+    await gotoApp(page, "/health");
+    await expect(page.getByText("น้ำหนักเทียบเกณฑ์")).toBeVisible();
+    await expect(page.getByRole("link", { name: "ใส่ข้อมูล" })).toBeVisible();
+  });
+
+  await test.step("ใส่ข้อมูลแล้วยังไม่เคยชั่ง = ชวนให้บันทึก", async () => {
+    await page.getByRole("link", { name: "ใส่ข้อมูล" }).click();
+    await page.getByLabel("ส่วนสูง (ซม.)").fill("160");
+    await page.getByLabel("น้ำหนักก่อนตั้งครรภ์ (กก.)").fill("52");
+    await page.getByRole("button", { name: "บันทึก" }).click();
+    await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+    await gotoApp(page, "/health");
+    await expect(page.getByText(/บันทึกน้ำหนักสักครั้ง/)).toBeVisible();
+    await expect(page.getByText(/11\.5–16 กก\./)).toBeVisible();
+  });
+
+  await test.step("บันทึกน้ำหนักแล้วการ์ดเทียบเกณฑ์ให้เห็น", async () => {
+    await gotoApp(page, "/health/new");
+    await page.getByLabel(/น้ำหนัก/).first().fill("58.4");
+    await page.getByRole("button", { name: /บันทึก/ }).first().click();
+    await page.waitForURL(/\/health(\?|$)/, { timeout: 30_000 });
+
+    // อายุครรภ์ 24 สัปดาห์ (ตั้งค่าโดย completeOnboarding) เพิ่ม 6.4 กก.
+    await expect(page.getByText(/เพิ่มมาแล้ว/)).toContainText("6.4");
+    await expect(page.getByText(/อยู่ในช่วงที่คาดไว้/)).toBeVisible();
+    await expect(page.getByText(/ครรภ์เดี่ยว ไม่ใช่คำวินิจฉัย/)).toBeVisible();
+  });
+});

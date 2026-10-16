@@ -5,7 +5,9 @@ import { ButtonLink } from "@/components/ui/button";
 import { Fab } from "@/components/ui/fab";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LogCard } from "@/components/health/log-card";
-import { listWeeklyLogs, requireFamilyContext } from "@/lib/queries";
+import { getPregnancy, listWeeklyLogs, requireFamilyContext } from "@/lib/queries";
+import { buildWeightCard } from "@/lib/weight-card";
+import { WeightCard } from "@/components/health/weight-card";
 import { can } from "@/lib/authz";
 
 export const metadata = { title: "บันทึกสุขภาพ · Pre Care" };
@@ -24,7 +26,21 @@ export default async function HealthPage() {
     throw e;
   }
 
-  const logs = await listWeeklyLogs(ctx.db, ctx.familyId);
+  const [logs, preg] = await Promise.all([
+    listWeeklyLogs(ctx.db, ctx.familyId),
+    getPregnancy(ctx.db, ctx.familyId),
+  ]);
+
+  /**
+   * ใช้บันทึกชุดเดียวกับที่แสดงด้านล่าง ไม่ยิงคิวรีซ้ำ
+   * (listWeeklyLogs จำกัด 50 รายการ ซึ่งครอบคลุมทั้งการตั้งครรภ์อยู่แล้ว)
+   */
+  const weightCard = buildWeightCard({
+    lmpDate: preg.profile?.lmpDate ?? null,
+    heightCm: preg.profile?.heightCm ?? null,
+    prePregnancyWeight: preg.profile?.prePregnancyWeight ?? null,
+    logs: logs.map((l) => ({ week: l.week, weight: l.weight })),
+  });
   const canWrite = can.writeRecords(ctx.role);
 
   // จัดกลุ่มตามเดือน ตาม screen-blueprint §6.2
@@ -79,6 +95,10 @@ export default async function HealthPage() {
           )}
         </div>
       </header>
+
+      {/* อยู่เหนือรายการบันทึก เพราะเป็นภาพรวม ส่วนรายการคือรายละเอียด
+          และแสดงแม้ยังไม่มีบันทึกเลย เพื่อชวนให้กรอกข้อมูลที่ขาด */}
+      <WeightCard view={weightCard} />
 
       {logs.length === 0 ? (
         <EmptyState
