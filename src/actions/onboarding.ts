@@ -42,7 +42,13 @@ export const completeOnboarding = authAction
         role: "owner",
         status: "active",
       }),
-      ctx.db.insert(pregnancyProfiles).values({ familyId, lmpDate: lmp, dueDate: due }),
+      ctx.db.insert(pregnancyProfiles).values({
+        familyId,
+        lmpDate: lmp,
+        dueDate: due,
+        heightCm: parsedInput.heightCm ?? null,
+        prePregnancyWeight: parsedInput.prePregnancyWeight ?? null,
+      }),
       // กลุ่มตั้งต้นให้ครอบครัวใหม่ — migration สร้างให้เฉพาะครอบครัวที่มีอยู่
       // ตอนนั้น ถ้าไม่สร้างตรงนี้ด้วย ครอบครัวใหม่จะไม่มีกลุ่มให้เลือกเลย
       ctx.db.insert(careGroups).values({

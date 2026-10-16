@@ -7,6 +7,27 @@ import { isValidDay, localToday } from "@/lib/local-time";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง");
 
+/**
+ * ส่วนสูงและน้ำหนักก่อนตั้งครรภ์ — ว่างได้ แต่ถ้ากรอกต้องอยู่ในช่วงที่เป็นไปได้
+ *
+ * ช่วงกว้างไว้โดยตั้งใจ หน้าที่ของมันคือกันพิมพ์ผิดแบบคนละหลัก (เช่น 1600 ซม.
+ * หรือ 5 กก.) ไม่ใช่ตัดสินว่าร่างกายแบบไหน "ปกติ" ซึ่งไม่ใช่เรื่องของแอป
+ */
+export const heightCmInput = z
+  .number()
+  .min(120, "ส่วนสูงต้องอยู่ระหว่าง 120–230 ซม.")
+  .max(230, "ส่วนสูงต้องอยู่ระหว่าง 120–230 ซม.")
+  .nullable()
+  .optional();
+
+export const weightKgInput = z
+  .number()
+  .min(25, "น้ำหนักต้องอยู่ระหว่าง 25–300 กก.")
+  .max(300, "น้ำหนักต้องอยู่ระหว่าง 25–300 กก.")
+  .nullable()
+  .optional();
+
+
 export const weeklyLogInput = createInsertSchema(weeklyLogs)
   // 4 ฟิลด์นี้ server เป็นคนใส่ ไม่รับจาก client เด็ดขาด
   .omit({ id: true, familyId: true, recordedBy: true, createdAt: true })
@@ -74,13 +95,20 @@ export const onboardingInput = z
     familyName: z.string().min(1, "กรุณาตั้งชื่อครอบครัว").max(80),
     lmpDate: isoDate.nullable().optional(),
     dueDate: isoDate.nullable().optional(),
+    heightCm: heightCmInput,
+    prePregnancyWeight: weightKgInput,
   })
   .refine((v) => !(v.lmpDate && v.dueDate), {
     message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",
   });
 
 export const pregnancyInput = z
-  .object({ lmpDate: isoDate.nullable(), dueDate: isoDate.nullable() })
+  .object({
+    lmpDate: isoDate.nullable(),
+    dueDate: isoDate.nullable(),
+    heightCm: heightCmInput,
+    prePregnancyWeight: weightKgInput,
+  })
   .refine((v) => Boolean(v.lmpDate) !== Boolean(v.dueDate), {
     message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",
   });

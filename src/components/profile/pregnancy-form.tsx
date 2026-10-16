@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BAND_LABEL, bandOf, bmiOf, rangeOf } from "@/lib/weight-gain";
 import { useAction } from "next-safe-action/hooks";
 import { ChevronLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,18 +16,32 @@ import { thaiDate } from "@/lib/format";
 
 const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
+/** ช่องว่าง = ยังไม่กรอก ไม่ใช่ศูนย์ — ศูนย์เป็นค่าที่เป็นไปไม่ได้ของทั้งสองช่อง */
+const num = (v: string): number | null => {
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
 export function PregnancyForm({
   currentLmp,
   currentDue,
+  currentHeight,
+  currentWeight,
   hasLogs,
 }: {
   currentLmp: string | null;
   currentDue: string | null;
+  currentHeight: number | null;
+  currentWeight: number | null;
   hasLogs: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"lmp" | "edd">("lmp");
   const [date, setDate] = useState(currentLmp ?? "");
+  const [height, setHeight] = useState(currentHeight ? String(currentHeight) : "");
+  const [weight, setWeight] = useState(currentWeight ? String(currentWeight) : "");
 
   const { execute, isPending, result } = useAction(updatePregnancy, {
     onSuccess: () => {
@@ -39,6 +54,11 @@ export function PregnancyForm({
   const due = date ? (mode === "lmp" ? toIso(calculateDueDate(date)) : date) : null;
   const ga = lmp ? calculateGestationalAge(lmp) : null;
   const changed = lmp !== currentLmp;
+  /** ปุ่มบันทึกเปิดเมื่อมีอะไรเปลี่ยนจริง ไม่ว่าจะเป็นวันที่หรือตัวเลขสองค่าใหม่ */
+  const touched =
+    changed || num(height) !== currentHeight || num(weight) !== currentWeight;
+  const bmi = bmiOf(num(weight), num(height));
+  const band = bandOf(bmi);
 
   return (
     <div className="flex min-h-dvh flex-col bg-cream-50">
@@ -93,6 +113,42 @@ export function PregnancyForm({
           max={mode === "lmp" ? new Date().toISOString().slice(0, 10) : undefined}
         />
 
+        {/**
+          * สองค่านี้เป็นต้นทางของเกณฑ์น้ำหนักทั้งหมด (BMI ก่อนตั้งครรภ์)
+          * ว่างได้ เพราะบางคนจำน้ำหนักก่อนตั้งครรภ์ไม่ได้ — การ์ดน้ำหนัก
+          * จะชวนให้กรอกเอง ดีกว่าบังคับตั้งแต่ตรงนี้แล้วคนติดอยู่ที่ฟอร์ม
+          */}
+        <div className="flex gap-3">
+          <Field
+            label="ส่วนสูง (ซม.)"
+            type="number"
+            inputMode="decimal"
+            value={height}
+            onChange={(e) => setHeight(e.target.value)}
+            hint="ใช้คำนวณเกณฑ์น้ำหนัก"
+          />
+          <Field
+            label="น้ำหนักก่อนตั้งครรภ์ (กก.)"
+            type="number"
+            inputMode="decimal"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            hint="ประมาณได้ ไม่ต้องเป๊ะ"
+          />
+        </div>
+
+        {bmi && band && (
+          <Card className="gap-1 bg-cream-100 p-3.5">
+            <span className="text-sm text-ink-900">
+              BMI ก่อนตั้งครรภ์ <b>{bmi}</b> · {BAND_LABEL[band]}
+            </span>
+            <span className="text-[13px] leading-relaxed text-ink-600">
+              เกณฑ์สากลแนะนำให้เพิ่ม {rangeOf(band).totalMin}–{rangeOf(band).totalMax} กก.
+              ตลอดการตั้งครรภ์ (ครรภ์เดี่ยว) · เป็นค่าอ้างอิง ไม่ใช่คำวินิจฉัย
+            </span>
+          </Card>
+        )}
+
         {ga && due && (
           <Card className="gap-3 rounded-lg border-peach-300 bg-peach-100 p-3.5">
             <span className="text-center text-sm text-ink-600">อายุครรภ์ที่จะเป็น</span>
@@ -132,9 +188,15 @@ export function PregnancyForm({
           <Button
             full
             loading={isPending}
-            disabled={!date || !changed}
+            disabled={!date || !touched}
             onClick={() =>
-              execute(mode === "lmp" ? { lmpDate: date, dueDate: null } : { lmpDate: null, dueDate: date })
+              execute({
+                ...(mode === "lmp"
+                  ? { lmpDate: date, dueDate: null }
+                  : { lmpDate: null, dueDate: date }),
+                heightCm: num(height),
+                prePregnancyWeight: num(weight),
+              })
             }
           >
             บันทึก

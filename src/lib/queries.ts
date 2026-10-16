@@ -16,7 +16,8 @@ import {
   account,
   appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
   medicationDoses, medicationTimes, medications,
-  photos, pregnancyProfiles, storageObjects, trackingSessions, user, visitQuestions, weeklyLogs,
+  photos, pregnancyProfileChanges, pregnancyProfiles, storageObjects, trackingSessions, user,
+  visitQuestions, weeklyLogs,
 } from "@/db/schema";
 import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
 import { toLaborView } from "@/lib/labor";
@@ -779,6 +780,29 @@ export async function hasPassword(db: Db, userId: string) {
     .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
     .get();
   return Boolean(row);
+}
+
+/**
+ * ประวัติการแก้ข้อมูลตั้งครรภ์ — ใครแก้ ตอนไหน จากอะไรเป็นอะไร
+ *
+ * จำกัดจำนวนเพราะหน้าจอแสดงได้ไม่กี่รายการอยู่แล้ว และตารางนี้โตได้เรื่อยๆ
+ * ตามจำนวนครั้งที่แก้ ไม่ควรดึงมาทั้งหมดทุกครั้งที่เปิดหน้า
+ */
+export async function listPregnancyChanges(db: Db, familyId: string, limit = 20) {
+  return db
+    .select({
+      id: pregnancyProfileChanges.id,
+      field: pregnancyProfileChanges.field,
+      oldValue: pregnancyProfileChanges.oldValue,
+      newValue: pregnancyProfileChanges.newValue,
+      changedAt: pregnancyProfileChanges.changedAt,
+      byName: user.name,
+    })
+    .from(pregnancyProfileChanges)
+    .innerJoin(user, eq(user.id, pregnancyProfileChanges.changedBy))
+    .where(eq(pregnancyProfileChanges.familyId, familyId))
+    .orderBy(desc(pregnancyProfileChanges.changedAt))
+    .limit(limit);
 }
 
 /** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */

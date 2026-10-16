@@ -87,8 +87,59 @@ export const pregnancyProfiles = sqliteTable("pregnancy_profiles", {
    * set null ตอนลบรูป — ไม่งั้นการ์ดจะชี้ไปยังไฟล์ที่ไม่มีแล้วและพังเงียบๆ
    */
   coverPhotoId: text("cover_photo_id").references(() => photos.id, { onDelete: "set null" }),
+
+  /**
+   * ส่วนสูง (ซม.) และน้ำหนักก่อนตั้งครรภ์ (กก.)
+   *
+   * สองค่านี้เป็นต้นทางของเกณฑ์น้ำหนักทั้งหมด — เกณฑ์ IOM อิงกับ BMI
+   * ก่อนตั้งครรภ์ล้วนๆ ถ้าไม่มี ก็บอกไม่ได้เลยว่าควรเพิ่มเท่าไร
+   *
+   * ว่างได้ เพราะบางคนจำน้ำหนักก่อนตั้งครรภ์ไม่ได้ และการบังคับกรอกจะทำให้
+   * คนติดอยู่ที่หน้าลงทะเบียน — หน้าจอที่ต้องใช้ค่านี้จะชวนให้กรอกเอาเอง
+   */
+  heightCm: real("height_cm"),
+  prePregnancyWeight: real("pre_pregnancy_weight"),
+
   updatedAt: text("updated_at").notNull().default(nowIso),
 });
+
+/** ฟิลด์ของ pregnancy_profiles ที่เก็บประวัติการแก้ไว้ */
+export const TRACKED_PROFILE_FIELDS = [
+  "lmpDate",
+  "dueDate",
+  "heightCm",
+  "prePregnancyWeight",
+] as const;
+export type TrackedProfileField = (typeof TRACKED_PROFILE_FIELDS)[number];
+
+/**
+ * ประวัติการแก้ข้อมูลตั้งครรภ์
+ *
+ * มีเพราะค่าพวกนี้เปลี่ยนความหมายของทั้งแอป — แก้น้ำหนักก่อนตั้งครรภ์ทีเดียว
+ * ช่วงเกณฑ์ขยับทั้งกราฟ และแก้ LMP ทีเดียวอายุครรภ์เปลี่ยนทั้งระบบ
+ * ในแอปที่คนทั้งครอบครัวแก้ได้ ต้องตอบได้ว่าใครแก้ ตอนไหน จากอะไรเป็นอะไร
+ *
+ * เก็บค่าเป็นข้อความทั้งคู่ เพราะฟิลด์ที่ติดตามมีทั้งวันที่และตัวเลข
+ * ตารางนี้ไม่ได้เอาไว้คำนวณ เอาไว้อ่านอย่างเดียว
+ */
+export const pregnancyProfileChanges = sqliteTable(
+  "pregnancy_profile_changes",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    field: text("field", { enum: TRACKED_PROFILE_FIELDS }).notNull(),
+    /** null = เดิมยังไม่ได้กรอก */
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    changedBy: text("changed_by")
+      .notNull()
+      .references(() => user.id),
+    changedAt: text("changed_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_profile_changes_family").on(t.familyId, t.changedAt)],
+);
 
 export const MOODS = ["great", "good", "okay", "tired", "bad"] as const;
 

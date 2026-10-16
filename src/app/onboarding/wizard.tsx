@@ -22,6 +22,14 @@ function thaiDate(iso: string) {
 const toIso = (d: Date) => d.toISOString().slice(0, 10);
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+/** ช่องว่าง = ยังไม่กรอก ไม่ใช่ศูนย์ — ศูนย์เป็นค่าที่เป็นไปไม่ได้ของทั้งสองช่อง */
+const toNum = (v: string): number | null => {
+  const t = v.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
 export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: string }) {
   const [step, setStep] = useState(0);
   const [familyName, setFamilyName] = useState(defaultFamilyName);
@@ -33,6 +41,8 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
    * (เจ้าของโปรเจกต์ทักมาว่าคนในครอบครัวที่แค่อยากบันทึกสุขภาพตัวเองใช้ไม่ถูก)
    */
   const [pregnant, setPregnant] = useState<boolean | null>(null);
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
   const [mode, setMode] = useState<"lmp" | "edd">("lmp");
   const [date, setDate] = useState("");
 
@@ -48,6 +58,8 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
     execute({
       familyName: familyName.trim(),
       ...(skipDate || !date ? {} : mode === "lmp" ? { lmpDate: date } : { dueDate: date }),
+      heightCm: toNum(height),
+      prePregnancyWeight: toNum(weight),
     });
 
   return (
@@ -173,6 +185,27 @@ export function OnboardingWizard({ defaultFamilyName }: { defaultFamilyName: str
               }
               error={date && !dateValid ? "วันที่อยู่นอกช่วงที่เป็นไปได้" : undefined}
             />
+
+            {/* ต้นทางของเกณฑ์น้ำหนัก — ว่างได้ เพราะบางคนจำน้ำหนักก่อนตั้งครรภ์ไม่ได้
+                และการบังคับกรอกจะทำให้คนติดอยู่ที่หน้าลงทะเบียน */}
+            <div className="flex gap-3">
+              <Field
+                label="ส่วนสูง (ซม.)"
+                type="number"
+                inputMode="decimal"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                hint="ใส่ทีหลังได้"
+              />
+              <Field
+                label="น้ำหนักก่อนตั้งครรภ์ (กก.)"
+                type="number"
+                inputMode="decimal"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                hint="ประมาณได้"
+              />
+            </div>
 
             {ga && due && dateValid && (
               <Card className="flex flex-col gap-3 border-peach-300 bg-peach-100">

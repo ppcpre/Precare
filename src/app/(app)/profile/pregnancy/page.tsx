@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { count, eq } from "drizzle-orm";
 import { PregnancyForm } from "@/components/profile/pregnancy-form";
-import { getPregnancy, requireFamilyContext } from "@/lib/queries";
+import { getPregnancy, listPregnancyChanges, requireFamilyContext } from "@/lib/queries";
+import { ChangeHistory } from "@/components/profile/change-history";
 import { weeklyLogs } from "@/db/schema";
 
 export const metadata = { title: "วันตั้งครรภ์ · Pre Care" };
@@ -27,11 +28,21 @@ export default async function PregnancySettingsPage() {
       .get(),
   ]);
 
+  const changes = await listPregnancyChanges(ctx.db, ctx.familyId);
+
   return (
+    <>
     <PregnancyForm
       currentLmp={preg.profile?.lmpDate ?? null}
       currentDue={preg.profile?.dueDate ?? null}
+      currentHeight={preg.profile?.heightCm ?? null}
+      currentWeight={preg.profile?.prePregnancyWeight ?? null}
       hasLogs={(logCount?.n ?? 0) > 0}
     />
+    {/* ใต้ฟอร์ม ไม่ใช่เหนือ — คนเปิดหน้านี้มาเพื่อแก้ ไม่ได้มาเพื่ออ่านประวัติ */}
+    <div className="px-4 pb-6">
+      <ChangeHistory changes={changes} />
+    </div>
+    </>
   );
 }
