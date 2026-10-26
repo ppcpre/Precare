@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Plus, Eye } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
-import { GestationHero, SetupPrompt } from "@/components/dashboard/hero";
+import { GestationHero, PostpartumCard, SetupPrompt } from "@/components/dashboard/hero";
 import { NextAppointmentCard, RecentLogsCard, FoodTodayCard } from "@/components/dashboard/cards";
 import { WeeklyBabyCard } from "@/components/dashboard/weekly";
 import { weeklyContent } from "@/data/weekly-content";
@@ -18,6 +18,7 @@ import { LaborCard } from "@/components/labor/dashboard-card";
 import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
 import { familyMediaBase } from "@/lib/media-base";
+import { listChildren } from "@/lib/queries";
 
 export const metadata = { title: "หน้าแรก · Pre Care" };
 
@@ -34,13 +35,15 @@ export default async function DashboardPage() {
   }
 
   const { db, familyId, role, user } = ctx;
-  const [data, activeKick, kickSessions, openQuestions, activeLabor, mediaBase] = await Promise.all([
+  const [data, activeKick, kickSessions, openQuestions, activeLabor, mediaBase, kids] =
+    await Promise.all([
     getDashboard(db, familyId, user.id),
     getActiveKickSession(db, familyId),
     listKickSessions(db, familyId, 10),
     countOpenQuestions(db, familyId),
     getActiveLaborSession(db, familyId),
     familyMediaBase(familyId),
+    listChildren(db, familyId),
   ]);
 
   // now มาจาก getDashboard ไม่ใช่เรียก Date.now() ใน render
@@ -72,6 +75,10 @@ export default async function DashboardPage() {
               canEdit={canWrite}
               mediaBase={mediaBase}
             />
+          ) : data.postpartum ? (
+            // หลังคลอดต้องไม่ขึ้น "ตั้งค่าวันตั้งครรภ์" — ข้อมูลตั้งไว้แล้ว
+            // แค่จบรอบไปแล้ว ถ้าขึ้นแบบนั้นจะเหมือนแอปลืมทุกอย่างที่เพิ่งผ่านมา
+            <PostpartumCard hasChild={kids.length > 0} />
           ) : (
             <SetupPrompt canEdit={can.editPregnancy(role)} />
           )}

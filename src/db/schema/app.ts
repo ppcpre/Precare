@@ -109,6 +109,14 @@ export const TRACKED_PROFILE_FIELDS = [
   "dueDate",
   "heightCm",
   "prePregnancyWeight",
+  /**
+   * สถานะเป็นฟิลด์ที่ต้องบันทึกประวัติที่สุดในบรรดาทั้งหมด
+   *
+   * คนหนึ่งกดเปลี่ยน แล้วหน้าแรกของทุกคนในครอบครัวเปลี่ยนตามทันที
+   * (การ์ดอายุครรภ์ นับลูกดิ้น จับเวลาเจ็บท้อง หายไปพร้อมกันหมด)
+   * ถ้าตอบไม่ได้ว่าใครกดตอนไหน คนที่เหลือจะงงว่าแอปพังหรือเปล่า
+   */
+  "status",
 ] as const;
 export type TrackedProfileField = (typeof TRACKED_PROFILE_FIELDS)[number];
 

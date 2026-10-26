@@ -50,7 +50,7 @@ test("นับครบรอบ และรอบอยู่รอดตอ�
     const lmp = new Date();
     lmp.setDate(lmp.getDate() - 30 * 7);
     await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
-    await page.getByRole("button", { name: /บันทึก/ }).click();
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await gotoApp(page, "/kicks");
     await expect(page.getByRole("button", { name: "เริ่มนับ" })).toBeVisible();
   });
@@ -123,7 +123,7 @@ test("เริ่มซ้ำต้องได้รอบเดิม ไม�
   const lmp = new Date();
   lmp.setDate(lmp.getDate() - 30 * 7);
   await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
-  await page.getByRole("button", { name: /บันทึก/ }).click();
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
 
   await gotoApp(page, "/kicks");
   await page.getByRole("button", { name: "เริ่มนับ" }).click();

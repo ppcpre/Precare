@@ -143,3 +143,28 @@ export function SetupPrompt({ canEdit }: { canEdit: boolean }) {
     </Card>
   );
 }
+
+/**
+ * การ์ดหลังคลอด — แทนที่การ์ดอายุครรภ์เมื่อกดว่าคลอดแล้ว
+ *
+ * ⚠️ เงียบโดยตั้งใจ ไม่แสดงความยินดี ไม่เขียนว่า "ลูกน้อย" ไม่ถือว่ามีลูกแล้ว
+ *    การตั้งครรภ์ไม่ได้จบด้วยลูกเสมอไป คนที่เพิ่งสูญเสียก็กดปุ่มนี้เหมือนกัน
+ *    เพื่อให้แอปหยุดนับ แล้วต้องไม่โดนแอปแสดงความยินดีใส่
+ *
+ * ลิงก์ไปสมุดรูปเป็นแค่ทางเลือก ไม่ใช่ขั้นตอนถัดไปที่ต้องทำ
+ */
+export function PostpartumCard({ hasChild }: { hasChild: boolean }) {
+  return (
+    <Card className="flex flex-col gap-3 rounded-lg border-cream-200 bg-cream-100 p-3.5">
+      <div className="flex flex-col gap-0.5">
+        <span className="font-semibold text-ink-900">บันทึกไว้ว่าคลอดแล้ว</span>
+        <span className="text-[13px] leading-relaxed text-ink-600">
+          หยุดนับอายุครรภ์แล้ว บันทึกเก่าทั้งหมดยังอยู่ครบ
+        </span>
+      </div>
+      <ButtonLink href={hasChild ? "/baby" : "/baby"} variant="secondary" full>
+        {hasChild ? "เปิดสมุดรูปของลูก" : "เพิ่มสมุดรูปของลูก"}
+      </ButtonLink>
+    </Card>
+  );
+}

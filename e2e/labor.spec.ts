@@ -29,7 +29,7 @@ async function setWeek(page: import("@playwright/test").Page, weeks: number) {
   const lmp = new Date();
   lmp.setDate(lmp.getDate() - weeks * 7);
   await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
-  await page.getByRole("button", { name: /บันทึก/ }).click();
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await page.waitForURL(/\/profile/, { timeout: 30_000 });
 }
 

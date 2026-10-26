@@ -41,13 +41,24 @@ export async function requireFamilyContext(min: Role = "viewer") {
   return { db, user, familyId, role };
 }
 
+/**
+ * ข้อมูลการตั้งครรภ์
+ *
+ * `ga` คือ "อายุครรภ์ตอนนี้" ซึ่งหลังคลอดแล้วไม่มีอยู่จริง — คืน null
+ * ไม่ใช่ปล่อยให้นับต่อไปเป็นสัปดาห์ที่ 43, 44, 45…
+ *
+ * lmpDate ยังอยู่ใน profile ตามเดิม ใครที่ต้องใช้ย้อนหลัง (เช่น export
+ * หรือสัปดาห์ของรูปเก่า) ยังอ่านได้ เราแค่หยุดคำนวณค่าปัจจุบัน
+ */
 export async function getPregnancy(db: Db, familyId: string) {
   const p = await db
     .select()
     .from(pregnancyProfiles)
     .where(eq(pregnancyProfiles.familyId, familyId))
     .get();
-  if (!p?.lmpDate) return { profile: p ?? null, ga: null, daysLeft: null };
+  if (!p?.lmpDate || p.status === "postpartum") {
+    return { profile: p ?? null, ga: null, daysLeft: null };
+  }
   return {
     profile: p,
     ga: calculateGestationalAge(p.lmpDate),
@@ -380,6 +391,7 @@ export async function getDashboard(db: Db, familyId: string, meId: string) {
   ]);
 
   const profile = pregnancyRows[0] ?? null;
+  const postpartum = profile?.status === "postpartum";
   // วิดีโอใช้เฟรมหน้าปกเป็นรูป ไม่ใช่ตัวไฟล์ — <img src> ชี้ไปที่ .mp4 ไม่ได้
   const coverKey =
     profile?.coverMediaKind === "video" ? profile.coverThumbKey : (profile?.coverR2Key ?? null);
@@ -387,8 +399,11 @@ export async function getDashboard(db: Db, familyId: string, meId: string) {
     now,
     profile,
     cover: coverKey ? { key: coverKey, week: profile?.coverWeek ?? null } : null,
-    ga: profile?.lmpDate ? calculateGestationalAge(profile.lmpDate) : null,
-    daysLeft: profile?.dueDate ? daysUntilDueDate(profile.dueDate) : null,
+    // หลังคลอดแล้วหยุดนับ — การ์ดอายุครรภ์ / นับลูกดิ้น / จับเวลาเจ็บท้อง
+    // อ่าน ga ตัวนี้ตัวเดียว พอเป็น null ทั้งสามใบเงียบพร้อมกัน
+    ga: profile?.lmpDate && !postpartum ? calculateGestationalAge(profile.lmpDate) : null,
+    daysLeft: profile?.dueDate && !postpartum ? daysUntilDueDate(profile.dueDate) : null,
+    postpartum,
     nextAppointment: apptRows[0] ?? null,
     recentLogs: logRows.map((r) => ({ ...r, symptoms: parseSymptoms(r.symptoms) })),
     memberCount: memberCount[0]?.n ?? 0,

@@ -36,7 +36,9 @@ export default async function HealthPage() {
    * (listWeeklyLogs จำกัด 50 รายการ ซึ่งครอบคลุมทั้งการตั้งครรภ์อยู่แล้ว)
    */
   const weightCard = buildWeightCard({
-    lmpDate: preg.profile?.lmpDate ?? null,
+    // preg.ga เป็น null แล้วหลังคลอด — ใช้ตัวนี้ ไม่ใช่ lmpDate ดิบ
+    // เกณฑ์ IOM เป็นเกณฑ์ของคนที่ยังตั้งครรภ์อยู่ หลังคลอดการ์ดต้องหายไป
+    lmpDate: preg.ga ? (preg.profile?.lmpDate ?? null) : null,
     heightCm: preg.profile?.heightCm ?? null,
     prePregnancyWeight: preg.profile?.prePregnancyWeight ?? null,
     logs: logs.map((l) => ({ week: l.week, weight: l.weight })),

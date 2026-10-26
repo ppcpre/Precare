@@ -3,6 +3,7 @@ import { count, eq } from "drizzle-orm";
 import { PregnancyForm } from "@/components/profile/pregnancy-form";
 import { getPregnancy, listPregnancyChanges, requireFamilyContext } from "@/lib/queries";
 import { ChangeHistory } from "@/components/profile/change-history";
+import { PregnancyStatusCard } from "@/components/profile/pregnancy-status";
 import { weeklyLogs } from "@/db/schema";
 
 export const metadata = { title: "วันตั้งครรภ์ · Pre Care" };
@@ -39,6 +40,14 @@ export default async function PregnancySettingsPage() {
       currentWeight={preg.profile?.prePregnancyWeight ?? null}
       hasLogs={(logCount?.n ?? 0) > 0}
     />
+    {/* สวิตช์สถานะอยู่ใต้ฟอร์ม เหนือประวัติ — ไม่ใช่ของที่กดทุกวัน
+        แต่ต้องหาเจอตอนที่ต้องใช้ โดยไม่ต้องเดาว่าอยู่หน้าไหน */}
+    {/* ยังไม่ได้ตั้งวันตั้งครรภ์ = ยังไม่มีอะไรให้จบ ปุ่มนี้จะไม่มีความหมาย */}
+    {preg.profile?.lmpDate && (
+      <div className="px-4 pb-4">
+        <PregnancyStatusCard status={preg.profile.status} />
+      </div>
+    )}
     {/* ใต้ฟอร์ม ไม่ใช่เหนือ — คนเปิดหน้านี้มาเพื่อแก้ ไม่ได้มาเพื่ออ่านประวัติ */}
     <div className="px-4 pb-6">
       <ChangeHistory changes={changes} />

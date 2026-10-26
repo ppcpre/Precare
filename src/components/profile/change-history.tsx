@@ -5,6 +5,7 @@ import type { TrackedProfileField } from "@/db/schema";
 const LABEL: Record<TrackedProfileField, string> = {
   lmpDate: "วันประจำเดือนครั้งสุดท้าย",
   dueDate: "วันคาดคลอด",
+  status: "สถานะ",
   heightCm: "ส่วนสูง",
   prePregnancyWeight: "น้ำหนักก่อนตั้งครรภ์",
 };
@@ -36,6 +37,7 @@ export function ChangeHistory({ changes }: { changes: ProfileChange[] }) {
   const show = (f: TrackedProfileField, v: string | null) => {
     if (v === null) return "ยังไม่ได้กรอก";
     // วันที่เก็บเป็น YYYY-MM-DD ส่วนอีกสองค่าเป็นตัวเลข
+    if (f === "status") return v === "postpartum" ? "คลอดแล้ว" : "กำลังตั้งครรภ์";
     return f === "lmpDate" || f === "dueDate" ? thaiDate(v) : `${v}${UNIT[f] ?? ""}`;
   };
 

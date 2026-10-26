@@ -23,7 +23,7 @@ test("กรอกส่วนสูง/น้ำหนัก แก้ได้
     await expect(page.getByText(/เกณฑ์ปกติ/)).toBeVisible();
     await expect(page.getByText(/11\.5–16 กก\./)).toBeVisible();
 
-    await page.getByRole("button", { name: "บันทึก" }).click();
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
   });
 
@@ -38,7 +38,7 @@ test("กรอกส่วนสูง/น้ำหนัก แก้ได้
     // 70 / 1.6² = 27.3 → น้ำหนักเกิน → 7-11.5 กก.
     await expect(page.getByText(/น้ำหนักเกิน/)).toBeVisible();
     await expect(page.getByText(/7–11\.5 กก\./)).toBeVisible();
-    await page.getByRole("button", { name: "บันทึก" }).click();
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
   });
 
@@ -74,7 +74,7 @@ test("การ์ดน้ำหนักชวนให้กรอกข้�
     await page.getByRole("link", { name: "ใส่ข้อมูล" }).click();
     await page.getByLabel("ส่วนสูง (ซม.)").fill("160");
     await page.getByLabel("น้ำหนักก่อนตั้งครรภ์ (กก.)").fill("52");
-    await page.getByRole("button", { name: "บันทึก" }).click();
+    await page.getByRole("button", { name: "บันทึก", exact: true }).click();
     await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 
     await gotoApp(page, "/health");
@@ -85,7 +85,7 @@ test("การ์ดน้ำหนักชวนให้กรอกข้�
   await test.step("บันทึกน้ำหนักแล้วการ์ดเทียบเกณฑ์ให้เห็น", async () => {
     await gotoApp(page, "/health/new");
     await page.getByLabel(/น้ำหนัก/).first().fill("58.4");
-    await page.getByRole("button", { name: /บันทึก/ }).first().click();
+    await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
     await page.waitForURL(/\/health(\?|$)/, { timeout: 30_000 });
 
     // อายุครรภ์ 24 สัปดาห์ (ตั้งค่าโดย completeOnboarding) เพิ่ม 6.4 กก.
