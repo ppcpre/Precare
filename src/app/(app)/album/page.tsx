@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PhotoGroups } from "@/components/album/photo-groups";
 import { AlbumViewToggle } from "@/components/album/view-toggle";
 import { QuotaBar } from "@/components/album/quota-bar";
-import { listPhotos, requireFamilyContext } from "@/lib/queries";
+import { listChildren, listPhotos, requireFamilyContext } from "@/lib/queries";
 import { familyMediaBase } from "@/lib/media-base";
 import { getStorageUsage } from "@/lib/storage";
 import { can } from "@/lib/authz";
@@ -50,10 +50,11 @@ export default async function AlbumPage({
     throw e;
   }
 
-  const [items, usage, mediaBase] = await Promise.all([
+  const [items, usage, mediaBase, kids] = await Promise.all([
     listPhotos(ctx.db, ctx.familyId, active, onlyVideo),
     getStorageUsage(ctx.db, ctx.familyId),
     familyMediaBase(ctx.familyId),
+    listChildren(ctx.db, ctx.familyId),
   ]);
   const canWrite = can.writeRecords(ctx.role);
 
@@ -86,6 +87,25 @@ export default async function AlbumPage({
 
       {/* โควตาอยู่บนสุด — ต้องเห็นก่อนเลือกรูป ไม่ใช่หลังโดนปฏิเสธ */}
       <QuotaBar usage={usage} />
+
+      {/* รูปลูกไม่ปนกับรูปครรภ์ — อยู่คนละสมุด แถวนี้คือทางข้ามไปอีกสมุด
+          โผล่เฉพาะตอนมีลูกแล้ว ไม่งั้นเป็นแถบว่างที่ไม่มีความหมาย */}
+      {kids.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <span className="shrink-0 rounded-full border border-brown-100 bg-brown-100 px-3.5 py-1.5 text-sm whitespace-nowrap text-brown-900">
+            ครรภ์นี้
+          </span>
+          {kids.map((k) => (
+            <Link
+              key={k.id}
+              href={`/baby/${k.id}`}
+              className="shrink-0 rounded-full border border-cream-200 bg-white px-3.5 py-1.5 text-sm whitespace-nowrap text-ink-600"
+            >
+              {k.name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map((f) => (

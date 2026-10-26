@@ -53,12 +53,15 @@ export function UploadSheet({
   storageFull,
   logId,
   appointmentId,
+  childId,
   initialTakenAt,
 }: {
   uploaderName: string;
   storageFull: boolean;
   logId?: string;
   appointmentId?: string;
+  /** อัปเข้า timeline ของลูกคนนี้แทนอัลบั้มครรภ์ */
+  childId?: string;
   initialTakenAt?: string;
 }) {
   const router = useRouter();
@@ -298,6 +301,7 @@ export function UploadSheet({
         fd.set("pinned", String(pinned));
         if (logId) fd.set("logId", logId);
         if (appointmentId) fd.set("appointmentId", appointmentId);
+        if (childId) fd.set("childId", childId);
         const res = await photosAction.executeAsync(fd);
         if (res?.serverError || res?.validationErrors) {
           /**
@@ -331,6 +335,7 @@ export function UploadSheet({
         }
         if (logId) fd.set("logId", logId);
         if (appointmentId) fd.set("appointmentId", appointmentId);
+        if (childId) fd.set("childId", childId);
         const res = await videoAction.executeAsync(fd);
         if (res?.serverError || res?.validationErrors) return;
       }
@@ -340,7 +345,9 @@ export function UploadSheet({
         URL.revokeObjectURL(video.url);
         if (video.posterUrl) URL.revokeObjectURL(video.posterUrl);
       }
-      router.push(appointmentId ? `/appointments/${appointmentId}/edit` : "/album");
+      router.push(
+        appointmentId ? `/appointments/${appointmentId}/edit` : childId ? `/baby/${childId}` : "/album",
+      );
       router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
@@ -367,7 +374,7 @@ export function UploadSheet({
           <X size={22} strokeWidth={1.8} />
         </button>
         <h1 className="font-semibold text-ink-900">
-          {appointmentId ? "แนบไฟล์กับนัดหมาย" : "เพิ่มลงอัลบั้ม"}
+          {appointmentId ? "แนบไฟล์กับนัดหมาย" : childId ? "เพิ่มลงสมุดรูปของลูก" : "เพิ่มลงอัลบั้ม"}
         </h1>
       </header>
 

@@ -481,6 +481,17 @@ export const photos = sqliteTable(
     appointmentId: text("appointment_id").references(() => appointments.id, {
       onDelete: "set null",
     }),
+    /**
+     * รูปของลูกคนไหน — null = เป็นรูปของครรภ์ (ใช้ `week` แทน)
+     *
+     * ใช้ตารางเดียวกับรูปครรภ์ ไม่แยกคลัง เพราะได้โควตา R2 / thumbnail /
+     * วิดีโอ / caption / pinned / การลบ มาทั้งชุด ถ้าแยกตารางต้องทำ
+     * upload pipeline ซ้ำทั้งเส้นแล้วสองเส้นนั้นจะค่อยๆ เพี้ยนจากกัน
+     *
+     * ⚠️ ไม่มีคอลัมน์ "เดือนที่เท่าไร" โดยตั้งใจ — ช่องอายุคำนวณสดจาก
+     *    takenAt กับวันเกิดเสมอ ดูเหตุผลใน src/lib/child-age.ts
+     */
+    childId: text("child_id").references(() => children.id, { onDelete: "set null" }),
     caption: text("caption"),
     /**
      * ยอดรวมที่ AI อ่านได้จากใบเสร็จ (สตางค์) — มีเฉพาะ type = receipt
@@ -499,6 +510,8 @@ export const photos = sqliteTable(
   (t) => [
     index("idx_photos_family").on(t.familyId, t.takenAt),
     index("idx_photos_appt").on(t.appointmentId),
+    /** หน้า timeline ของลูกกรองด้วย childId แล้วเรียงตามวันถ่าย */
+    index("idx_photos_child").on(t.childId, t.takenAt),
   ],
 );
 
@@ -665,4 +678,106 @@ export const pushSubscriptions = sqliteTable(
     lastSuccessAt: text("last_success_at"),
   },
   (t) => [index("idx_push_user").on(t.userId)],
+);
+
+/**
+ * ลูก
+ *
+ * แยกตารางออกจาก pregnancy_profiles (ซึ่งเป็น 1 แถวต่อครอบครัว) เพราะ
+ * - ครรภ์แฝดคือลูกหลายคน วันเกิดเดียวกัน แต่คนละ timeline
+ * - ท้องที่สองต้องไม่ทับข้อมูลลูกคนแรก
+ *
+ * ⚠️ ห้ามสร้างแถวนี้อัตโนมัติเมื่อถึงกำหนดคลอด ต้องมีคนกดเพิ่มเองเท่านั้น
+ *    การตั้งครรภ์ไม่ได้จบด้วยลูกเสมอไป และแอปที่เด้ง "ลูกน้อยอายุ 1 เดือนแล้ว!"
+ *    ให้คนที่เพิ่งสูญเสียคือความเสียหายที่แก้คืนไม่ได้
+ */
+export const children = sqliteTable(
+  "children",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** วันเกิด — ต้นทางของทุกช่องอายุ ดู src/lib/child-age.ts */
+    birthDate: text("birth_date").notNull(),
+    /**
+     * ไม่มีคอลัมน์รูปหน้าปกโดยตั้งใจ
+     *
+     * ถ้ามี children.coverPhotoId → photos.id ขณะที่ photos.childId → children.id
+     * สองตารางจะอ้างกันเป็นวง ซึ่ง TypeScript อนุมานชนิดไม่ออกทั้งคู่
+     * และยังได้บั๊ก "หน้าปกชี้ไปยังรูปที่ถูกลบแล้ว" มาด้วยฟรีๆ
+     *
+     * หน้าปกใช้รูปที่ปักหมุด (photos.pinned) ซึ่งเป็นกลไกที่มีอยู่แล้ว
+     * และเป็นตัวเดียวกับที่เลือกหน้าปกของแต่ละช่องอายุ
+     */
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_children_family").on(t.familyId, t.birthDate)],
+);
+
+/**
+ * น้ำหนัก/ส่วนสูง/รอบศีรษะ ณ วันหนึ่ง
+ *
+ * แยกจากตารางรูป ไม่ยัดเป็นคอลัมน์ของ photos เพราะ
+ * - ลบรูปทิ้งแล้วน้ำหนักต้องไม่หายไปด้วย มันคือข้อมูลสุขภาพ ไม่ใช่ metadata ของไฟล์
+ * - ชั่งน้ำหนักตอนไปฉีดวัคซีนโดยไม่ได้ถ่ายรูปเป็นเรื่องปกติ
+ *
+ * ทั้งสามค่าเป็น null ได้ — บางคลินิกวัดแค่น้ำหนัก
+ */
+export const childMeasurements = sqliteTable(
+  "child_measurements",
+  {
+    id: text("id").primaryKey(),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    measuredOn: text("measured_on").notNull(),
+    weightKg: real("weight_kg"),
+    heightCm: real("height_cm"),
+    headCm: real("head_cm"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_meas").on(t.childId, t.measuredOn)],
+);
+
+/**
+ * หมุดพัฒนาการ — รายการตายตัว ไม่ให้ผู้ใช้เพิ่มเอง
+ *
+ * เป็น enum ไม่ใช่ข้อความอิสระ เพราะวันหนึ่งจะเทียบกับช่วงอายุปกติได้
+ * (เช่น เดินได้ 9–18 เดือนถือว่าปกติ) ซึ่งทำไม่ได้ถ้าเก็บเป็นข้อความที่คนพิมพ์เอง
+ *
+ * ⚠️ ยังไม่มีการเตือนว่า "ช้ากว่าเกณฑ์" ในรอบนี้ — การบอกพ่อแม่ว่าลูกพัฒนาการช้า
+ *    ต้องให้บุคลากรทางการแพทย์ตรวจถ้อยคำก่อน
+ */
+export const MILESTONE_KINDS = [
+  "neck",
+  "roll",
+  "sit",
+  "crawl",
+  "stand",
+  "walk",
+  "tooth",
+  "word",
+] as const;
+export type MilestoneKind = (typeof MILESTONE_KINDS)[number];
+
+export const childMilestones = sqliteTable(
+  "child_milestones",
+  {
+    id: text("id").primaryKey(),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: MILESTONE_KINDS }).notNull(),
+    achievedOn: text("achieved_on").notNull(),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    /** หมุดหนึ่งอันเกิดครั้งเดียวต่อลูกหนึ่งคน — กดซ้ำคือการแก้วัน ไม่ใช่เพิ่มแถว */
+    uniqueIndex("uq_child_milestone").on(t.childId, t.kind),
+  ],
 );

@@ -5,7 +5,7 @@ import type { Db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { z } from "zod";
-import { appointments, photos, pregnancyProfiles, storageObjects, ALBUM_PHOTO_TYPES } from "@/db/schema";
+import { appointments, photos, pregnancyProfiles, storageObjects, ALBUM_PHOTO_TYPES, children } from "@/db/schema";
 import { editorAction, AppError } from "@/lib/safe-action";
 import {
   MAX_FILE_BYTES,
@@ -50,6 +50,23 @@ async function assertAppointment(db: Db, familyId: string, id: string | null) {
 }
 
 /**
+ * ยืนยันว่าลูกคนนี้เป็นของครอบครัวนี้ — childId มาจาก form ของ client
+ *
+ * ถ้าไม่เช็ค คนที่เดา id ได้จะแปะรูปเข้า timeline ของลูกครอบครัวอื่นได้
+ * (เขียนได้ ทั้งที่อ่านไม่ได้) เป็นช่องเดียวกับที่ assertAppointment ปิดอยู่
+ */
+async function assertChild(db: Db, familyId: string, id: string | null) {
+  if (!id) return null;
+  const row = await db
+    .select({ id: children.id })
+    .from(children)
+    .where(and(eq(children.id, id), eq(children.familyId, familyId)))
+    .get();
+  if (!row) throw new AppError("ไม่พบข้อมูลลูกคนนี้");
+  return id;
+}
+
+/**
  * เพิ่มรูปเข้าอัลบั้ม — รับได้หลายรูปต่อครั้ง
  *
  * client ย่อรูปเป็น webp ให้แล้ว แต่ฝั่งนี้ยังตรวจซ้ำทั้งชนิดและขนาด
@@ -85,7 +102,10 @@ export const addPhotos = editorAction
       (fd.get("appointmentId") as string) || null,
     );
 
-    const week = await weekOfTakenAt(ctx.db, ctx.familyId, takenAt);
+    const childId = await assertChild(ctx.db, ctx.familyId, (fd.get("childId") as string) || null);
+    /** รูปของลูกไม่มี "สัปดาห์ที่" — ช่องอายุคำนวณจากวันเกิดตอนแสดงผล
+     *  ถ้าปล่อยให้มี week ติดมาด้วย รูปจะไปโผล่ในอัลบั้มครรภ์พร้อมกัน */
+    const week = childId ? null : await weekOfTakenAt(ctx.db, ctx.familyId, takenAt);
 
     const { env } = await getCloudflareContext({ async: true });
     await sweepOrphanMedia(ctx.db, env.PHOTOS_BUCKET, ctx.familyId);
@@ -138,6 +158,7 @@ export const addPhotos = editorAction
         r2Key: key,
         caption,
         appointmentId,
+        childId,
         uploadedBy: ctx.user.id,
       });
       created.push(id);
@@ -177,6 +198,7 @@ export const addVideo = editorAction
     const rawDuration = Number(fd.get("durationMs") ?? 0);
     const durationMs = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : null;
     const caption = String(fd.get("caption") ?? "").trim().slice(0, 500) || null;
+    const videoChildId = await assertChild(ctx.db, ctx.familyId, (fd.get("childId") as string) || null);
     const logId = (fd.get("logId") as string) || null;
     const appointmentId = await assertAppointment(
       ctx.db,
@@ -251,7 +273,8 @@ export const addVideo = editorAction
       id,
       familyId: ctx.familyId,
       logId,
-      week: await weekOfTakenAt(ctx.db, ctx.familyId, takenAt),
+      week: videoChildId ? null : await weekOfTakenAt(ctx.db, ctx.familyId, takenAt),
+      childId: videoChildId,
       takenAt,
       type: type as (typeof ALBUM_PHOTO_TYPES)[number],
       mediaKind: "video",

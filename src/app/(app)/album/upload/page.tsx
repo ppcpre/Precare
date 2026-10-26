@@ -8,9 +8,14 @@ export const metadata = { title: "เพิ่มไฟล์ · Pre Care" };
 export default async function AlbumUploadPage({
   searchParams,
 }: {
-  searchParams: Promise<{ logId?: string; appointmentId?: string; takenAt?: string }>;
+  searchParams: Promise<{
+    logId?: string;
+    appointmentId?: string;
+    childId?: string;
+    takenAt?: string;
+  }>;
 }) {
-  const { logId, appointmentId, takenAt } = await searchParams;
+  const { logId, appointmentId, childId, takenAt } = await searchParams;
 
   let ctx;
   try {
@@ -32,6 +37,7 @@ export default async function AlbumUploadPage({
       storageFull={usage.full}
       logId={logId}
       appointmentId={appointmentId}
+      childId={childId}
       initialTakenAt={initialTakenAt}
     />
   );

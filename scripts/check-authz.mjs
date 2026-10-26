@@ -52,6 +52,8 @@ const ACTION_RULES = {
   "food.ts": ["editorAction"],
   // ยา/วิตามินเป็นของคนคนเดียว — คนอื่นในครอบครัวไม่เห็นด้วยซ้ำ ไม่ใช่แค่แก้ไม่ได้
   "medications.ts": ["editorAction"],
+  // ลูกเป็นข้อมูลของครอบครัว ทุกคนที่เขียนได้แก้ได้ แต่ viewer ต้องแก้ไม่ได้
+  "children.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],

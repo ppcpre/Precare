@@ -139,6 +139,10 @@ export default async function ProfilePage() {
               </div>
             </>
           )}
+          <span className="h-px bg-cream-200" />
+          {/* สมุดรูปลูกอยู่ใต้ข้อมูลครรภ์ เพราะเป็นเรื่องต่อเนื่องกัน
+              และแถบเมนูล่างเต็ม 5 ช่องแล้ว ใส่ช่องที่ 6 บนมือถือไม่ไหว */}
+          <Row icon={Baby} label="สมุดรูปของลูก" href="/baby" />
         </Card>
       </section>
 

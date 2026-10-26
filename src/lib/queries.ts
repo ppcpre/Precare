@@ -15,6 +15,7 @@ import type { AlbumPhotoType } from "@/db/schema";
 import {
   account,
   appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
+  childMeasurements, childMilestones, children,
   medicationDoses, medicationTimes, medications,
   photos, pregnancyProfileChanges, pregnancyProfiles, storageObjects, trackingSessions, user,
   visitQuestions, weeklyLogs,
@@ -437,11 +438,22 @@ export async function getLayoutData(db: Db, familyId: string) {
 }
 
 /** รูปในอัลบั้ม เรียงจากใหม่ไปเก่าตาม "วันที่ถ่าย" ไม่ใช่วันที่อัปโหลด */
+/**
+ * รูปในอัลบั้ม
+ *
+ * `childId` คือขอบเขตของอัลบั้ม ไม่ใช่ตัวกรองเสริม
+ *   null (ค่าเริ่มต้น) = อัลบั้มของครรภ์ · ต้องไม่ติดรูปลูกมาด้วย
+ *   "<id>"             = อัลบั้มของลูกคนนั้น
+ *
+ * ⚠️ ถ้าไม่ใส่ isNull ตรงนี้ รูปลูกทั้งหมดจะไปกองอยู่ใต้ "ไม่ระบุสัปดาห์"
+ *    ในอัลบั้มครรภ์ เพราะรูปลูกไม่มีค่า week
+ */
 export async function listPhotos(
   db: Db,
   familyId: string,
   type?: AlbumPhotoType,
   onlyVideo = false,
+  childId: string | null = null,
 ) {
   const rows = await db
     .select({
@@ -468,10 +480,88 @@ export async function listPhotos(
         ...(type ? [eq(photos.type, type)] : []),
         // "เฉพาะวิดีโอ" เป็นสวิตช์คนละแกนกับประเภทเนื้อหา ใช้ร่วมกันได้
         ...(onlyVideo ? [eq(photos.mediaKind, "video")] : []),
+        childId === null ? isNull(photos.childId) : eq(photos.childId, childId),
       ),
     )
     .orderBy(desc(photos.takenAt), desc(photos.createdAt));
   return rows;
+}
+
+/* ───────────────────────── ลูก ───────────────────────── */
+
+/** ลูกทุกคนของครอบครัว พร้อมจำนวนรูป — เรียงตามวันเกิด แฝดจะอยู่ติดกัน */
+export async function listChildren(db: Db, familyId: string) {
+  return db
+    .select({
+      id: children.id,
+      name: children.name,
+      birthDate: children.birthDate,
+      photoCount: sql<number>`(select count(*) from photos where photos.child_id = ${children.id})`,
+    })
+    .from(children)
+    .where(eq(children.familyId, familyId))
+    .orderBy(asc(children.birthDate), asc(children.createdAt));
+}
+
+/**
+ * ลูกหนึ่งคน
+ *
+ * ⚠️ กรอง familyId ด้วยเสมอ ไม่ใช่แค่ id — id เป็น UUID ที่มาจาก URL
+ *    ถ้าเช็คแค่ id คนที่เดา/เห็น URL ได้จะอ่านข้อมูลลูกของครอบครัวอื่นได้
+ */
+export async function getChild(db: Db, familyId: string, childId: string) {
+  const [row] = await db
+    .select()
+    .from(children)
+    .where(and(eq(children.id, childId), eq(children.familyId, familyId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** รูปของลูกคนหนึ่ง เท่าที่ timeline ต้องใช้ */
+export async function listChildPhotos(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      id: photos.id,
+      takenAt: photos.takenAt,
+      thumbKey: photos.thumbKey,
+      r2Key: photos.r2Key,
+      mediaKind: photos.mediaKind,
+      pinned: photos.pinned,
+      caption: photos.caption,
+    })
+    .from(photos)
+    .where(and(eq(photos.familyId, familyId), eq(photos.childId, childId)))
+    .orderBy(desc(photos.takenAt));
+}
+
+/** น้ำหนัก/ส่วนสูงที่เคยบันทึก — join children เพื่อกันข้ามครอบครัว */
+export async function listMeasurements(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      id: childMeasurements.id,
+      measuredOn: childMeasurements.measuredOn,
+      weightKg: childMeasurements.weightKg,
+      heightCm: childMeasurements.heightCm,
+      headCm: childMeasurements.headCm,
+    })
+    .from(childMeasurements)
+    .innerJoin(children, eq(children.id, childMeasurements.childId))
+    .where(and(eq(childMeasurements.childId, childId), eq(children.familyId, familyId)))
+    .orderBy(desc(childMeasurements.measuredOn));
+}
+
+/** หมุดพัฒนาการที่ถึงแล้ว */
+export async function listMilestones(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      kind: childMilestones.kind,
+      achievedOn: childMilestones.achievedOn,
+    })
+    .from(childMilestones)
+    .innerJoin(children, eq(children.id, childMilestones.childId))
+    .where(and(eq(childMilestones.childId, childId), eq(children.familyId, familyId)))
+    .orderBy(asc(childMilestones.achievedOn));
 }
 
 /** ไฟล์ที่แนบกับนัดหมายรายการหนึ่ง */
