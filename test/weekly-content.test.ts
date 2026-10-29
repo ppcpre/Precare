@@ -9,6 +9,7 @@ import {
   WEEKLY_CONTENT,
   sizeImageKey,
   weeklyContent,
+  WHO_FIRST_WEEK,
 } from "@/data/weekly-content";
 
 describe("ชุดข้อมูลรายสัปดาห์", () => {
@@ -62,6 +63,64 @@ describe("ชุดข้อมูลรายสัปดาห์", () => {
     const w21 = WEEKLY_CONTENT.find((w) => w.week === 21)!;
     expect(w21.lengthCm! - w20.lengthCm!).toBeGreaterThan(9);
     expect(w20.measure).not.toBe(w21.measure);
+  });
+
+  /**
+   * ตัวเลขน้ำหนักต้องตรงกับตารางที่ 11 ของ WHO เป๊ะๆ
+   *
+   * ชุดเดิมใช้ตาราง Utah ซึ่งต่ำกว่าความจริงเป็นระบบ — 10 สัปดาห์จาก 27 ค่าที่
+   * เรียกว่า "ค่าเฉลี่ย" ต่ำกว่าเปอร์เซ็นไทล์ที่ 10 ของ WHO ด้วยซ้ำ ทำให้พ่อแม่
+   * ที่ลูกปกติดีคิดว่าลูกตัวเล็ก และเลขไม่ตรงกับที่หมอวัดได้
+   *
+   * ล็อกค่าไว้ทุกสัปดาห์ ไม่ใช่สุ่มเช็ค เพราะตัวเลขทางการแพทย์ที่เปลี่ยนไป
+   * ทีละตัวโดยไม่มีใครสังเกตคือสิ่งที่เพิ่งเกิดขึ้นมาแล้วรอบหนึ่ง
+   */
+  it("น้ำหนักสัปดาห์ 14–40 ตรงกับ WHO Fetal Growth Charts ตารางที่ 11", () => {
+    // [สัปดาห์, เปอร์เซ็นไทล์ 10, 50, 90] — WHO 2017 (Kiserud et al.) รวมทุกเพศ
+    const WHO: [number, number, number, number][] = [
+      [14, 78, 90, 104], [15, 99, 114, 132], [16, 124, 144, 166], [17, 155, 179, 207],
+      [18, 192, 222, 255], [19, 235, 272, 313], [20, 286, 330, 380], [21, 345, 398, 458],
+      [22, 412, 476, 548], [23, 489, 565, 650], [24, 576, 665, 765], [25, 673, 778, 894],
+      [26, 780, 902, 1038], [27, 898, 1039, 1196], [28, 1026, 1189, 1368], [29, 1165, 1350, 1554],
+      [30, 1313, 1523, 1753], [31, 1470, 1707, 1964], [32, 1635, 1901, 2187], [33, 1807, 2103, 2419],
+      [34, 1985, 2312, 2659], [35, 2167, 2527, 2904], [36, 2352, 2745, 3153], [37, 2537, 2966, 3403],
+      [38, 2723, 3186, 3652], [39, 2905, 3403, 3897], [40, 3084, 3617, 4135],
+    ];
+    expect(WHO).toHaveLength(MAX_WEEK - WHO_FIRST_WEEK + 1);
+    for (const [week, lo, mid, hi] of WHO) {
+      const row = WEEKLY_CONTENT.find((w) => w.week === week)!;
+      expect(row.weightG, `สัปดาห์ ${week} ค่ากลาง`).toBe(mid);
+      expect(row.weightLowG, `สัปดาห์ ${week} ขอบล่าง`).toBe(lo);
+      expect(row.weightHighG, `สัปดาห์ ${week} ขอบบน`).toBe(hi);
+    }
+  });
+
+  it("ช่วงปกติมีเฉพาะตั้งแต่สัปดาห์ 14 — ก่อนหน้านั้นไม่มีเกณฑ์มาตรฐาน", () => {
+    for (const w of WEEKLY_CONTENT) {
+      const should = w.week >= WHO_FIRST_WEEK;
+      expect(w.weightLowG != null, `สัปดาห์ ${w.week}`).toBe(should);
+      expect(w.weightHighG != null, `สัปดาห์ ${w.week}`).toBe(should);
+    }
+  });
+
+  it("ค่ากลางต้องอยู่ในช่วงเสมอ ไม่ใช่หลุดออกนอกกรอบที่เราบอกว่าปกติ", () => {
+    for (const w of WEEKLY_CONTENT) {
+      if (w.weightLowG == null || w.weightHighG == null) continue;
+      expect(w.weightLowG, `สัปดาห์ ${w.week}`).toBeLessThan(w.weightG!);
+      expect(w.weightG!, `สัปดาห์ ${w.week}`).toBeLessThan(w.weightHighG);
+    }
+  });
+
+  it("ขอบล่างและขอบบนก็ต้องเพิ่มขึ้นเรื่อยๆ ทั้งคู่", () => {
+    const rows = WEEKLY_CONTENT.filter((w) => w.weightLowG != null);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].weightLowG!, `ขอบล่าง สัปดาห์ ${rows[i].week}`).toBeGreaterThan(
+        rows[i - 1].weightLowG!,
+      );
+      expect(rows[i].weightHighG!, `ขอบบน สัปดาห์ ${rows[i].week}`).toBeGreaterThan(
+        rows[i - 1].weightHighG!,
+      );
+    }
   });
 
   it("ไตรมาสแบ่งตามเกณฑ์ 1–12 / 13–27 / 28–40", () => {

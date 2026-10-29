@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, signUp, uniqueEmail } from "./helpers";
+import { completeOnboarding, gotoApp, signUp, uniqueEmail } from "./helpers";
 
 /**
  * Phase 2 — การ์ดพัฒนาการรายสัปดาห์ (ขนาด + พัฒนาการ อยู่ใบเดียวกัน)
@@ -14,7 +14,9 @@ test("หน้าแรกแสดงขนาดและพัฒนาก�
   await expect(page.getByRole("heading", { name: "พัฒนาการของลูกน้อย" })).toBeVisible();
   await expect(page.getByText("ข้าวโพด")).toBeVisible();
   await expect(page.getByText("30 ซม.")).toBeVisible();
-  await expect(page.getByText("600 ก.")).toBeVisible();
+  // WHO ตารางที่ 11 สัปดาห์ 24 — ของเดิมเป็น 600 ก. ซึ่งต่ำกว่าความจริง 10%
+  await expect(page.getByText("665 ก.")).toBeVisible();
+  await expect(page.getByText("ช่วงปกติ 576–765 ก.")).toBeVisible();
 
   await expect(page.getByText(/ปอดพัฒนาครบโครงสร้างแล้ว/)).toBeVisible();
 
@@ -31,9 +33,15 @@ test("หน้าแรกแสดงขนาดและพัฒนาก�
     });
   expect(rightGap, "กล่องตัวเลขต้องชนขอบในของการ์ด").toBeLessThan(2);
 
-  // ข้อมูลทางการแพทย์ต้องมีข้อความกำกับเสมอ ไม่ใช่ทางเลือก
+  /**
+   * ข้อมูลทางการแพทย์ต้องมีข้อความกำกับเสมอ ไม่ใช่ทางเลือก
+   *
+   * เช็คใจความ ไม่ใช่คำเป๊ะๆ — ตอนเปลี่ยนมาใช้ WHO คำว่า "ค่าเฉลี่ย" ถูกเขียน
+   * ทิ้งไปพร้อมกับใจความว่าลูกแต่ละคนต่างกันได้ ซึ่งเป็นครึ่งหนึ่งของเหตุผล
+   * ที่ข้อความนี้มีอยู่ สองอย่างนี้ห้ามหายไม่ว่าจะเรียบเรียงใหม่กี่รอบ
+   */
   const note = page.getByTestId("weekly-disclaimer");
-  await expect(note).toContainText("ค่าเฉลี่ย");
+  await expect(note).toContainText(/ต่างกันได้|ค่าเฉลี่ย/);
   await expect(note).toContainText("ไม่ใช่คำแนะนำทางการแพทย์");
 
   // ต้องพอดีบรรทัดเดียวบนมือถือ — ถ้าข้อความยาวขึ้นจนตกบรรทัดที่สอง ให้แดง
@@ -134,4 +142,48 @@ test("มือถือเห็น FAB อย่างเดียว เด�
       await expect(fab, `${path} เดสก์ท็อปไม่ควรมี FAB`).toBeHidden();
     }
   }
+});
+
+/**
+ * Regression — หน่วยของช่วงน้ำหนัก
+ *
+ * สัปดาห์ 27 เป็นสัปดาห์เดียวที่ขอบล่างยังไม่ถึงกิโล (898 ก.) แต่ขอบบนเกินแล้ว
+ * (1,196 ก.) ถ้าตัดหน่วยตัวหน้าทิ้งแบบสัปดาห์อื่น จะอ่านเป็น "898–1.20 กก."
+ * ซึ่งผิดไปคนละโลก — และเป็นเคสที่หลุดง่ายเพราะมีอยู่สัปดาห์เดียวใน 27 สัปดาห์
+ */
+test("ช่วงน้ำหนักที่คร่อมหลักกิโล ต้องมีหน่วยกำกับทั้งสองข้าง", async ({ page }) => {
+  await signUp(page, uniqueEmail("range"), "แม่ช่วงน้ำหนัก");
+  await completeOnboarding(page, "ครอบครัวช่วงน้ำหนัก");
+
+  await gotoApp(page, "/profile/pregnancy");
+  const lmp = new Date();
+  lmp.setDate(lmp.getDate() - 27 * 7);
+  await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+  await expect(page.getByText("1.04 กก.")).toBeVisible();
+  await expect(page.getByText("ช่วงปกติ 898 ก.–1.20 กก.")).toBeVisible();
+});
+
+/**
+ * ก่อนสัปดาห์ 14 ไม่มีเกณฑ์ของ WHO — ต้องบอกว่าเป็นค่าประมาณ ไม่ใช่เงียบ
+ *
+ * ถ้าวันหนึ่งมีคนเติมช่วงปกติให้สัปดาห์ต้นๆ เพื่อให้ "ดูครบ" มันจะกลายเป็น
+ * ตัวเลขที่เราแต่งขึ้นเองแล้วติดป้ายว่าเป็นเกณฑ์
+ */
+test("สัปดาห์ก่อน 14 บอกว่าน้ำหนักเป็นค่าประมาณ ไม่แสดงช่วงปกติ", async ({ page }) => {
+  await signUp(page, uniqueEmail("approx"), "แม่ไตรมาสแรก");
+  await completeOnboarding(page, "ครอบครัวไตรมาสแรก");
+
+  await gotoApp(page, "/profile/pregnancy");
+  const lmp = new Date();
+  lmp.setDate(lmp.getDate() - 12 * 7);
+  await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+  await expect(page.getByText("14 ก.")).toBeVisible();
+  await expect(page.getByText(/ยังไม่มีเกณฑ์มาตรฐาน/)).toBeVisible();
+  await expect(page.getByText(/ช่วงปกติ/)).toHaveCount(0);
 });

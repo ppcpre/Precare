@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { Baby, Info, Ruler, Weight } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { DISCLAIMER, sizeImageKey, type WeeklyContent } from "@/data/weekly-content";
+import {
+  APPROX_NOTE,
+  DISCLAIMER,
+  sizeImageKey,
+  type WeeklyContent,
+} from "@/data/weekly-content";
 import { cn } from "@/lib/cn";
 
 /**
@@ -47,11 +52,27 @@ function SizeImage({ week }: { week: number }) {
   );
 }
 
+/** เกิน 1 กก. อ่านเป็นกิโลง่ายกว่า — 1,189 ก. กับ 1.19 กก. สื่อไม่เท่ากัน */
+const fmtWeight = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(2)} กก.` : `${g} ก.`);
+
+/**
+ * ช่วงน้ำหนัก — ตัดหน่วยที่ซ้ำออก "1.03–1.37 กก." ไม่ใช่ "1.03 กก.–1.37 กก."
+ *
+ * แต่ตัดได้เฉพาะตอนสองค่าอยู่หน่วยเดียวกัน สัปดาห์ 27 ขอบล่าง 898 ก. ขอบบน
+ * 1,196 ก. ถ้าตัดหน่วยตัวหน้าทิ้งจะอ่านเป็น "898–1.20 กก." ซึ่งผิดไปเลย
+ */
+const fmtRange = (lo: number, hi: number) =>
+  lo >= 1000 === hi >= 1000
+    ? `${hi >= 1000 ? (lo / 1000).toFixed(2) : lo}–${fmtWeight(hi)}`
+    : `${fmtWeight(lo)}–${fmtWeight(hi)}`;
+
 export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
   const [showMeasureNote, setShowMeasureNote] = useState(false);
   // ดึงออกมาเป็นตัวแปรเพื่อให้ TypeScript narrow ได้ — เช็คผ่าน boolean แยก
   // ไม่ทำให้ content.weightG แคบลงตาม
-  const { lengthCm, weightG } = content;
+  const { lengthCm, weightG, weightLowG, weightHighG } = content;
+  /** ก่อนสัปดาห์ 14 ไม่มีเกณฑ์ของ WHO — ตัวเลขเป็นค่าประมาณ ต้องบอกให้รู้ */
+  const hasRange = weightLowG != null && weightHighG != null;
 
   return (
     /* ไม่ใส่ bg-peach-100 ทับ — cn() เป็นแค่ join ไม่ได้ merge
@@ -81,9 +102,24 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
               <span className="flex flex-1 items-center gap-2 rounded-sm bg-cream-100 px-3 py-2">
                 <Weight size={16} strokeWidth={1.8} className="shrink-0 text-ink-400" />
                 <span className="text-sm whitespace-nowrap text-ink-900">
-                  {weightG >= 1000 ? `${(weightG / 1000).toFixed(2)} กก.` : `${weightG} ก.`}
+                  {fmtWeight(weightG)}
                 </span>
               </span>
+            </span>
+          ) : null}
+
+          {lengthCm != null && weightG != null ? (
+            /**
+             * ช่วงปกติอยู่ใต้ตัวเลข ไม่ใช่แทนที่
+             *
+             * ครึ่งหนึ่งของเด็กปกติต้องต่ำกว่าค่ากลางอยู่แล้ว ถ้าโชว์แต่เลขเดียว
+             * พ่อแม่ครึ่งหนึ่งจะคิดว่าลูกตัวเล็กผิดปกติ และอธิบายไม่ได้ว่าทำไม
+             * เลขที่หมอวัดได้ถึงไม่ตรงกับในแอป
+             */
+            <span className="mt-1 block text-[11px] leading-relaxed text-ink-400">
+              {hasRange
+                ? `ช่วงปกติ ${fmtRange(weightLowG, weightHighG)}`
+                : APPROX_NOTE}
             </span>
           ) : (
             // สัปดาห์ 4–7 ยังเล็กเกินกว่าจะวัดเป็นมาตรฐานได้ อย่าโชว์ช่องว่างเปล่าๆ
