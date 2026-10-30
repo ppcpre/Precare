@@ -187,3 +187,35 @@ test("สัปดาห์ก่อน 14 บอกว่าน้ำหนั�
   await expect(page.getByText(/ยังไม่มีเกณฑ์มาตรฐาน/)).toBeVisible();
   await expect(page.getByText(/ช่วงปกติ/)).toHaveCount(0);
 });
+
+/**
+ * Regression — รอยต่อของความยาวที่สัปดาห์ 25 ต้องอธิบายได้
+ *
+ * ความยาวกระโดดจาก 30.0 เป็น 34.6 ซม. ในสัปดาห์เดียว (สัปดาห์อื่นเพิ่ม ~1.1)
+ * เป็นข้อบกพร่องของข้อมูลที่ยังหาแหล่งมาแทนไม่ได้ สิ่งที่ทำได้คือบอกผู้ใช้ตรงๆ
+ * ถ้าวันหนึ่งคำอธิบายหาย ผู้ใช้จะเห็นลูกยาวขึ้น 4.6 ซม. ในเจ็ดวันโดยไม่มีคำตอบ
+ */
+test("สัปดาห์ 25 ต้องอธิบายได้ว่าทำไมความยาวกระโดด", async ({ page }) => {
+  await signUp(page, uniqueEmail("jump"), "แม่รอยต่อ");
+  await completeOnboarding(page, "ครอบครัวรอยต่อ");
+
+  await gotoApp(page, "/profile/pregnancy");
+  const lmp = new Date();
+  lmp.setDate(lmp.getDate() - 25 * 7);
+  await page.getByLabel(/วันประจำเดือนครั้งสุดท้าย/).fill(lmp.toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+  await expect(page.getByText("34.6 ซม.")).toBeVisible();
+  const why = page.getByRole("button", { name: /ทำไมตัวเลขเพิ่มขึ้นเยอะ/ });
+  await expect(why).toBeVisible();
+  await why.click();
+  await expect(page.getByText(/วัดโดยตรงไม่ได้/)).toBeVisible();
+});
+
+test("สัปดาห์ที่ไม่มีรอยต่อ ต้องไม่ขึ้นคำอธิบายให้รก", async ({ page }) => {
+  await signUp(page, uniqueEmail("nojump"), "แม่ไม่มีรอย");
+  await completeOnboarding(page, "ครอบครัวไม่มีรอย");
+  // onboarding ตั้งไว้ 24 สัปดาห์ ซึ่งอยู่กลางช่วงที่ต่อเนื่องดี
+  await expect(page.getByRole("button", { name: /ทำไมตัวเลขเพิ่มขึ้นเยอะ/ })).toHaveCount(0);
+});

@@ -10,6 +10,8 @@ import {
   sizeImageKey,
   weeklyContent,
   WHO_FIRST_WEEK,
+  LENGTH_JUMP_WEEKS,
+  lengthJumpNote,
 } from "@/data/weekly-content";
 
 describe("ชุดข้อมูลรายสัปดาห์", () => {
@@ -63,6 +65,45 @@ describe("ชุดข้อมูลรายสัปดาห์", () => {
     const w21 = WEEKLY_CONTENT.find((w) => w.week === 21)!;
     expect(w21.lengthCm! - w20.lengthCm!).toBeGreaterThan(9);
     expect(w20.measure).not.toBe(w21.measure);
+  });
+
+  /**
+   * ความยาวห้ามกระโดดนอกจากสองจุดที่บันทึกไว้
+   *
+   * เทสต์เดิมเช็คแค่ว่า "เพิ่มขึ้นเรื่อยๆ" กับรอยที่สัปดาห์ 21 — รอยที่สัปดาห์ 25
+   * (30.0 → 34.6 ทั้งที่สัปดาห์อื่นเพิ่ม ~1.1) จึงนั่งอยู่ในข้อมูลโดยไม่มีใครเห็น
+   * จนผู้ใช้ทักเรื่องน้ำหนักแล้วไปเจอตอนไล่ตรวจชุดเดียวกัน
+   *
+   * ตัวนี้ล็อกว่ารอยต่อมีได้เฉพาะสัปดาห์ใน LENGTH_JUMP_WEEKS เท่านั้น
+   * ถ้าวันหนึ่งมีคนแก้ตัวเลขแล้วเกิดรอยใหม่ จะแดงทันทีพร้อมบอกว่าอยู่สัปดาห์ไหน
+   */
+  it("ความยาวกระโดดได้เฉพาะสัปดาห์ที่บันทึกเหตุผลไว้แล้ว", () => {
+    const rows = WEEKLY_CONTENT.filter((w) => w.lengthCm != null);
+    const MAX_STEP = 2.0; // ซม. ต่อสัปดาห์ — ปกติเพิ่ม 1.0–1.3
+    const unexplained: string[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const step = rows[i].lengthCm! - rows[i - 1].lengthCm!;
+      const known = (LENGTH_JUMP_WEEKS as readonly number[]).includes(rows[i].week);
+      if (step > MAX_STEP && !known) {
+        unexplained.push(`สัปดาห์ ${rows[i].week} (+${step.toFixed(1)} ซม.)`);
+      }
+      // และสัปดาห์ที่บันทึกว่ามีรอย ต้องมีรอยจริง ไม่ใช่รายการที่ค้างอยู่เฉยๆ
+      if (known) expect(step, `สัปดาห์ ${rows[i].week}`).toBeGreaterThan(MAX_STEP);
+    }
+
+    expect(unexplained, `รอยต่อที่ไม่มีคำอธิบาย: ${unexplained.join(", ")}`).toEqual([]);
+  });
+
+  it("ทุกรอยต่อของความยาวมีข้อความอธิบายให้ผู้ใช้อ่าน", () => {
+    for (const week of LENGTH_JUMP_WEEKS) {
+      expect(lengthJumpNote(week), `สัปดาห์ ${week}`).toBeTruthy();
+      // สัปดาห์ถัดไปก็ยังต้องอธิบาย คนเปิดแอปช้าหนึ่งสัปดาห์ต้องไม่พลาดคำอธิบาย
+      expect(lengthJumpNote(week + 1), `สัปดาห์ ${week + 1}`).toBeTruthy();
+    }
+    // สัปดาห์ที่ไม่ได้อยู่ติดรอยต่อต้องไม่ขึ้นข้อความ ไม่งั้นกลายเป็นเสียงรบกวน
+    expect(lengthJumpNote(30)).toBeNull();
+    expect(lengthJumpNote(16)).toBeNull();
   });
 
   /**

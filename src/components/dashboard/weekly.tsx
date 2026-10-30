@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import {
   APPROX_NOTE,
   DISCLAIMER,
+  lengthJumpNote,
   sizeImageKey,
   type WeeklyContent,
 } from "@/data/weekly-content";
@@ -73,6 +74,8 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
   const { lengthCm, weightG, weightLowG, weightHighG } = content;
   /** ก่อนสัปดาห์ 14 ไม่มีเกณฑ์ของ WHO — ตัวเลขเป็นค่าประมาณ ต้องบอกให้รู้ */
   const hasRange = weightLowG != null && weightHighG != null;
+  /** ความยาวต่อกันไม่สนิทสองจุด (สัปดาห์ 21 และ 25) ต้องอธิบาย ไม่ใช่ปล่อยให้งง */
+  const jumpNote = lengthJumpNote(content.week);
 
   return (
     /* ไม่ใส่ bg-peach-100 ทับ — cn() เป็นแค่ join ไม่ได้ merge
@@ -133,7 +136,7 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
       <p className="text-[15px] leading-relaxed text-ink-900">{content.development}</p>
 
       {/* ตัวเลขกระโดด 10 ซม. ที่สัปดาห์ 21 เพราะเปลี่ยนวิธีวัด ไม่ใช่ลูกโตพรวด */}
-      {content.measure === "crown-heel" && content.week <= 22 && (
+      {jumpNote && (
         <button
           type="button"
           onClick={() => setShowMeasureNote((v) => !v)}
@@ -141,9 +144,7 @@ export function WeeklyBabyCard({ content }: { content: WeeklyContent }) {
         >
           <Info size={13} strokeWidth={1.9} className="mt-0.5 shrink-0" />
           <span className={cn(showMeasureNote && "text-ink-600")}>
-            {showMeasureNote
-              ? "ตั้งแต่สัปดาห์ที่ 21 เปลี่ยนวิธีวัดจาก หัวถึงก้น เป็น หัวถึงส้นเท้า ตัวเลขจึงเพิ่มขึ้นมากในสัปดาห์เดียว ไม่ได้แปลว่าลูกโตผิดปกติ"
-              : "ทำไมตัวเลขเพิ่มขึ้นเยอะจากสัปดาห์ก่อน"}
+            {showMeasureNote ? jumpNote : "ทำไมตัวเลขเพิ่มขึ้นเยอะจากสัปดาห์ก่อน"}
           </span>
         </button>
       )}
