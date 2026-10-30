@@ -53,6 +53,8 @@ export const updatePregnancy = ownerAction
       dueDate: due,
       heightCm: parsedInput.heightCm ?? null,
       prePregnancyWeight: parsedInput.prePregnancyWeight ?? null,
+      hospitalName: parsedInput.hospitalName ?? null,
+      hospitalPhone: parsedInput.hospitalPhone ?? null,
     };
 
     /**
@@ -85,6 +87,7 @@ export const updatePregnancy = ownerAction
 
     revalidatePath("/dashboard");
     revalidatePath("/profile/pregnancy");
+    revalidatePath("/danger/pregnancy");
     return { ok: true };
   });
 

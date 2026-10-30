@@ -102,12 +102,29 @@ export const onboardingInput = z
     message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",
   });
 
+/**
+ * เบอร์โรงพยาบาล — **ไม่ validate รูปแบบโดยตั้งใจ**
+ *
+ * ต้องรับได้ทั้ง "02-201-1000", "1415", "081 234 5678", "02-201-1000 ต่อ 2345"
+ * การบังคับรูปแบบจะทำให้คนกรอกไม่ผ่านแล้วเลิกกรอก ซึ่งแย่กว่าเบอร์ที่กดแล้วไม่ติด
+ * ตัดแค่ช่องว่างหัวท้ายและจำกัดความยาวกันข้อมูลขยะ
+ */
+const hospitalText = z
+  .string()
+  .trim()
+  .max(120)
+  .transform((v) => v || null)
+  .nullable()
+  .optional();
+
 export const pregnancyInput = z
   .object({
     lmpDate: isoDate.nullable(),
     dueDate: isoDate.nullable(),
     heightCm: heightCmInput,
     prePregnancyWeight: weightKgInput,
+    hospitalName: hospitalText,
+    hospitalPhone: hospitalText,
   })
   .refine((v) => Boolean(v.lmpDate) !== Boolean(v.dueDate), {
     message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",

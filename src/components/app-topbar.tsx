@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, ShieldAlert } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/logo";
 
@@ -36,6 +36,18 @@ export function AppHeader({
       </Link>
 
       <div className="flex shrink-0 items-center gap-1">
+        {/* ทางเข้าหน้าฉุกเฉิน — ไอคอนสีเทาเหมือนกระดิ่ง ไม่มีจุดแดง ไม่กะพริบ
+            ตอนตกใจทุก tap มีราคา จึงต้องอยู่ที่เดียวกันทุกหน้า กดครั้งเดียวถึง
+            แต่ต้องไม่ข่มขวัญคนที่เปิดแอปมาดูอายุครรภ์เฉยๆ ทุกวัน */}
+        <Link
+          prefetch={false}
+          href="/danger"
+          aria-label="อาการที่ต้องไปโรงพยาบาล"
+          className="flex size-11 items-center justify-center rounded-full hover:bg-cream-100"
+        >
+          <ShieldAlert size={21} strokeWidth={1.8} className="text-ink-600" />
+        </Link>
+
         <Link
           prefetch={false}
           href="/appointments"

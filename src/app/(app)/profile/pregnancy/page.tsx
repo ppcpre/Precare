@@ -38,6 +38,8 @@ export default async function PregnancySettingsPage() {
       currentDue={preg.profile?.dueDate ?? null}
       currentHeight={preg.profile?.heightCm ?? null}
       currentWeight={preg.profile?.prePregnancyWeight ?? null}
+      currentHospitalName={preg.profile?.hospitalName ?? null}
+      currentHospitalPhone={preg.profile?.hospitalPhone ?? null}
       hasLogs={(logCount?.n ?? 0) > 0}
     />
     {/* สวิตช์สถานะอยู่ใต้ฟอร์ม เหนือประวัติ — ไม่ใช่ของที่กดทุกวัน

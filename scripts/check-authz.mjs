@@ -36,6 +36,18 @@ const PAGE_RULES = {
 // และดาวน์โหลดข้อมูลของตัวเองได้ ถ้าใช้ requireFamilyContext จะถูกเด้งไป onboarding
 const SESSION_ONLY_PAGES = new Set(["profile/edit", "profile/privacy", "profile/password"]);
 
+/**
+ * หน้าที่ไม่ต้องมีด่านตรวจสิทธิ์เลย — มีได้เฉพาะหน้าที่ **ไม่อ่านข้อมูลของใครเลย**
+ *
+ * /danger เป็นหน้าเลือกว่าใครมีอาการ เนื้อหาเป็น static ทั้งหมด ไม่แตะ D1
+ * และต้องไม่เด้งไป onboarding เด็ดขาด — คนที่ยังตั้งค่าครอบครัวไม่เสร็จแล้วกด
+ * ปุ่มฉุกเฉิน ต้องได้เบอร์ 1669 ไม่ใช่หน้าตั้งค่า
+ *
+ * ⚠️ ห้ามใส่หน้าที่อ่านข้อมูลผู้ใช้ลงในลิสต์นี้ — /danger/[group] อ่านเบอร์
+ *    โรงพยาบาลของครอบครัว จึงยังต้องผ่าน requireFamilyContext ตามปกติ
+ */
+const PUBLIC_IN_APP_PAGES = new Set(["danger"]);
+
 /** action ที่ต้องใช้ client ระดับไหน */
 const ACTION_RULES = {
   "family.ts": ["ownerAction", "memberAction", "authAction"],
@@ -82,6 +94,7 @@ for (const f of walk(appDir).filter((p) => p.endsWith("page.tsx"))) {
   const m = src.match(/requireFamilyContext\("(\w+)"\)/);
 
   if (!m) {
+    if (PUBLIC_IN_APP_PAGES.has(rel)) continue;
     if (!SESSION_ONLY_PAGES.has(rel)) {
       fail.push(`หน้า /${rel} ไม่มีด่านตรวจสิทธิ์ (requireFamilyContext)`);
     } else if (!src.includes("getSessionUser")) {

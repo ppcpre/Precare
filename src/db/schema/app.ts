@@ -100,6 +100,20 @@ export const pregnancyProfiles = sqliteTable("pregnancy_profiles", {
   heightCm: real("height_cm"),
   prePregnancyWeight: real("pre_pregnancy_weight"),
 
+  /**
+   * โรงพยาบาลที่ฝากครรภ์ — ใช้บนหน้าสัญญาณอันตราย
+   *
+   * อยู่ที่ครอบครัว ไม่ใช่ที่ผู้ใช้ เพราะตอนฉุกเฉินคนโทรอาจไม่ใช่คนท้อง
+   * สามีหรือย่าต้องกดโทรได้จากเครื่องตัวเอง
+   *
+   * ⚠️ เก็บเบอร์เป็นข้อความดิบ ไม่ normalize และไม่ validate รูปแบบ
+   *    ต้องรับได้ทั้ง "02-201-1000", "1415", "081 234 5678" และ
+   *    "02-201-1000 ต่อ 2345" — การบังคับรูปแบบจะทำให้คนกรอกไม่ผ่านแล้วเลิกกรอก
+   *    ซึ่งแย่กว่าเบอร์ที่กดแล้วไม่ติด
+   */
+  hospitalName: text("hospital_name"),
+  hospitalPhone: text("hospital_phone"),
+
   updatedAt: text("updated_at").notNull().default(nowIso),
 });
 

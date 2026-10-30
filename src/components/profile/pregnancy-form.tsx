@@ -29,12 +29,16 @@ export function PregnancyForm({
   currentDue,
   currentHeight,
   currentWeight,
+  currentHospitalName,
+  currentHospitalPhone,
   hasLogs,
 }: {
   currentLmp: string | null;
   currentDue: string | null;
   currentHeight: number | null;
   currentWeight: number | null;
+  currentHospitalName: string | null;
+  currentHospitalPhone: string | null;
   hasLogs: boolean;
 }) {
   const router = useRouter();
@@ -42,6 +46,8 @@ export function PregnancyForm({
   const [date, setDate] = useState(currentLmp ?? "");
   const [height, setHeight] = useState(currentHeight ? String(currentHeight) : "");
   const [weight, setWeight] = useState(currentWeight ? String(currentWeight) : "");
+  const [hospital, setHospital] = useState(currentHospitalName ?? "");
+  const [hospitalPhone, setHospitalPhone] = useState(currentHospitalPhone ?? "");
 
   const { execute, isPending, result } = useAction(updatePregnancy, {
     onSuccess: () => {
@@ -56,7 +62,11 @@ export function PregnancyForm({
   const changed = lmp !== currentLmp;
   /** ปุ่มบันทึกเปิดเมื่อมีอะไรเปลี่ยนจริง ไม่ว่าจะเป็นวันที่หรือตัวเลขสองค่าใหม่ */
   const touched =
-    changed || num(height) !== currentHeight || num(weight) !== currentWeight;
+    changed ||
+    num(height) !== currentHeight ||
+    num(weight) !== currentWeight ||
+    hospital.trim() !== (currentHospitalName ?? "") ||
+    hospitalPhone.trim() !== (currentHospitalPhone ?? "");
   const bmi = bmiOf(num(weight), num(height));
   const band = bandOf(bmi);
 
@@ -137,6 +147,26 @@ export function PregnancyForm({
           />
         </div>
 
+        {/* เบอร์ รพ. อยู่ในหมวดตั้งครรภ์ เพราะเป็นข้อมูลของครรภ์นี้
+            ใช้บนหน้าฉุกเฉิน ตอนที่ไม่มีใครอยากค้นหาเบอร์ */}
+        <Field
+          label="โรงพยาบาลที่ฝากครรภ์"
+          value={hospital}
+          onChange={(e) => setHospital(e.target.value)}
+          maxLength={120}
+          placeholder="เช่น รพ.รามาธิบดี"
+        />
+        <Field
+          label="เบอร์โทรโรงพยาบาล"
+          type="tel"
+          inputMode="tel"
+          value={hospitalPhone}
+          onChange={(e) => setHospitalPhone(e.target.value)}
+          maxLength={120}
+          placeholder="02-201-1000"
+          hint="ใส่ไว้ก่อน จะได้กดโทรจากหน้าฉุกเฉินได้ทันที"
+        />
+
         {bmi && band && (
           <Card className="gap-1 bg-cream-100 p-3.5">
             <span className="text-sm text-ink-900">
@@ -196,6 +226,8 @@ export function PregnancyForm({
                   : { lmpDate: null, dueDate: date }),
                 heightCm: num(height),
                 prePregnancyWeight: num(weight),
+                hospitalName: hospital,
+                hospitalPhone,
               })
             }
           >
