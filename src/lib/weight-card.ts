@@ -32,6 +32,8 @@ export type WeightCardView =
       state: "ready";
       bmi: number;
       band: BmiBand;
+      /** น้ำหนักก่อนตั้งครรภ์ (กก.) — แกนตั้งของกราฟเป็นน้ำหนักจริง จึงต้องรู้จุดเริ่ม */
+      prePregnancyWeight: number;
       points: WeightPoint[];
       /** จุดล่าสุด ใช้เทียบกับเกณฑ์ */
       current: WeightPoint;
@@ -73,6 +75,7 @@ export function buildWeightCard(input: WeightCardInput): WeightCardView {
     state: "ready",
     bmi,
     band,
+    prePregnancyWeight: base,
     points,
     current,
     expected,
@@ -83,4 +86,48 @@ export function buildWeightCard(input: WeightCardInput): WeightCardView {
      */
     fastGain: prev ? isFastGain(current.gain - prev.gain, current.week - prev.week) : false,
   };
+}
+
+/** จำนวนช่องที่อยากได้บนแกนตั้ง — ขอ 6 แล้วปัดขั้นเป็นเลขกลมๆ มักได้ 4–6 ขีด */
+const AXIS_GAPS = 6;
+/** ตัวคูณที่ยอมให้เป็นระยะห่างของขีด — ไม่มี 2.5 เพราะไม่อยากให้ป้ายมีทศนิยม */
+const AXIS_STEPS = [1, 2, 4, 5, 10];
+
+export interface WeightTick {
+  /** น้ำหนักจริงที่พิมพ์บนแกน (กก.) */
+  kg: number;
+  /** ตำแหน่งบนแกนเดียวกับ WeightPoint.gain จึงวาดด้วย yOf ตัวเดียวกันได้ */
+  gain: number;
+}
+
+/**
+ * ขีดของแกนตั้ง — เป็น **น้ำหนักจริง** ไม่ใช่น้ำหนักที่เพิ่ม
+ *
+ * คนชั่งได้ 58.4 ตอนเช้าแล้วเปิดแอปมา ควรหาตัวเองบนกราฟเจอทันที ไม่ต้องคิด
+ * ในใจว่า 0 บนแกนคือน้ำหนักก่อนท้องของตัวเอง ส่วนตัวเลขที่เพิ่มยังอยู่ใน
+ * ข้อความใต้กราฟ จึงไม่เสียข้อมูลอะไรไป
+ *
+ * ขีดเกาะทวีคูณของเลขกลมๆ ไม่ใช่หารช่วงเท่าๆ กัน — ไม่งั้นป้ายจะออกมาเป็น
+ * 51.5 / 55.0 / 58.5 ซึ่งอ่านไม่ออกว่าเป็นเลขอะไร
+ */
+export function weightAxisTicks(
+  prePregnancyWeight: number,
+  minGain: number,
+  maxGain: number,
+): WeightTick[] {
+  const lo = prePregnancyWeight + minGain;
+  const hi = prePregnancyWeight + maxGain;
+  if (!(hi > lo)) return [];
+
+  const raw = (hi - lo) / AXIS_GAPS;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  // ไม่ต่ำกว่า 1 กก. ป้ายจึงเป็นจำนวนเต็มเสมอ
+  const step = Math.max(1, (AXIS_STEPS.find((m) => raw <= m * pow) ?? 10) * pow);
+
+  const ticks: WeightTick[] = [];
+  for (let k = Math.ceil(lo / step); k * step <= hi + 1e-9; k++) {
+    const kg = Math.round(k * step * 10) / 10;
+    ticks.push({ kg, gain: Math.round((kg - prePregnancyWeight) * 10) / 10 });
+  }
+  return ticks;
 }

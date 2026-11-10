@@ -2,15 +2,23 @@ import Link from "next/link";
 import { AlertTriangle, CircleCheck, Scale, TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { BAND_LABEL, expectedGainAt, rangeOf } from "@/lib/weight-gain";
-import type { WeightCardView } from "@/lib/weight-card";
+import { weightAxisTicks, type WeightCardView } from "@/lib/weight-card";
 
-/** กรอบของกราฟ — หน่วยเดียวกับ viewBox ไม่ใช่พิกเซลจริง */
-const X0 = 26;
-const X1 = 308;
-const Y0 = 14;
-const Y1 = 104;
+/**
+ * กรอบของกราฟ — หน่วยเดียวกับ viewBox ไม่ใช่พิกเซลจริง
+ *
+ * ขอบซ้าย 34 และสูง 150 เผื่อที่ให้ป้ายแกน ไม่ใช่เลขสุ่ม: ป้ายแกนตั้งกว้าง
+ * ที่สุดคือสามหลัก (เช่น 102) ที่ fontSize 9 กินราว 15 หน่วย บวกช่องไฟ 6
+ * ส่วนแกนนอนอยู่ที่ y=141 ซึ่งอยู่ใต้เส้นฐาน 128 ลงมาพอให้ไม่ชนกัน
+ */
+const X0 = 34;
+const X1 = 310;
+const Y0 = 12;
+const Y1 = 128;
 const WEEK_MIN = 4;
 const WEEK_MAX = 40;
+/** ไตรมาสละขีด — ถี่กว่านี้ป้ายจะชนกันในกราฟกว้าง 320 หน่วย */
+const WEEK_TICKS = [10, 20, 30, WEEK_MAX];
 
 const xOf = (week: number) =>
   X0 + ((Math.max(WEEK_MIN, Math.min(WEEK_MAX, week)) - WEEK_MIN) / (WEEK_MAX - WEEK_MIN)) * (X1 - X0);
@@ -66,7 +74,8 @@ export function WeightCard({ view }: { view: WeightCardView }) {
     );
   }
 
-  const { points, current, expected, status } = view;
+  const { points, current, expected, status, prePregnancyWeight } = view;
+  const currentKg = Math.round((prePregnancyWeight + current.gain) * 10) / 10;
 
   // สเกลแกนตั้งครอบทั้งเกณฑ์และน้ำหนักจริง เผื่อคนที่อยู่นอกช่วงให้เห็นตัวเองด้วย
   const topBand = expectedGainAt(view.band, WEEK_MAX).max;
@@ -83,6 +92,7 @@ export function WeightCard({ view }: { view: WeightCardView }) {
     .map((w) => `${xOf(w)},${yOf(expectedGainAt(view.band, w).min)}`);
 
   const line = points.map((p) => `${xOf(p.week)},${yOf(p.gain)}`).join(" ");
+  const ticks = weightAxisTicks(prePregnancyWeight, minGain, maxGain);
   const tone =
     status === "within"
       ? { bg: "bg-sage-100", icon: CircleCheck, text: "อยู่ในช่วงที่คาดไว้" }
@@ -102,11 +112,26 @@ export function WeightCard({ view }: { view: WeightCardView }) {
       </div>
 
       <svg
-        viewBox="0 0 320 120"
+        viewBox="0 0 320 150"
         className="w-full"
         role="img"
-        aria-label={`น้ำหนักเพิ่มมาแล้ว ${current.gain} กิโลกรัม ${tone.text} ของสัปดาห์ที่ ${current.week}`}
+        aria-label={`สัปดาห์ที่ ${current.week} น้ำหนัก ${currentKg} กิโลกรัม เพิ่มมาแล้ว ${current.gain} กิโลกรัม ${tone.text}`}
       >
+        {/*
+          เส้นตารางแนวนอน จางพอให้ลากสายตาไปอ่านค่าบนแกนได้ แต่ไม่แย่งสายตา
+          จากเส้นน้ำหนัก — ไม่มีเส้นแนวตั้ง เพราะในกราฟกว้าง 320 หน่วยมันรกเกิน
+        */}
+        {ticks.map((t) => (
+          <line
+            key={t.kg}
+            x1={X0}
+            y1={yOf(t.gain)}
+            x2={X1}
+            y2={yOf(t.gain)}
+            className="stroke-cream-100"
+            strokeWidth="1"
+          />
+        ))}
         {/* แถบคือช่วงที่เกณฑ์คาดไว้ ไม่ใช่เส้นเป้าหมายเส้นเดียว เพราะเกณฑ์เป็นช่วง */}
         <polygon
           points={[...bandTop, ...bandBottom].join(" ")}
@@ -122,12 +147,40 @@ export function WeightCard({ view }: { view: WeightCardView }) {
           strokeLinejoin="round"
         />
         <circle cx={xOf(current.week)} cy={yOf(current.gain)} r="4" className="fill-brown-700" />
-        <text x={X0} y="116" className="fill-ink-400" fontSize="9">
-          สัปดาห์ {WEEK_MIN}
+
+        {/*
+          แกนตั้งเป็น**น้ำหนักจริง** ไม่ใช่น้ำหนักที่เพิ่ม — ชั่งได้ 58.4 ตอนเช้า
+          ก็หาตัวเองบนกราฟเจอทันที ส่วนตัวเลขที่เพิ่มยังอยู่ในข้อความใต้กราฟ
+          +3 คือครึ่งความสูงของตัวอักษร 9 หน่วย เพื่อให้ป้ายอยู่กลางเส้นพอดี
+        */}
+        {ticks.map((t) => (
+          <text
+            key={t.kg}
+            x={X0 - 6}
+            y={yOf(t.gain) + 3}
+            textAnchor="end"
+            className="fill-ink-400"
+            fontSize="9"
+          >
+            {t.kg}
+          </text>
+        ))}
+        <text x={X0} y="9" className="fill-ink-400" fontSize="9">
+          กก.
         </text>
-        <text x={X1} y="116" textAnchor="end" className="fill-ink-400" fontSize="9">
-          {WEEK_MAX}
-        </text>
+
+        {WEEK_TICKS.map((w) => (
+          <text
+            key={w}
+            x={xOf(w)}
+            y="141"
+            textAnchor={w === WEEK_MAX ? "end" : "middle"}
+            className="fill-ink-400"
+            fontSize="9"
+          >
+            {w === WEEK_MAX ? `${w} สัปดาห์` : w}
+          </text>
+        ))}
       </svg>
 
       <div className={`flex items-start gap-2 rounded-sm px-3 py-2.5 ${tone.bg}`}>

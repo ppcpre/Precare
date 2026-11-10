@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeightCard } from "@/lib/weight-card";
+import { buildWeightCard, weightAxisTicks } from "@/lib/weight-card";
 
 const base = {
   lmpDate: "2026-04-01",
@@ -77,5 +77,50 @@ describe("การ์ดน้ำหนัก", () => {
   it("มีบันทึกเดียวยังเทียบอัตราไม่ได้ ต้องไม่เตือน", () => {
     const v = buildWeightCard({ ...base, logs: [{ week: 24, weight: 70 }] });
     expect(v.state === "ready" && v.fastGain).toBe(false);
+  });
+});
+
+/**
+ * ขีดแกนตั้งของกราฟ
+ *
+ * แกนตั้งเป็น "น้ำหนักจริง" ไม่ใช่น้ำหนักที่เพิ่ม เพราะคนชั่งได้ 58.4 ตอนเช้า
+ * ควรหาตัวเองบนกราฟเจอทันที ไม่ต้องคิดในใจว่า 0 คือน้ำหนักก่อนท้องของตัวเอง
+ */
+describe("ขีดแกนตั้งของกราฟน้ำหนัก", () => {
+  it("เป็นน้ำหนักจริง ไม่ใช่น้ำหนักที่เพิ่ม", () => {
+    // ก่อนท้อง 52 กก. · สเกลที่การ์ดใช้ตอนอายุครรภ์ 24 สัปดาห์ เกณฑ์ปกติ
+    const ticks = weightAxisTicks(52, -0.5, 17);
+    expect(ticks.map((t) => t.kg)).toEqual([52, 56, 60, 64, 68]);
+    // gain คือตำแหน่งบนแกนเดียวกับ WeightPoint.gain จึงวาดด้วย yOf ตัวเดิมได้
+    expect(ticks.map((t) => t.gain)).toEqual([0, 4, 8, 12, 16]);
+  });
+
+  it("เกาะเลขกลมๆ ไม่ใช่หารช่วงเท่าๆ กัน — ป้าย 51.5/55.0/58.5 อ่านไม่ออก", () => {
+    for (const base of [48, 52.4, 61.7, 80, 95.5]) {
+      // ช่วงแคบ (1.8 กก.) ด้วย ไม่งั้นขั้นจะเล็กกว่า 1 แล้วป้ายกลายเป็น 52.4/52.8
+      for (const maxGain of [1.3, 17]) {
+        const ticks = weightAxisTicks(base, -0.5, maxGain);
+        expect(ticks.every((t) => Number.isInteger(t.kg))).toBe(true);
+      }
+    }
+  });
+
+  it("ไม่แน่นจนป้ายทับกัน และไม่โหรงเหรงจนอ่านค่าไม่ได้", () => {
+    // ครบทุกกลุ่ม BMI: อ้วนเพิ่มน้อยสุด (9) ต่ำกว่าเกณฑ์เพิ่มมากสุด (18)
+    for (const maxGain of [6, 10, 12, 17, 19]) {
+      const n = weightAxisTicks(60, -0.5, maxGain).length;
+      expect(n).toBeGreaterThanOrEqual(4);
+      expect(n).toBeLessThanOrEqual(6);
+    }
+  });
+
+  /** คนที่กรอกน้ำหนักผิดเป็นหลักร้อยไม่ควรทำให้แกนมีขีดเป็นสิบๆ ขีด */
+  it("ช่วงกว้างผิดปกติก็ยังมีขีดไม่กี่ขีด", () => {
+    expect(weightAxisTicks(52, -0.5, 98).length).toBeLessThanOrEqual(6);
+  });
+
+  it("ช่วงพังก็คืนค่าว่าง ไม่ใช่วนไม่จบ", () => {
+    expect(weightAxisTicks(52, 0, 0)).toEqual([]);
+    expect(weightAxisTicks(52, 5, 1)).toEqual([]);
   });
 });
