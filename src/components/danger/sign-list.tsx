@@ -12,8 +12,11 @@ import { cn } from "@/lib/cn";
  * อ่านกำแพงข้อความ อาการที่ไม่มีข้อย่อย (สโตรค เด็กเล็ก) แสดงเป็นบรรทัดเฉยๆ
  * ไม่ทำเป็นปุ่มที่กดแล้วไม่มีอะไรเกิดขึ้น
  *
- * ขนาดตัวอักษรใหญ่กว่าหน้าอื่นในแอปโดยตั้งใจ (17–18px เทียบกับ 13–15px)
- * เพราะคนเปิดมาตอนตกใจ มือสั่น และอาจเป็นผู้สูงอายุที่สายตายาว
+ * ขนาดตัวอักษรยังใหญ่กว่าหน้าอื่นในแอป แต่ลดลงหนึ่งขั้นแล้ว (16–18px เทียบกับ
+ * 13–15px) เพราะรอบแรกใหญ่เกินจนเนื้อหาเหลือน้อยต่อหนึ่งหน้าจอ
+ *
+ * ⚠️ พื้นของหน้านี้คือ 14px ห้ามลงไปถึง 13px ที่หน้าอื่นใช้ — คนเปิดมาตอนตกใจ
+ *    มือสั่น และอาจเป็นผู้สูงอายุที่สายตายาว
  */
 export function SignList({
   section,
@@ -33,9 +36,9 @@ export function SignList({
           : "border border-cream-200",
       )}
     >
-      <h2 className="text-xl font-bold text-ink-900">{section.title}</h2>
+      <h2 className="text-[18px] font-bold text-ink-900">{section.title}</h2>
       {section.note && (
-        <p className="text-[15px] leading-relaxed text-ink-600">{section.note}</p>
+        <p className="text-sm leading-relaxed text-ink-600">{section.note}</p>
       )}
 
       <ul className={cn("flex flex-col", expandable ? "gap-1.5" : "gap-2")}>
@@ -50,7 +53,7 @@ export function SignList({
                 aria-hidden
                 className="mt-2 size-2 shrink-0 rounded-full bg-peach-700"
               />
-              <span className="text-[17px] font-medium leading-relaxed text-ink-900">
+              <span className="text-[16px] font-medium leading-relaxed text-ink-900">
                 {sign.label}
               </span>
             </li>
@@ -60,7 +63,7 @@ export function SignList({
 
       {/* `action` คือสิ่งที่ต้องทำ ไม่ใช่คำอธิบาย — ไม่ตัดทิ้งตอนทำหน้าให้กระชับ */}
       {section.action && (
-        <p className="rounded-[10px] bg-peach-100 px-3.5 py-3 text-base font-semibold leading-relaxed text-ink-900">
+        <p className="rounded-[10px] bg-peach-100 px-3.5 py-3 text-[15px] font-semibold leading-relaxed text-ink-900">
           {section.action}
         </p>
       )}
@@ -79,7 +82,7 @@ function Expandable({ sign }: { sign: DangerSign }) {
         onClick={() => setOpen((v) => !v)}
         className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-cream-200 bg-cream-50 px-3.5 py-2.5 text-left"
       >
-        <span className="flex-1 text-[18px] font-semibold leading-snug text-ink-900">
+        <span className="flex-1 text-[17px] font-semibold leading-snug text-ink-900">
           {sign.label}
         </span>
         <ChevronDown
@@ -97,7 +100,7 @@ function Expandable({ sign }: { sign: DangerSign }) {
                 aria-hidden
                 className="mt-2 size-1.5 shrink-0 rounded-full bg-peach-700"
               />
-              <span className="text-[17px] leading-relaxed text-ink-900">{d}</span>
+              <span className="text-[16px] leading-relaxed text-ink-900">{d}</span>
             </li>
           ))}
         </ul>

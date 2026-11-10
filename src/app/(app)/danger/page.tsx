@@ -19,7 +19,7 @@ export const metadata = { title: "อาการที่ต้องไปโ�
 export default function DangerHubPage() {
   return (
     <div className="flex flex-col gap-4 pb-8">
-      <h1 className="text-2xl font-semibold text-ink-900">อาการที่ต้องไปโรงพยาบาล</h1>
+      <h1 className="text-xl font-semibold text-ink-900">อาการที่ต้องไปโรงพยาบาล</h1>
 
       <div className="flex flex-col gap-2">
         <EmsButton big />
@@ -34,8 +34,8 @@ export default function DangerHubPage() {
               className="flex items-center gap-3.5 rounded-xl border border-cream-200 bg-white p-4"
             >
               <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-xl font-bold text-ink-900">{g.name}</span>
-                <span className="text-[15px] leading-relaxed text-ink-600">{g.hint}</span>
+                <span className="text-[18px] font-bold text-ink-900">{g.name}</span>
+                <span className="text-sm leading-relaxed text-ink-600">{g.hint}</span>
               </span>
               <ChevronRight size={24} strokeWidth={2.4} className="shrink-0 text-brown-700" />
             </Link>
@@ -45,7 +45,7 @@ export default function DangerHubPage() {
 
       {/* ตัวเลขของ NHS บอกว่า 8 ใน 10 คนที่เปิดหน้าแบบนี้แค่ไม่แน่ใจ ไม่ได้กำลังแย่
           ปิดท้ายด้วยการชวนให้โทรถาม ไม่ใช่ตะโกนว่าฉุกเฉินใส่ทุกคน */}
-      <p className="text-base leading-relaxed text-ink-900">
+      <p className="text-[15px] leading-relaxed text-ink-900">
         ไม่แน่ใจว่าอาการไหน — โทรถามได้เลย
       </p>
     </div>

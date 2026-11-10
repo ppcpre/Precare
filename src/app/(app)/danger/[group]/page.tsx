@@ -57,7 +57,7 @@ export default async function DangerGroupPage({
         >
           <ChevronLeft size={26} strokeWidth={2.2} />
         </Link>
-        <h1 className="text-xl font-semibold text-ink-900">{group.name}</h1>
+        <h1 className="text-[18px] font-semibold text-ink-900">{group.name}</h1>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -81,20 +81,20 @@ export default async function DangerGroupPage({
           เรื่องนี้ไม่ได้กำลังมองหาอาการทางกาย */}
       {group.showHospital && (
         <section className="flex flex-col gap-2.5 rounded-xl border-[1.5px] border-sage-500 bg-sage-100 p-4">
-          <h2 className="text-lg font-bold leading-snug text-ink-900">{SELF_HARM.title}</h2>
+          <h2 className="text-[17px] font-bold leading-snug text-ink-900">{SELF_HARM.title}</h2>
           <a
             href={`tel:${SELF_HARM.phone}`}
-            className="flex h-[60px] items-center justify-center gap-2.5 rounded-xl bg-sage-700 text-[19px] font-bold text-white"
+            className="flex h-[60px] items-center justify-center gap-2.5 rounded-xl bg-sage-700 text-[17px] font-bold text-white"
           >
             <Phone size={21} strokeWidth={2.2} aria-hidden />
             โทร {SELF_HARM.phone}
           </a>
-          <p className="text-[15px] leading-relaxed text-ink-600">{SELF_HARM.phoneNote}</p>
+          <p className="text-sm leading-relaxed text-ink-600">{SELF_HARM.phoneNote}</p>
         </section>
       )}
 
       {group.footer && (
-        <p className="rounded-xl bg-cream-100 px-4 py-3.5 text-base leading-relaxed text-ink-900">
+        <p className="rounded-xl bg-cream-100 px-4 py-3.5 text-[15px] leading-relaxed text-ink-900">
           {group.footer}
         </p>
       )}
