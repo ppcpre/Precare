@@ -123,3 +123,45 @@ test("การ์ดน้ำหนักชวนให้กรอกข้�
     ]);
   });
 });
+
+/**
+ * Regression — เกินช่วงนิดเดียวต้องไม่ขึ้นคำที่ทำให้ตกใจ
+ *
+ * ขอบของช่วง IOM ไม่ใช่เส้นตัดสิน ตัวเลขรายสัปดาห์เป็นการคำนวณต่อจากน้ำหนัก
+ * รวมทั้งครรภ์กับอัตราต่อสัปดาห์ บวกสมมติฐานไตรมาสแรกที่กว้าง 1.5 กก.
+ * ตั้งแต่ต้น คนที่เกินขอบบน 0.3 กก. จึงไม่ควรเห็นข้อความเดียวกับคนที่เกิน 3 กก.
+ */
+test("เกินช่วงที่คาดไว้นิดเดียว บอกว่าห่างแค่ไหน และบอกที่มาของเกณฑ์ได้", async ({
+  page,
+}) => {
+  await signUp(page, uniqueEmail("wslight"), "แม่เกินนิดเดียว");
+  await completeOnboarding(page, "ครอบครัวเกินนิดเดียว");
+
+  await gotoApp(page, "/profile/pregnancy");
+  await page.getByLabel("ส่วนสูง (ซม.)").fill("160");
+  await page.getByLabel("น้ำหนักก่อนตั้งครรภ์ (กก.)").fill("52");
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+  // สัปดาห์ 24 ช่วงที่คาดไว้คือ 4.4–7.5 กก. — 59.8 คือเพิ่ม 7.8 เกินขอบบน 0.3
+  await gotoApp(page, "/health/new");
+  await page.getByLabel(/น้ำหนัก/).first().fill("59.8");
+  await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
+  await page.waitForURL(/\/health(\?|$)/, { timeout: 30_000 });
+
+  await test.step("บอกเป็นกิโลว่าห่างแค่ไหน ไม่ใช่แค่ว่าอยู่นอกช่วง", async () => {
+    await expect(page.getByText(/เกินช่วงที่คาดไว้ 0\.3 กก\./)).toBeVisible();
+    await expect(page.getByText(/ห่างไม่ถึงที่เกณฑ์ให้ขึ้นได้ในหนึ่งสัปดาห์/)).toBeVisible();
+    // คำเดิมที่ทำให้ตกใจต้องไม่กลับมา
+    await expect(page.getByText(/สูงกว่าช่วงที่คาดไว้/)).toHaveCount(0);
+  });
+
+  await test.step("กดดูได้ว่าช่วงนี้มาจากเกณฑ์อะไร", async () => {
+    const source = page.getByText(/ช่วงที่คาดไว้นี้มาจากไหน/);
+    await expect(source).toBeVisible();
+    await source.click();
+    await expect(page.getByText(/IOM 2009/)).toBeVisible();
+    // ต้องบอกด้วยว่าตัวเลขรายสัปดาห์เป็นการคำนวณต่อ ไม่ใช่ตัวเลขที่เกณฑ์ให้มาตรงๆ
+    await expect(page.getByText(/ขอบของช่วงจึงไม่ใช่เส้นตัดสิน/)).toBeVisible();
+  });
+});

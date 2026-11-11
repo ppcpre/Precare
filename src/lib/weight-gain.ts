@@ -125,3 +125,38 @@ export function isFastGain(deltaKg: number, weeksApart: number): boolean {
   if (weeksApart <= 0) return false;
   return deltaKg / weeksApart > FAST_GAIN_KG_PER_WEEK;
 }
+
+export interface GainAssessment {
+  status: GainStatus;
+  /** ห่างจากขอบที่ใกล้ที่สุดกี่กิโล — 0 เมื่ออยู่ในช่วง */
+  offBy: number;
+  /** ห่างไม่เกินที่ขึ้นได้ในหนึ่งสัปดาห์ตามเกณฑ์ของกลุ่ม BMI นี้ */
+  slight: boolean;
+}
+
+/**
+ * ห่างจากช่วงแค่ไหน ไม่ใช่แค่ "อยู่นอกช่วงหรือเปล่า"
+ *
+ * **ขอบของช่วงไม่ใช่เส้นตัดสิน** IOM 2009 ให้มาเป็นน้ำหนักรวมทั้งการตั้งครรภ์
+ * กับอัตราต่อสัปดาห์ของไตรมาส 2–3 เท่านั้น ไม่ได้ให้เป็นตัวเลขรายสัปดาห์ —
+ * ตัวเลขรายสัปดาห์ที่แอปใช้คือการคำนวณต่อจากสองอย่างนั้น บวกกับสมมติฐาน
+ * ไตรมาสแรก 0.5–2 กก. ที่เกณฑ์ใช้คำนวณ ซึ่งเป็นช่วงกว้าง 1.5 กก. ตั้งแต่ต้น
+ * เกินขอบบนไป 0.2 กก. จึงอยู่ในความคลาดเคลื่อนของการคำนวณเอง ยังไม่นับ
+ * เครื่องชั่ง เวลาที่ชั่ง และเสื้อผ้า
+ *
+ * เส้นแบ่งว่า "นิดเดียว" จึงไม่ได้ตั้งขึ้นมาลอยๆ แต่ใช้อัตราต่อสัปดาห์ของ
+ * กลุ่ม BMI นั้นเอง — ห่างไม่ถึงหนึ่งสัปดาห์ของการขึ้นตามปกติ และเส้นนี้
+ * ขยับตามกลุ่ม คนที่เกณฑ์ให้ขึ้นได้น้อยกว่า เกินน้อยกว่าก็มีความหมายกว่า
+ */
+export function assessGain(
+  gain: number,
+  band: BmiBand,
+  range: { min: number; max: number },
+): GainAssessment {
+  const status = statusOf(gain, range);
+  if (status === "within") return { status, offBy: 0, slight: false };
+
+  const raw = status === "above" ? gain - range.max : range.min - gain;
+  const offBy = Math.round(raw * 10) / 10;
+  return { status, offBy, slight: offBy <= RANGES[band].weeklyMax };
+}

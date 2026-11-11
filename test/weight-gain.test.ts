@@ -7,6 +7,7 @@ import {
   isFastGain,
   rangeOf,
   statusOf,
+  assessGain,
 } from "@/lib/weight-gain";
 
 /**
@@ -118,5 +119,50 @@ describe("น้ำหนักขึ้นเร็วผิดปกติ", (
   it("ระยะห่างเป็นศูนย์หรือติดลบ ต้องไม่หารด้วยศูนย์", () => {
     expect(isFastGain(5, 0)).toBe(false);
     expect(isFastGain(5, -1)).toBe(false);
+  });
+});
+
+/**
+ * "เกินนิดเดียว" กับ "เกินจริงจัง"
+ *
+ * ขอบของช่วงไม่ใช่เส้นตัดสิน — IOM ให้มาเป็นน้ำหนักรวมทั้งครรภ์กับอัตรา
+ * ต่อสัปดาห์ ส่วนตัวเลขรายสัปดาห์แอปคำนวณต่อเอง เกิน 0.2 กก. จึงอยู่ใน
+ * ความคลาดเคลื่อนของการคำนวณและของเครื่องชั่ง การขึ้นคำว่า "สูงกว่าเกณฑ์"
+ * เท่ากันกับคนที่เกิน 3 กก. คือทำให้ตกใจโดยไม่จำเป็น
+ */
+describe("ประเมินว่าห่างจากช่วงแค่ไหน", () => {
+  const r = { min: 4.4, max: 7.5 };
+
+  it("อยู่ในช่วง = ไม่ต้องบอกระยะห่าง", () => {
+    expect(assessGain(6.4, "normal", r)).toEqual({ status: "within", offBy: 0, slight: false });
+  });
+
+  it("บอกว่าห่างจากขอบกี่กิโล ไม่ใช่แค่ว่าอยู่นอกช่วง", () => {
+    expect(assessGain(7.8, "normal", r).offBy).toBe(0.3);
+    expect(assessGain(4.1, "normal", r).offBy).toBe(0.3);
+    // ห่างจากขอบที่ใกล้ที่สุด ไม่ใช่จากกลางช่วงหรือจากขอบอีกด้าน
+    expect(assessGain(10.5, "normal", r).offBy).toBe(3);
+  });
+
+  /**
+   * เส้นแบ่ง "นิดเดียว" คืออัตราต่อสัปดาห์ของกลุ่ม BMI นั้นเอง (IOM 2009)
+   * ไม่ใช่ตัวเลขที่ตั้งขึ้นมาเอง — เกินไม่ถึงหนึ่งสัปดาห์ของการขึ้นตามปกติ
+   */
+  it("เกินไม่ถึงที่ขึ้นได้ในหนึ่งสัปดาห์ = นิดเดียว", () => {
+    expect(assessGain(8.0, "normal", r).slight).toBe(true); // เกิน 0.5 = หนึ่งสัปดาห์พอดี
+    expect(assessGain(8.1, "normal", r).slight).toBe(false); // เกิน 0.6
+    expect(assessGain(3.9, "normal", r).slight).toBe(true);
+    expect(assessGain(3.8, "normal", r).slight).toBe(false);
+  });
+
+  it("เส้นแบ่งขยับตามกลุ่ม BMI — คนที่ขึ้นได้น้อยกว่า เกินน้อยกว่าก็มีความหมาย", () => {
+    // อ้วน 0.27 กก./สัปดาห์ · ต่ำกว่าเกณฑ์ 0.58 กก./สัปดาห์
+    expect(assessGain(7.8, "obese", r).slight).toBe(false); // เกิน 0.3 > 0.27
+    expect(assessGain(7.8, "under", r).slight).toBe(true); // เกิน 0.3 < 0.58
+  });
+
+  it("ขอบพอดีถือว่าอยู่ในช่วง ไม่ใช่เกินนิดเดียว", () => {
+    expect(assessGain(7.5, "normal", r).status).toBe("within");
+    expect(assessGain(4.4, "normal", r).status).toBe("within");
   });
 });

@@ -1,8 +1,21 @@
 import Link from "next/link";
-import { AlertTriangle, CircleCheck, Scale, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  CircleCheck,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { BAND_LABEL, expectedGainAt, rangeOf } from "@/lib/weight-gain";
-import { weightAxisTicks, type WeightCardView } from "@/lib/weight-card";
+import {
+  BAND_LABEL,
+  FIRST_TRIMESTER_MAX,
+  FIRST_TRIMESTER_MIN,
+  expectedGainAt,
+  rangeOf,
+} from "@/lib/weight-gain";
+import { gainTone, weightAxisTicks, type WeightCardView } from "@/lib/weight-card";
 
 /**
  * กรอบของกราฟ — หน่วยเดียวกับ viewBox ไม่ใช่พิกเซลจริง
@@ -74,7 +87,7 @@ export function WeightCard({ view }: { view: WeightCardView }) {
     );
   }
 
-  const { points, current, expected, status, prePregnancyWeight } = view;
+  const { points, current, expected, assessment, prePregnancyWeight } = view;
   const currentKg = Math.round((prePregnancyWeight + current.gain) * 10) / 10;
 
   // สเกลแกนตั้งครอบทั้งเกณฑ์และน้ำหนักจริง เผื่อคนที่อยู่นอกช่วงให้เห็นตัวเองด้วย
@@ -93,13 +106,20 @@ export function WeightCard({ view }: { view: WeightCardView }) {
 
   const line = points.map((p) => `${xOf(p.week)},${yOf(p.gain)}`).join(" ");
   const ticks = weightAxisTicks(prePregnancyWeight, minGain, maxGain);
-  const tone =
-    status === "within"
-      ? { bg: "bg-sage-100", icon: CircleCheck, text: "อยู่ในช่วงที่คาดไว้" }
-      : status === "above"
-        ? { bg: "bg-peach-100", icon: TrendingUp, text: "สูงกว่าช่วงที่คาดไว้" }
-        : { bg: "bg-cream-100", icon: TrendingDown, text: "ต่ำกว่าช่วงที่คาดไว้" };
-  const Icon = tone.icon;
+  const tone = gainTone(assessment);
+  /*
+    สีเตือน (peach) ไม่ใช้กับการอยู่นอกช่วง — สงวนไว้ให้สัญญาณทางคลินิกจริงๆ
+    คือขึ้นเกิน 1 กก./สัปดาห์ ซึ่งผูกกับครรภ์เป็นพิษ ส่วนการอยู่นอกช่วง IOM
+    เป็นข้อมูล ไม่ใช่เรื่องด่วน
+  */
+  const toneBg = tone.kind === "within" ? "bg-sage-100" : "bg-cream-100";
+  const Icon =
+    assessment.status === "within"
+      ? CircleCheck
+      : assessment.status === "above"
+        ? TrendingUp
+        : TrendingDown;
+  const r = rangeOf(view.band);
 
   return (
     <Card className="flex flex-col gap-3">
@@ -183,10 +203,11 @@ export function WeightCard({ view }: { view: WeightCardView }) {
         ))}
       </svg>
 
-      <div className={`flex items-start gap-2 rounded-sm px-3 py-2.5 ${tone.bg}`}>
+      <div className={`flex items-start gap-2 rounded-sm px-3 py-2.5 ${toneBg}`}>
         <Icon size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-ink-600" />
         <span className="text-[13px] leading-relaxed text-ink-900">
           {tone.text} · เพิ่มมาแล้ว <b>{current.gain}</b> กก.
+          {tone.note && <span className="block text-[11px] text-ink-600">{tone.note}</span>}
           <span className="block text-[11px] text-ink-600">
             ช่วงที่คาดไว้ของสัปดาห์นี้ {expected.min}–{expected.max} กก. · BMI ก่อนตั้งครรภ์{" "}
             {view.bmi} ({BAND_LABEL[view.band]})
@@ -205,6 +226,37 @@ export function WeightCard({ view }: { view: WeightCardView }) {
           </span>
         </div>
       )}
+
+      {/*
+        ที่มาของช่วง — ผู้ใช้ถามได้ว่า "ดูจากเกณฑ์อะไร" และคำตอบมีผลต่อการตีความ
+        <details> ให้ keyboard + screen reader มาฟรี และไม่ต้องทำเป็น client component
+      */}
+      <details className="group">
+        {/* ลูกศรไม่ใช่ของประดับ — ถ้าไม่มี summary จะอ่านเหมือนหัวข้อที่กดไม่ได้ */}
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-brown-700">
+          ช่วงที่คาดไว้นี้มาจากไหน
+          <ChevronDown
+            size={15}
+            strokeWidth={2.2}
+            aria-hidden
+            className="shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="flex flex-col gap-1.5 pb-1 text-[11px] leading-relaxed text-ink-600">
+          <p>
+            เกณฑ์ IOM 2009 สำหรับครรภ์เดี่ยว ให้มาสองอย่าง — น้ำหนักรวมทั้งการตั้งครรภ์{" "}
+            {r.totalMin}–{r.totalMax} กก. สำหรับ{BAND_LABEL[view.band]} และอัตราในไตรมาส 2–3{" "}
+            {r.weeklyMin}–{r.weeklyMax} กก./สัปดาห์
+          </p>
+          <p>
+            ไม่ได้ให้มาเป็นตัวเลขรายสัปดาห์ ช่วงของสัปดาห์นี้จึงเป็นการคำนวณต่อจากสองอย่างนั้น
+            บวกสมมติฐานว่าไตรมาสแรกขึ้น {FIRST_TRIMESTER_MIN}–{FIRST_TRIMESTER_MAX} กก.
+            ตามที่เกณฑ์ใช้คำนวณ ซึ่งกว้าง {FIRST_TRIMESTER_MAX - FIRST_TRIMESTER_MIN} กก.
+            ตั้งแต่ต้น — <b className="font-semibold">ขอบของช่วงจึงไม่ใช่เส้นตัดสิน</b>{" "}
+            เกินหรือขาดไปเล็กน้อยยังอยู่ในความคลาดเคลื่อนของการคำนวณเองและของเครื่องชั่ง
+          </p>
+        </div>
+      </details>
 
       <p className="text-[11px] leading-relaxed text-ink-400">
         เกณฑ์อ้างอิงสำหรับครรภ์เดี่ยว ไม่ใช่คำวินิจฉัย · ครรภ์แฝดใช้เกณฑ์คนละชุด

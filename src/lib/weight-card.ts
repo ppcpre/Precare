@@ -6,13 +6,13 @@
  * หรือเทียบน้ำหนักของสัปดาห์ที่ 10 กับเกณฑ์ของสัปดาห์ปัจจุบัน
  */
 import {
+  assessGain,
   bandOf,
   bmiOf,
   expectedGainAt,
   isFastGain,
-  statusOf,
   type BmiBand,
-  type GainStatus,
+  type GainAssessment,
 } from "@/lib/weight-gain";
 
 export interface WeightPoint {
@@ -38,7 +38,8 @@ export type WeightCardView =
       /** จุดล่าสุด ใช้เทียบกับเกณฑ์ */
       current: WeightPoint;
       expected: { min: number; max: number };
-      status: GainStatus;
+      /** อยู่ในช่วงไหม และถ้าไม่ ห่างแค่ไหน — ขอบของช่วงไม่ใช่เส้นตัดสิน */
+      assessment: GainAssessment;
       /** ขึ้นเร็วผิดปกติระหว่างสองครั้งล่าสุด (เกิน 1 กก./สัปดาห์) */
       fastGain: boolean;
     };
@@ -79,7 +80,7 @@ export function buildWeightCard(input: WeightCardInput): WeightCardView {
     points,
     current,
     expected,
-    status: statusOf(current.gain, expected),
+    assessment: assessGain(current.gain, band, expected),
     /**
      * เทียบเฉพาะสองครั้งล่าสุด ไม่ใช่ทั้งช่วง — สัญญาณที่สนใจคือ "เพิ่งขึ้นเร็ว"
      * ไม่ใช่ "ขึ้นเยอะมาตลอด" ซึ่งเป็นคนละเรื่องและอ่านได้จากกราฟอยู่แล้ว
@@ -130,4 +131,49 @@ export function weightAxisTicks(
     ticks.push({ kg, gain: Math.round((kg - prePregnancyWeight) * 10) / 10 });
   }
   return ticks;
+}
+
+/** within = ในช่วง · slight = ห่างนิดเดียว · off = ห่างจนควรยกไปคุยกับหมอ */
+export type GainToneKind = "within" | "slight" | "off";
+
+export interface GainTone {
+  kind: GainToneKind;
+  text: string;
+  /** คำอธิบายใต้ข้อความหลัก — null เมื่ออยู่ในช่วง ไม่มีอะไรต้องอธิบาย */
+  note: string | null;
+}
+
+/**
+ * ถ้อยคำของแถบสรุป
+ *
+ * เลี่ยงคำว่า "สูงกว่า/ต่ำกว่าช่วงที่คาดไว้" เพราะอ่านเหมือนตัดสินว่าตัวเอง
+ * หนักเกินหรือผอมเกิน ทั้งที่สิ่งที่วัดคือ**จังหวะการขึ้น**เทียบกับตาราง
+ * จึงใช้คำว่าขึ้นเร็ว/ขึ้นช้ากว่า และบอกเป็นกิโลเสมอว่าห่างแค่ไหน —
+ * คนที่เกิน 0.3 กก. ไม่ควรได้ข้อความเดียวกับคนที่เกิน 3 กก.
+ *
+ * ทางออกของทุกกรณีคือคุยกับหมอ **ห้ามแนะนำให้คุมอาหารหรือลดน้ำหนักเอง**
+ * ระหว่างตั้งครรภ์ — เป็นคำแนะนำทางการแพทย์ที่แอปไม่มีสิทธิ์ให้
+ */
+export function gainTone(a: GainAssessment): GainTone {
+  if (a.status === "within") {
+    return { kind: "within", text: "อยู่ในช่วงที่คาดไว้", note: null };
+  }
+
+  const up = a.status === "above";
+
+  if (a.slight) {
+    return {
+      kind: "slight",
+      text: up ? `เกินช่วงที่คาดไว้ ${a.offBy} กก.` : `ยังไม่ถึงช่วงที่คาดไว้ ${a.offBy} กก.`,
+      note: "ห่างไม่ถึงที่เกณฑ์ให้ขึ้นได้ในหนึ่งสัปดาห์ · ชั่งคนละเวลาก็ต่างกันได้เท่านี้",
+    };
+  }
+
+  return {
+    kind: "off",
+    text: up
+      ? `ขึ้นเร็วกว่าช่วงที่คาดไว้ ${a.offBy} กก.`
+      : `ขึ้นช้ากว่าช่วงที่คาดไว้ ${a.offBy} กก.`,
+    note: "ยกไปคุยกับหมอตอนฝากครรภ์ครั้งหน้าได้ ไม่ต้องปรับอาหารเอง",
+  };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildWeightCard, weightAxisTicks } from "@/lib/weight-card";
+import { assessGain } from "@/lib/weight-gain";
+import { buildWeightCard, gainTone, weightAxisTicks } from "@/lib/weight-card";
 
 const base = {
   lmpDate: "2026-04-01",
@@ -40,7 +41,7 @@ describe("การ์ดน้ำหนัก", () => {
     const v = buildWeightCard({ ...base, logs: [{ week: 24, weight: 58.4 }] });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.current.week).toBe(24);
-    expect(v.status).toBe("within");
+    expect(v.assessment.status).toBe("within");
   });
 
   it("บันทึกไม่เรียงลำดับก็ต้องได้จุดล่าสุดถูกต้อง", () => {
@@ -57,7 +58,7 @@ describe("การ์ดน้ำหนัก", () => {
     const v = buildWeightCard({ ...base, logs: [{ week: 8, weight: 50.5 }] });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.current.gain).toBe(-1.5);
-    expect(v.status).toBe("below");
+    expect(v.assessment.status).toBe("below");
   });
 
   it("ขึ้นเร็วผิดปกติระหว่างสองครั้งล่าสุด", () => {
@@ -122,5 +123,50 @@ describe("ขีดแกนตั้งของกราฟน้ำหนั�
   it("ช่วงพังก็คืนค่าว่าง ไม่ใช่วนไม่จบ", () => {
     expect(weightAxisTicks(52, 0, 0)).toEqual([]);
     expect(weightAxisTicks(52, 5, 1)).toEqual([]);
+  });
+});
+
+/**
+ * ถ้อยคำของแถบสรุป
+ *
+ * คำว่า "สูงกว่าช่วงที่คาดไว้" อ่านเหมือนตัดสินว่าตัวเองหนักเกิน ทั้งที่สิ่งที่
+ * วัดคือจังหวะการขึ้นเทียบกับตาราง และคนที่เกิน 0.2 กก. ไม่ควรได้ข้อความ
+ * เดียวกับคนที่เกิน 3 กก. — คนท้องอ่านแล้วตกใจง่าย
+ */
+describe("ถ้อยคำของแถบสรุปน้ำหนัก", () => {
+  const tone = (gain: number, band: "normal" | "obese" = "normal") =>
+    gainTone(assessGain(gain, band, { min: 4.4, max: 7.5 }));
+
+  it("อยู่ในช่วง = ไม่ต้องอธิบายอะไรเพิ่ม", () => {
+    expect(tone(6.4)).toEqual({ kind: "within", text: "อยู่ในช่วงที่คาดไว้", note: null });
+  });
+
+  it("เกินนิดเดียว บอกเป็นกิโลว่าห่างแค่ไหน และไม่ใช้คำว่าสูงกว่าเกณฑ์", () => {
+    const t = tone(7.8);
+    expect(t.kind).toBe("slight");
+    expect(t.text).toContain("0.3");
+    expect(t.text).not.toContain("สูงกว่า");
+    // ต้องบอกด้วยว่าทำไมถึงไม่ต้องตกใจ ไม่ใช่แค่ลดระดับคำแล้วเงียบ
+    expect(t.note).toBeTruthy();
+  });
+
+  it("เกินจริงจัง ชวนไปคุยกับหมอ ไม่ใช่ชวนให้คุมอาหารเอง", () => {
+    const t = tone(10.5);
+    expect(t.kind).toBe("off");
+    expect(t.text).toContain("3");
+    expect(t.note).toContain("หมอ");
+    expect(t.note).not.toMatch(/ลดน้ำหนัก|คุมอาหาร|งดของหวาน/);
+  });
+
+  /** ขึ้นช้ากว่าก็มีความเสี่ยงของมัน ต้องไม่หายไปเงียบๆ และต้องไม่ดุกว่ากัน */
+  it("ขึ้นช้ากว่าได้ถ้อยคำคู่ขนานกับขึ้นเร็วกว่า", () => {
+    expect(tone(3.9).kind).toBe("slight");
+    expect(tone(1.0).kind).toBe("off");
+    expect(tone(1.0).note).toContain("หมอ");
+  });
+
+  it("เส้นแบ่งขยับตามกลุ่ม BMI", () => {
+    expect(tone(7.8, "obese").kind).toBe("off"); // เกิน 0.3 > 0.27 กก./สัปดาห์
+    expect(tone(7.8, "normal").kind).toBe("slight"); // เกิน 0.3 < 0.5
   });
 });
