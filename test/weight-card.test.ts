@@ -1,12 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { assessGain } from "@/lib/weight-gain";
-import { buildWeightCard, gainTone, weightAxisTicks } from "@/lib/weight-card";
+import {
+  buildWeightCard,
+  gainTone,
+  weightAxisTicks,
+  type WeightLogInput,
+} from "@/lib/weight-card";
+
+/**
+ * บันทึกหนึ่งครั้ง — วันที่คิดจาก lmp + สัปดาห์ ให้ตรงกับความจริงพอประมาณ
+ * เทสต์ไหนที่สนใจ "ชั่งวันไหนของสัปดาห์" ส่ง date/created มาเองได้
+ */
+const log = (
+  week: number,
+  weight: number | null,
+  logDate = `2026-${String(4 + Math.floor(week / 4)).padStart(2, "0")}-01`,
+  createdAt = `${logDate}T08:00:00.000Z`,
+): WeightLogInput => ({ week, weight, logDate, createdAt });
 
 const base = {
   lmpDate: "2026-04-01",
   heightCm: 160,
   prePregnancyWeight: 52,
-  logs: [] as { week: number; weight: number | null }[],
+  logs: [] as WeightLogInput[],
 };
 
 describe("การ์ดน้ำหนัก", () => {
@@ -21,14 +37,14 @@ describe("การ์ดน้ำหนัก", () => {
   });
 
   it("มีเกณฑ์แล้วแต่ยังไม่เคยชั่ง = ชวนให้บันทึก", () => {
-    const v = buildWeightCard({ ...base, logs: [{ week: 10, weight: null }] });
+    const v = buildWeightCard({ ...base, logs: [log(10, null)] });
     expect(v).toMatchObject({ state: "need_log", bmi: 20.3, band: "normal" });
   });
 
   it("คิดน้ำหนักที่เพิ่มจากก่อนตั้งครรภ์ ไม่ใช่จากครั้งแรกที่ชั่ง", () => {
     const v = buildWeightCard({
       ...base,
-      logs: [{ week: 12, weight: 53 }, { week: 24, weight: 58.4 }],
+      logs: [log(12, 53), log(24, 58.4)],
     });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.points).toEqual([
@@ -38,7 +54,7 @@ describe("การ์ดน้ำหนัก", () => {
   });
 
   it("เทียบกับเกณฑ์ของสัปดาห์ล่าสุด ไม่ใช่สัปดาห์อื่น", () => {
-    const v = buildWeightCard({ ...base, logs: [{ week: 24, weight: 58.4 }] });
+    const v = buildWeightCard({ ...base, logs: [log(24, 58.4)] });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.current.week).toBe(24);
     expect(v.assessment.status).toBe("within");
@@ -47,7 +63,7 @@ describe("การ์ดน้ำหนัก", () => {
   it("บันทึกไม่เรียงลำดับก็ต้องได้จุดล่าสุดถูกต้อง", () => {
     const v = buildWeightCard({
       ...base,
-      logs: [{ week: 24, weight: 58.4 }, { week: 12, weight: 53 }, { week: 20, weight: 56 }],
+      logs: [log(24, 58.4), log(12, 53), log(20, 56)],
     });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.points.map((p) => p.week)).toEqual([12, 20, 24]);
@@ -55,7 +71,7 @@ describe("การ์ดน้ำหนัก", () => {
   });
 
   it("น้ำหนักลดในไตรมาสแรกต้องแสดงได้ ไม่ใช่พังหรือปัดเป็นศูนย์", () => {
-    const v = buildWeightCard({ ...base, logs: [{ week: 8, weight: 50.5 }] });
+    const v = buildWeightCard({ ...base, logs: [log(8, 50.5)] });
     if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
     expect(v.current.gain).toBe(-1.5);
     expect(v.assessment.status).toBe("below");
@@ -64,19 +80,92 @@ describe("การ์ดน้ำหนัก", () => {
   it("ขึ้นเร็วผิดปกติระหว่างสองครั้งล่าสุด", () => {
     const fast = buildWeightCard({
       ...base,
-      logs: [{ week: 23, weight: 57 }, { week: 24, weight: 58.4 }],
+      logs: [log(23, 57), log(24, 58.4)],
     });
     expect(fast.state === "ready" && fast.fastGain).toBe(true);
 
     const normal = buildWeightCard({
       ...base,
-      logs: [{ week: 23, weight: 57 }, { week: 24, weight: 57.5 }],
+      logs: [log(23, 57), log(24, 57.5)],
     });
     expect(normal.state === "ready" && normal.fastGain).toBe(false);
   });
 
+  /**
+   * ชั่งสองครั้งในสัปดาห์เดียวเป็นเรื่องปกติ — ชั่งวันจันทร์ แล้วไปฝากครรภ์
+   * วันศุกร์ก็ชั่งอีก หรือวันไหนที่บวมแล้วอยากเช็ค การ์ดต้องตัดสินจาก
+   * **ครั้งล่าสุด** ไม่ใช่ครั้งที่เผอิญอยู่ท้ายอาร์เรย์
+   *
+   * คิวรีส่งมาเรียงใหม่ไปเก่า เทสต์พวกนี้จึงส่งแบบเดียวกับของจริง
+   */
+  describe("ชั่งหลายครั้งในสัปดาห์เดียว", () => {
+    const twice = [
+      log(24, 59.8, "2026-10-09"), // ศุกร์ — ครั้งล่าสุด
+      log(24, 58.4, "2026-10-05"), // จันทร์
+    ];
+
+    it("ตัดสินจากครั้งล่าสุด ไม่ใช่ครั้งแรกของสัปดาห์", () => {
+      const v = buildWeightCard({ ...base, logs: twice });
+      if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
+      expect(v.current.gain).toBe(7.8);
+    });
+
+    it("กราฟเหลือสัปดาห์ละจุด ไม่ใช่เส้นตั้งฉากกลางกราฟ", () => {
+      const v = buildWeightCard({
+        ...base,
+        logs: [...twice, log(20, 56, "2026-09-07")],
+      });
+      if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
+      expect(v.points).toEqual([
+        { week: 20, gain: 4 },
+        { week: 24, gain: 7.8 },
+      ]);
+    });
+
+    /** สลับลำดับที่ส่งเข้ามาด้วย ไม่งั้นเทสต์ผ่านเพราะบังเอิญหยิบตัวแรกถูก */
+    it("ชั่งสองครั้งในวันเดียวกัน ตัดสินด้วยเวลาที่บันทึก", () => {
+      const เช้า = log(24, 58.4, "2026-10-09", "2026-10-09T07:00:00.000Z");
+      const เย็น = log(24, 59.8, "2026-10-09", "2026-10-09T19:00:00.000Z");
+
+      for (const logs of [
+        [เย็น, เช้า],
+        [เช้า, เย็น],
+      ]) {
+        const v = buildWeightCard({ ...base, logs });
+        if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
+        expect(v.current.gain).toBe(7.8);
+      }
+    });
+
+    /** บันทึกความดัน/อาการโดยไม่ชั่ง ต้องไม่ลบน้ำหนักของสัปดาห์นั้นทิ้ง */
+    it("บันทึกทีหลังที่ไม่มีน้ำหนัก ไม่กลบน้ำหนักที่ชั่งไว้แล้ว", () => {
+      const v = buildWeightCard({
+        ...base,
+        logs: [log(24, null, "2026-10-10"), log(24, 58.4, "2026-10-05")],
+      });
+      if (v.state !== "ready") throw new Error("ควรพร้อมแสดง");
+      expect(v.current.gain).toBe(6.4);
+    });
+
+    /**
+     * สัญญาณขึ้นเร็วผูกกับครรภ์เป็นพิษ เตือนผิดคือทำให้คนท้องตกใจฟรี —
+     * ถ้าไปเทียบกับค่าที่เก่ากว่าในสัปดาห์เดียวกัน ส่วนต่างจะใหญ่เกินจริง
+     */
+    it("ไม่เตือนขึ้นเร็วเพราะไปเทียบกับค่าเก่าในสัปดาห์เดียวกัน", () => {
+      const v = buildWeightCard({
+        ...base,
+        logs: [
+          log(25, 60.3, "2026-10-12"),
+          log(24, 59.8, "2026-10-09"), // ครั้งล่าสุดของสัปดาห์ 24 — ห่างแค่ 0.5
+          log(24, 58.4, "2026-10-05"), // ถ้าไปเทียบตัวนี้จะกลายเป็น 1.9
+        ],
+      });
+      expect(v.state === "ready" && v.fastGain).toBe(false);
+    });
+  });
+
   it("มีบันทึกเดียวยังเทียบอัตราไม่ได้ ต้องไม่เตือน", () => {
-    const v = buildWeightCard({ ...base, logs: [{ week: 24, weight: 70 }] });
+    const v = buildWeightCard({ ...base, logs: [log(24, 70)] });
     expect(v.state === "ready" && v.fastGain).toBe(false);
   });
 });

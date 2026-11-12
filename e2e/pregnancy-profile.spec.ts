@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { completeOnboarding, gotoApp, signUp, uniqueEmail } from "./helpers";
+import { completeOnboarding, daysAgo, gotoApp, signUp, uniqueEmail } from "./helpers";
 
 /**
  * Regression — ส่วนสูง/น้ำหนักก่อนตั้งครรภ์ และประวัติการแก้
@@ -163,5 +163,49 @@ test("เกินช่วงที่คาดไว้นิดเดีย�
     await expect(page.getByText(/IOM 2009/)).toBeVisible();
     // ต้องบอกด้วยว่าตัวเลขรายสัปดาห์เป็นการคำนวณต่อ ไม่ใช่ตัวเลขที่เกณฑ์ให้มาตรงๆ
     await expect(page.getByText(/ขอบของช่วงจึงไม่ใช่เส้นตัดสิน/)).toBeVisible();
+  });
+});
+
+/**
+ * Regression — ชั่งสองครั้งในสัปดาห์เดียว ต้องตัดสินจากครั้งล่าสุด
+ *
+ * สัปดาห์เดียวชั่งหลายครั้งเป็นเรื่องปกติ (ชั่งเองที่บ้าน แล้วไปชั่งที่โรงพยาบาล
+ * ตอนฝากครรภ์) การ์ดเคยหยิบครั้งที่เก่าที่สุดของสัปดาห์มาตัดสิน เพราะเรียงตาม
+ * สัปดาห์แล้วหยิบตัวท้าย ซึ่งไปอาศัยลำดับที่คิวรีส่งมา (ใหม่ไปเก่า) โดยไม่รู้ตัว
+ */
+test("ชั่งสองครั้งในสัปดาห์เดียว การ์ดต้องใช้ครั้งล่าสุด", async ({ page }) => {
+  await signUp(page, uniqueEmail("wtwice"), "แม่ชั่งสองครั้ง");
+  await completeOnboarding(page, "ครอบครัวชั่งสองครั้ง");
+
+  await gotoApp(page, "/profile/pregnancy");
+  await page.getByLabel("ส่วนสูง (ซม.)").fill("160");
+  await page.getByLabel("น้ำหนักก่อนตั้งครรภ์ (กก.)").fill("52");
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+
+  // ทั้งสองครั้งอยู่ในสัปดาห์ 24 ต่างกันแค่วันที่ชั่ง
+  for (const [date, kg] of [
+    [daysAgo(4), "58.4"],
+    [daysAgo(0), "59.8"],
+  ]) {
+    await gotoApp(page, "/health/new");
+    await page.getByLabel("วันที่บันทึก").fill(date);
+    await page.getByLabel("สัปดาห์ที่").fill("24");
+    await page.getByLabel(/น้ำหนัก/).first().fill(kg);
+    await page.getByRole("button", { name: "บันทึก", exact: true }).first().click();
+    await page.waitForURL(/\/health(\?|$)/, { timeout: 30_000 });
+  }
+
+  await test.step("ตัวเลขบนการ์ดมาจากครั้งล่าสุด ไม่ใช่ครั้งแรกของสัปดาห์", async () => {
+    const chart = page.locator('svg[aria-label^="สัปดาห์ที่"]');
+    await expect(chart).toHaveAttribute("aria-label", /น้ำหนัก 59\.8 กิโลกรัม/);
+    await expect(page.getByText(/เพิ่มมาแล้ว/)).toContainText("7.8");
+    // 6.4 คือค่าของครั้งแรก — โผล่บนการ์ดเมื่อไหร่คือบั๊กเดิมกลับมา
+    await expect(page.getByText(/เพิ่มมาแล้ว 6\.4 กก\./)).toHaveCount(0);
+  });
+
+  await test.step("บันทึกทั้งสองครั้งยังอยู่ครบในรายการ", async () => {
+    await expect(page.getByText("59.8 กก.")).toBeVisible();
+    await expect(page.getByText("58.4 กก.")).toBeVisible();
   });
 });

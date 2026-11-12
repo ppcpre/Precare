@@ -41,7 +41,14 @@ export default async function HealthPage() {
     lmpDate: preg.ga ? (preg.profile?.lmpDate ?? null) : null,
     heightCm: preg.profile?.heightCm ?? null,
     prePregnancyWeight: preg.profile?.prePregnancyWeight ?? null,
-    logs: logs.map((l) => ({ week: l.week, weight: l.weight })),
+    // ส่ง logDate/createdAt ไปด้วย — ชั่งหลายครั้งในสัปดาห์เดียวได้
+    // และการ์ดต้องเลือกครั้งล่าสุดเอง ไม่ใช่เชื่อลำดับที่คิวรีส่งมา
+    logs: logs.map((l) => ({
+      week: l.week,
+      weight: l.weight,
+      logDate: l.logDate,
+      createdAt: l.createdAt,
+    })),
   });
   const canWrite = can.writeRecords(ctx.role);
 

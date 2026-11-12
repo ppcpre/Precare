@@ -44,12 +44,26 @@ export type WeightCardView =
       fastGain: boolean;
     };
 
+export interface WeightLogInput {
+  week: number;
+  weight: number | null;
+  /**
+   * วันที่ชั่ง (YYYY-MM-DD)
+   *
+   * จำเป็น เพราะสัปดาห์เดียวชั่งได้หลายครั้ง — ไม่มีวันที่ก็ไม่มีทางรู้ว่า
+   * อันไหนใหม่กว่า นอกจากจะไปเชื่อลำดับที่ผู้เรียกส่งมา ซึ่งเคยพลาดมาแล้ว
+   */
+  logDate: string;
+  /** เวลาที่บันทึกเข้าระบบ (ISO) — ตัวตัดสินเมื่อชั่งสองครั้งในวันเดียวกัน */
+  createdAt: string;
+}
+
 export interface WeightCardInput {
   lmpDate: string | null;
   heightCm: number | null;
   prePregnancyWeight: number | null;
   /** บันทึกสุขภาพทั้งหมด เรียงยังไงก็ได้ — ฟังก์ชันนี้จัดเอง */
-  logs: { week: number; weight: number | null }[];
+  logs: WeightLogInput[];
 }
 
 export function buildWeightCard(input: WeightCardInput): WeightCardView {
@@ -61,9 +75,29 @@ export function buildWeightCard(input: WeightCardInput): WeightCardView {
   if (bmi == null || band == null) return { state: "need_setup" };
 
   const base = input.prePregnancyWeight as number;
-  const points = input.logs
-    .filter((l): l is { week: number; weight: number } => l.weight != null)
-    .map((l) => ({ week: l.week, gain: Math.round((l.weight - base) * 10) / 10 }))
+
+  /**
+   * สัปดาห์ละจุดเดียว และต้องเป็น**ครั้งล่าสุด**ของสัปดาห์นั้น
+   *
+   * เดิมเรียงตามสัปดาห์แล้วหยิบตัวท้ายสุด ซึ่งอาศัยลำดับที่ผู้เรียกส่งมาโดยไม่รู้ตัว —
+   * คิวรีส่งมาใหม่ไปเก่า `sort` ของ JS เสถียร ตัวท้ายของสัปดาห์จึงเป็นครั้งที่
+   * **เก่าที่สุด** คนชั่งวันจันทร์แล้วชั่งอีกทีวันศุกร์ จะถูกตัดสินด้วยค่าวันจันทร์
+   *
+   * ผลพลอยได้อีกสองอย่าง: กราฟไม่มีเส้นตั้งฉาก (หลายจุดที่ x เดียวกัน) และ
+   * สัญญาณขึ้นเร็วไม่เตือนผิดเพราะไปเทียบกับค่าเก่าในสัปดาห์เดียวกัน
+   */
+  const latest = new Map<number, { weight: number; logDate: string; createdAt: string }>();
+  for (const l of input.logs) {
+    if (l.weight == null) continue;
+    const cur = latest.get(l.week);
+    const newer =
+      !cur ||
+      (l.logDate !== cur.logDate ? l.logDate > cur.logDate : l.createdAt > cur.createdAt);
+    if (newer) latest.set(l.week, { weight: l.weight, logDate: l.logDate, createdAt: l.createdAt });
+  }
+
+  const points = [...latest.entries()]
+    .map(([week, l]) => ({ week, gain: Math.round((l.weight - base) * 10) / 10 }))
     .sort((a, b) => a.week - b.week);
 
   if (points.length === 0) return { state: "need_log", bmi, band };
