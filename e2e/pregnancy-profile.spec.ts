@@ -151,7 +151,7 @@ test("เกินช่วงที่คาดไว้นิดเดีย�
 
   await test.step("บอกเป็นกิโลว่าห่างแค่ไหน ไม่ใช่แค่ว่าอยู่นอกช่วง", async () => {
     await expect(page.getByText(/เกินช่วงที่คาดไว้ 0\.3 กก\./)).toBeVisible();
-    await expect(page.getByText(/ห่างไม่ถึงที่เกณฑ์ให้ขึ้นได้ในหนึ่งสัปดาห์/)).toBeVisible();
+    await expect(page.getByText(/ห่างไม่ถึงที่ขึ้นได้ใน 1 สัปดาห์/)).toBeVisible();
     // คำเดิมที่ทำให้ตกใจต้องไม่กลับมา
     await expect(page.getByText(/สูงกว่าช่วงที่คาดไว้/)).toHaveCount(0);
   });

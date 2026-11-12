@@ -208,9 +208,10 @@ export function WeightCard({ view }: { view: WeightCardView }) {
         <span className="text-[13px] leading-relaxed text-ink-900">
           {tone.text} · เพิ่มมาแล้ว <b>{current.gain}</b> กก.
           {tone.note && <span className="block text-[11px] text-ink-600">{tone.note}</span>}
+          {/* ย่อให้จบบรรทัดเดียว — กล่องนี้มีงบ 3 บรรทัด คำเต็มอยู่ในปุ่มพับข้างล่าง */}
           <span className="block text-[11px] text-ink-600">
-            ช่วงที่คาดไว้ของสัปดาห์นี้ {expected.min}–{expected.max} กก. · BMI ก่อนตั้งครรภ์{" "}
-            {view.bmi} ({BAND_LABEL[view.band]})
+            ช่วงสัปดาห์นี้ {expected.min}–{expected.max} กก. · BMI {view.bmi}{" "}
+            {BAND_LABEL[view.band]}
           </span>
         </span>
       </div>
