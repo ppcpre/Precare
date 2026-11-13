@@ -803,3 +803,28 @@ export const childMilestones = sqliteTable(
     uniqueIndex("uq_child_milestone").on(t.childId, t.kind),
   ],
 );
+
+/**
+ * ผลของการสำรองข้อมูลแต่ละรอบ
+ *
+ * มีตารางนี้เพราะ **backup ที่พังเงียบๆ แย่กว่าไม่มี backup** — คนเข้าใจว่า
+ * ตัวเองมีสำเนาอยู่ แล้วไปรู้ตอนที่ต้องใช้ว่ารอบสุดท้ายที่สำเร็จคือสามเดือนก่อน
+ * Cron Trigger ที่ล้มไม่ถูกรันซ้ำให้ และไม่มีใครไปเปิด log ดูทุกวัน
+ * จึงต้องเก็บไว้ในที่ที่ถามได้ว่า "สำเร็จครั้งสุดท้ายเมื่อไหร่"
+ */
+export const backupRuns = sqliteTable(
+  "backup_runs",
+  {
+    id: text("id").primaryKey(),
+    ranAt: text("ran_at").notNull().default(nowIso),
+    /** ok = สำเร็จ · not_configured = ยังไม่ได้ตั้งค่า · failed = พัง */
+    status: text("status", { enum: ["ok", "not_configured", "failed"] }).notNull(),
+    objectKey: text("object_key"),
+    bytes: integer("bytes"),
+    /** จำนวนไฟล์เก่าที่ลบทิ้งตามอายุในรอบนี้ */
+    removed: integer("removed").notNull().default(0),
+    /** ข้อความผิดพลาดแบบย่อ — ห้ามใส่ข้อมูลผู้ใช้หรือ token ลงไป */
+    error: text("error"),
+  },
+  (t) => [index("idx_backup_runs_ran_at").on(t.ranAt)],
+);

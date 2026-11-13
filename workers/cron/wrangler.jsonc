@@ -7,12 +7,29 @@
 
   // ทุก 5 นาที — ละเอียดกว่านี้ไม่ได้ประโยชน์ เพราะคนตั้งเตือนเป็นหน่วยสิบนาที
   // และหยาบกว่านี้จะทำให้เตือน "ก่อน 60 นาที" คลาดได้เกือบครึ่งชั่วโมง
-  "triggers": { "crons": ["*/5 * * * *"] },
+  //
+  // รอบที่สองคือสำรองข้อมูล 19:20 UTC = 02:20 เวลาไทย — ต้องตรงกับ
+  // BACKUP_CRON ใน index.ts ทุกตัวอักษร เพราะใช้สตริงนี้แยกว่ารอบไหนทำอะไร
+  "triggers": { "crons": ["*/5 * * * *", "20 19 * * *"] },
+
+  // bucket ของสำรอง แยกจาก precare-photos เด็ดขาด — ของสำรองที่อยู่ปนกับ
+  // ของจริงจะโดนลบไปพร้อมกันตอนที่พลาด ซึ่งคือกรณีเดียวที่มันมีไว้เพื่อ
+  //   npx wrangler r2 bucket create precare-backup
+  "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "precare-backup" }],
 
   "vars": {
     "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
-    "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com"
+    "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com",
+    // id ของฐานอยู่ในรีโปอยู่แล้ว (binding ข้างล่าง) ใส่ซ้ำตรงนี้ได้
+    // ส่วน CF_ACCOUNT_ID กับ CF_API_TOKEN ตั้งเป็น secret — รีโปนี้เป็น public
+    "CF_DATABASE_ID": "906981f7-827b-4456-b586-a9d9717eae56"
   },
+
+  // สำรองข้อมูลต้องตั้งสองตัวนี้เองที่ worker ตัวนี้ ไม่ตั้ง = รอบสำรองจะจด
+  // ว่า not_configured ไว้ในตาราง backup_runs แล้วจบ ไม่ทำให้รอบเตือนนัดพัง
+  //   npx wrangler secret put CF_ACCOUNT_ID --config workers/cron/wrangler.jsonc
+  //   npx wrangler secret put CF_API_TOKEN  --config workers/cron/wrangler.jsonc
+  // token ต้องมีสิทธิ์ D1:Edit ของบัญชีนี้ สร้างที่ dash.cloudflare.com → API Tokens
 
   // VAPID_PRIVATE_KEY ต้องตั้งด้วย `wrangler secret put` ที่ worker ตัวนี้ด้วย
   //   npx wrangler secret put VAPID_PRIVATE_KEY --config workers/cron/wrangler.jsonc --env dev
@@ -29,10 +46,14 @@
     "dev": {
       "name": "precare-cron-dev",
       "observability": { "enabled": true },
-      "triggers": { "crons": ["*/5 * * * *"] },
+      "triggers": { "crons": ["*/5 * * * *", "20 19 * * *"] },
+      // bucket เดียวกับ production ได้ เพราะชื่อไฟล์คนละชุด (คนละ database id)
+      // แต่ bucket ต้องมีจริงก่อน ไม่งั้น deploy ไม่ผ่าน
+      "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "precare-backup" }],
       "vars": {
         "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
-        "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com"
+        "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com",
+        "CF_DATABASE_ID": "ed7a37a6-37ae-4a48-baa0-b78a311402fd"
       },
       "d1_databases": [
         {
