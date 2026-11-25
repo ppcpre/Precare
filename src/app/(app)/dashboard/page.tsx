@@ -19,6 +19,11 @@ import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
 import { familyMediaBase } from "@/lib/media-base";
 import { listChildren } from "@/lib/queries";
+import { latestBabyLogs, listBabyLogs } from "@/lib/baby-queries";
+import { addSeconds, summarizeDay } from "@/lib/baby-log";
+import { localNowIso } from "@/lib/local-time";
+import { BabyCard, type BabyCardData } from "@/components/baby/log/baby-card";
+import { ChildSwitcher } from "@/components/baby/log/child-switcher";
 
 export const metadata = { title: "หน้าแรก · Pre Care" };
 
@@ -51,6 +56,20 @@ export default async function DashboardPage() {
   const { now } = data;
 
   const canWrite = can.writeRecords(role);
+
+  // การ์ดลูก — เฉพาะเมื่อมีคนกดเพิ่มลูกแล้ว ห้ามเดาจากวันคาดคลอด
+  const nowIso = localNowIso();
+  const today = nowIso.slice(0, 10);
+  const dayFrom = `${today}T00:00:00`;
+  const babies: BabyCardData[] = await Promise.all(
+    kids.map(async (k) => {
+      const [{ latest }, rows] = await Promise.all([
+        latestBabyLogs(db, familyId, k.id),
+        listBabyLogs(db, familyId, k.id, dayFrom, addSeconds(dayFrom, 86_400)),
+      ]);
+      return { ...k, latest, summary: summarizeDay(rows, today, nowIso) };
+    }),
+  );
   // null เมื่ออายุครรภ์ยังไม่ถึง 4 สัปดาห์ หรือเลย 40 ไปแล้ว — การ์ดจะไม่ขึ้น
   const weekly = weeklyContent(data.ga?.weeks);
 
@@ -66,6 +85,26 @@ export default async function DashboardPage() {
 
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[2fr_1fr] lg:items-start">
         <div className="flex flex-col gap-3">
+          {babies.length === 1 && <BabyCard child={babies[0]} today={today} canWrite={canWrite} />}
+          {babies.length > 1 && (
+            <ChildSwitcher
+              tabs={babies.map((b) => ({
+                id: b.id,
+                name: b.name,
+                status:
+                  b.latest.sleep?.endedAt === null
+                    ? "กำลังนอน"
+                    : b.latest.breast?.endedAt === null
+                      ? "กำลังกินนม"
+                      : "",
+              }))}
+            >
+              {babies.map((b) => (
+                <BabyCard key={b.id} child={b} today={today} canWrite={canWrite} />
+              ))}
+            </ChildSwitcher>
+          )}
+
           {data.ga ? (
             <GestationHero
               ga={data.ga}
@@ -75,10 +114,10 @@ export default async function DashboardPage() {
               canEdit={canWrite}
               mediaBase={mediaBase}
             />
-          ) : data.postpartum ? (
+          ) : babies.length > 0 ? null : data.postpartum ? (
             // หลังคลอดต้องไม่ขึ้น "ตั้งค่าวันตั้งครรภ์" — ข้อมูลตั้งไว้แล้ว
             // แค่จบรอบไปแล้ว ถ้าขึ้นแบบนั้นจะเหมือนแอปลืมทุกอย่างที่เพิ่งผ่านมา
-            <PostpartumCard hasChild={kids.length > 0} />
+            <PostpartumCard canWrite={canWrite} />
           ) : (
             <SetupPrompt canEdit={can.editPregnancy(role)} />
           )}

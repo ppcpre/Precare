@@ -828,3 +828,69 @@ export const backupRuns = sqliteTable(
   },
   (t) => [index("idx_backup_runs_ran_at").on(t.ranAt)],
 );
+
+/**
+ * บันทึกประจำวันของลูกแรกเกิด — กิน ผ้าอ้อม นอน ปั๊มนม อาบน้ำ
+ *
+ * ตารางเดียวทุกประเภท ไม่แยกตารางละอย่าง เพราะหน้าที่ใช้บ่อยที่สุดคือ
+ * "วันนี้เกิดอะไรขึ้นบ้าง" กับ "ผ่านไปนานแค่ไหนแล้วตั้งแต่ครั้งล่าสุด"
+ * ซึ่งต้องอ่านทุกประเภทพร้อมกันตามลำดับเวลา แยกตารางเมื่อไหร่ต้อง union ทุกครั้ง
+ * คอลัมน์ที่ใช้เฉพาะบางประเภทจึงเป็น null ได้
+ *
+ * เวลาทุกช่องเป็นเวลาท้องถิ่นแบบไม่มี timezone และมาจาก client เสมอ
+ * (เหตุผลเดียวกับ tracking_sessions — worker รันใน UTC)
+ *
+ * ⚠️ ไม่มีเกณฑ์ "ผ้าอ้อมเปียกน้อยไป" หรือ "กินน้อยไป" ในตารางหรือโค้ดรอบนี้
+ *    ตัวเลขพวกนั้นต้องให้บุคลากรทางการแพทย์ตรวจถ้อยคำก่อน
+ */
+export const BABY_LOG_KINDS = ["breast", "bottle", "diaper", "sleep", "pump", "bath"] as const;
+export type BabyLogKind = (typeof BABY_LOG_KINDS)[number];
+/** ประเภทที่จับเวลาได้ — มีรอบค้าง (endedAt = null) ได้ */
+export const TIMED_BABY_KINDS = ["breast", "sleep"] as const;
+export const BREAST_SIDES = ["left", "right"] as const;
+export const MILK_KINDS = ["breast", "formula", "mixed"] as const;
+export const DIAPER_KINDS = ["wet", "dirty", "both"] as const;
+
+export const babyLogs = sqliteTable(
+  "baby_logs",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    /**
+     * null ได้เฉพาะปั๊มนม — ปั๊มเป็นข้อมูลของแม่ ไม่ใช่ของลูกคนไหน
+     * (ลูกแฝดกินนมจากขวดเดียวกันได้ ถ้าบังคับเลือกลูก แม่ต้องเดา)
+     */
+    childId: text("child_id").references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: BABY_LOG_KINDS }).notNull(),
+    startedAt: text("started_at").notNull(),
+    /**
+     * null = กำลังจับเวลาอยู่ (เฉพาะเต้ากับนอน)
+     * ของที่เกิดทีเดียว (ขวด ผ้าอ้อม อาบน้ำ) ใส่เท่ากับ startedAt
+     */
+    endedAt: text("ended_at"),
+    /** เต้า: วินาทีที่สะสมของแต่ละข้าง ไม่รวมช่วงที่กำลังจับอยู่ */
+    leftSec: integer("left_sec"),
+    rightSec: integer("right_sec"),
+    /** เต้า: ข้างล่าสุดที่ให้ — ใช้บอก "ต่อไป: อีกข้าง" */
+    side: text("side", { enum: BREAST_SIDES }),
+    /** เต้า: เวลาที่ข้างปัจจุบันเริ่ม · null = หยุดพักอยู่ หรือจบแล้ว */
+    sideStartedAt: text("side_started_at"),
+    /** ขวด: ปริมาณ · ปั๊ม: ไม่ใช้ (ดู leftMl/rightMl) */
+    ml: integer("ml"),
+    milk: text("milk", { enum: MILK_KINDS }),
+    leftMl: integer("left_ml"),
+    rightMl: integer("right_ml"),
+    diaper: text("diaper", { enum: DIAPER_KINDS }),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    /** หน้าวันนี้ + ครั้งล่าสุดของแต่ละประเภท */
+    index("idx_baby_logs_child").on(t.familyId, t.childId, t.startedAt),
+    /** หารอบที่จับเวลาค้าง — เปิดหน้าทีไรต้องเช็ค */
+    index("idx_baby_logs_open").on(t.familyId, t.endedAt),
+  ],
+);

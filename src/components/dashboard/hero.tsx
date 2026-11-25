@@ -151,9 +151,10 @@ export function SetupPrompt({ canEdit }: { canEdit: boolean }) {
  *    การตั้งครรภ์ไม่ได้จบด้วยลูกเสมอไป คนที่เพิ่งสูญเสียก็กดปุ่มนี้เหมือนกัน
  *    เพื่อให้แอปหยุดนับ แล้วต้องไม่โดนแอปแสดงความยินดีใส่
  *
- * ลิงก์ไปสมุดรูปเป็นแค่ทางเลือก ไม่ใช่ขั้นตอนถัดไปที่ต้องทำ
+ * A3 — ขึ้นเฉพาะตอนยังไม่มีลูกในระบบ พอเพิ่มลูกแล้วการ์ดลูก (BabyCard) ขึ้นแทน
+ * ปุ่มเพิ่มลูกเป็นแค่ทางเลือก ไม่ใช่ขั้นตอนถัดไปที่ต้องทำ
  */
-export function PostpartumCard({ hasChild }: { hasChild: boolean }) {
+export function PostpartumCard({ canWrite }: { canWrite: boolean }) {
   return (
     <Card className="flex flex-col gap-3 rounded-lg border-cream-200 bg-cream-100 p-3.5">
       <div className="flex flex-col gap-0.5">
@@ -162,9 +163,16 @@ export function PostpartumCard({ hasChild }: { hasChild: boolean }) {
           หยุดนับอายุครรภ์แล้ว บันทึกเก่าทั้งหมดยังอยู่ครบ
         </span>
       </div>
-      <ButtonLink href={hasChild ? "/baby" : "/baby"} variant="secondary" full>
-        {hasChild ? "เปิดสมุดรูปของลูก" : "เพิ่มสมุดรูปของลูก"}
-      </ButtonLink>
+      {canWrite && (
+        <>
+          <ButtonLink href="/baby" variant="secondary" full>
+            เพิ่มข้อมูลลูก
+          </ButtonLink>
+          <span className="text-center text-xs text-ink-400">
+            เพิ่มเมื่อพร้อม ใช้บันทึกการกิน การนอน ผ้าอ้อม และสมุดรูป
+          </span>
+        </>
+      )}
     </Card>
   );
 }

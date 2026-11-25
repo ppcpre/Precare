@@ -29,6 +29,7 @@ const PAGE_RULES = {
   "appointments/new": "editor",
   "appointments/[id]/edit": "editor",
   "album/upload": "editor",
+  "baby/pump": "editor",
 };
 /** หน้าที่แก้ข้อมูลของตัวเอง ไม่ผูกกับ family จึงใช้แค่ session */
 // หน้าที่ผูกกับ "ผู้ใช้" ไม่ใช่ "ครอบครัว" — ใช้ getSessionUser พอ
@@ -66,6 +67,8 @@ const ACTION_RULES = {
   "medications.ts": ["editorAction"],
   // ลูกเป็นข้อมูลของครอบครัว ทุกคนที่เขียนได้แก้ได้ แต่ viewer ต้องแก้ไม่ได้
   "children.ts": ["editorAction"],
+  // บันทึกประจำวันลูก (กิน ผ้าอ้อม นอน ปั๊ม) — ของครอบครัว viewer ดูได้อย่างเดียว
+  "baby-log.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],

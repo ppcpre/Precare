@@ -39,6 +39,11 @@
   --color-plum-100: #EEE6EC;
   --color-plum-500: #A38C9C;
   --color-plum-700: #7C6472;
+  /* บันทึกประจำวันลูก — ปั๊มนม (ดินเผา) กับ อาบน้ำ (น้ำผึ้ง) · หม่นแบบเดียวกับชุดบน */
+  --color-clay-100: #F1E6DF;
+  --color-clay-700: #9A6B55;
+  --color-honey-100: #F5ECD8;
+  --color-honey-700: #8F6E2F;
 
   /* Semantic — ใช้แบบหม่น ไม่ใช่สีสดจัด */
   --color-success: #7A9B76;
