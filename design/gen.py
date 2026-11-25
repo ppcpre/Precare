@@ -2880,6 +2880,660 @@ COST_DECISIONS = """ตัดสินใจครบแล้ว พร้อ�
 
 
 
+# ============================================================
+#  หลังคลอด · ลูก — บันทึกประจำวันของทารก (รอ approve ก่อนลงมือ)
+#
+#  16 หน้าจอ 4 กลุ่ม อยู่ใน page "หลังคลอด · ลูก" ของ canvas
+#   A. หน้าแรกหลังคลอด (ข้อ 6)          3 หน้า
+#   B. บันทึกประจำวัน รอบ 1 (ข้อ 4)     6 หน้า
+#   C. ดูย้อนหลัง + การแจ้งเตือน รอบ 2  3 หน้า
+#   D. ลูกในนัด / ยา / สุขภาพ (ข้อ 3)   4 หน้า
+#
+#  ⚠️ หลักเดิมที่ยังยึด: ทุกอย่างในนี้โผล่เมื่อมีคนกดเพิ่มลูกเองเท่านั้น
+#     แอปไม่เดาว่ามีลูกจากการกด "คลอดแล้ว" และไม่แสดงความยินดี
+# ============================================================
+
+ICONS.update({
+  'breast':'<path d="M3.5 7c.5 5 2.5 9 5 9s3.5-2.5 3.5-5.5c0 3 1 5.5 3.5 5.5s4.5-4 5-9"/><path d="M3.5 7 5 4M20.5 7 19 4"/>',
+  'bottle':'<path d="M9 7.5h6l.8 2.2v9.6a1.7 1.7 0 0 1-1.7 1.7H9.9a1.7 1.7 0 0 1-1.7-1.7V9.7Z"/><path d="M10 7.5V5.6c0-.9.9-2.1 2-2.1s2 1.2 2 2.1v1.9"/><path d="M8.4 12.5h2.8M8.4 15.5h2.8"/>',
+  'diaper':'<path d="M3.5 6.5h17v3.2a8.5 8.5 0 0 1-8.5 8.8 8.5 8.5 0 0 1-8.5-8.8Z"/><path d="M3.5 9.5c3 0 4.5 2 5 4.5M20.5 9.5c-3 0-4.5 2-5 4.5"/>',
+  'moon':'<path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1Z"/>',
+  'pump':'<path d="M9 10h6v9.3a1.7 1.7 0 0 1-1.7 1.7h-2.6A1.7 1.7 0 0 1 9 19.3Z"/><path d="M9.5 10 8 6.5a2 2 0 0 1 1.8-2.8h4.4A2 2 0 0 1 16 6.5L14.5 10"/><path d="M16 5.5h3.5l-1 4"/><path d="M11 14h2M11 17h2"/>',
+  'bath':'<path d="M3.5 12h17v1.5a5 5 0 0 1-5 5h-7a5 5 0 0 1-5-5Z"/><path d="M7 18.5 6 20.5M17 18.5l1 2"/><circle cx="14" cy="6" r="1.6"/><circle cx="17.5" cy="8.5" r="1.1"/><circle cx="11" cy="8.6" r="1"/>',
+  'thermo':'<path d="M10 14.2V5a2 2 0 0 1 4 0v9.2a4 4 0 1 1-4 0Z"/><path d="M12 9v7"/>',
+  'pill':'<path d="m10.2 4.8 9 9a3.6 3.6 0 0 1-5.1 5.1l-9-9a3.6 3.6 0 0 1 5.1-5.1Z"/><path d="m8.6 13.4 4.8-4.8"/>',
+  'swap':'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
+  'minus':'<path d="M5.2 12h13.6"/>',
+  'filter':'<path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z"/>',
+})
+
+# สีประจำประเภท (fg, bg) — หม่นระดับเดียวกับพาเลตต์เดิม ไม่ใช้สีสดแบบแอปตัวอย่าง
+# แต่ต้องแยกกันออกบนไทม์ไลน์ที่ไอคอนเล็กมาก
+KIND = {
+  'breast': ('เต้า',    'breast', PE7,       PE1),
+  'bottle': ('ขวดนม',   'bottle', '#5E7B94', SKY1),
+  'diaper': ('ผ้าอ้อม', 'diaper', '#5F7358', SAGE1),
+  'sleep':  ('นอน',     'moon',   '#7A6574', PLUM1),
+  'pump':   ('ปั๊มนม',  'pump',   '#9A6B55', CLAY1),
+  'bath':   ('อาบน้ำ',  'bath',   '#A8823C', '#F5ECD8'),
+}
+BNAV = [('home','หน้าแรก'),('pulse','สุขภาพ'),('calendar','นัดหมาย'),('album','อัลบั้ม'),('receipt','นับแคล')]
+
+def bnav(active=0):
+    """bottom nav ตามแอปจริงตอนนี้ (นับแคลแทนโปรไฟล์) — ของเดิมใน NAV เป็นชุดเก่า"""
+    items = []
+    for i,(k,lb) in enumerate(BNAV):
+        on = i == active
+        c = BR7 if on else IN4
+        pill = ('padding: 4px 14px; border-radius: 9999px; background: %s;' % BR1) if on else 'padding: 4px 14px;'
+        items.append('<div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">'
+                     '<div style="%s display: flex;">%s</div>'
+                     '<div style="font-size: 11px; color: %s; font-weight: %s;">%s</div></div>'
+                     % (pill, ic(k, 21, c, 1.8), c, '500' if on else '400', lb))
+    return ('<div style="margin-top: auto; flex: none; height: 64px; background: %s; border-top: 1px solid %s; '
+            'display: flex; align-items: center; justify-content: space-around; padding: 0 6px;">%s</div>'
+            ) % (WHITE, CR200, ''.join(items))
+
+def kbubble(kind, size=44, filled=False):
+    _, icn, fg, bg = KIND[kind]
+    return ('<div style="width: %dpx; height: %dpx; border-radius: 9999px; background: %s; flex: none; '
+            'display: flex; align-items: center; justify-content: center;">%s</div>'
+            ) % (size, size, fg if filled else bg, ic(icn, int(size*0.5), WHITE if filled else fg, 1.8))
+
+def child_avatar(initial='ต', size=40, ring=True):
+    return ('<div style="width: %dpx; height: %dpx; border-radius: 9999px; background: %s; flex: none; '
+            'border: %s; display: flex; align-items: center; justify-content: center; '
+            'font-size: %dpx; font-weight: 600; color: %s; box-sizing: border-box;">%s</div>'
+            ) % (size, size, PLUM1, ('2px solid %s' % PE3) if ring else 'none', int(size*0.4), '#7A6574', initial)
+
+def qtile(kind, since, sub=None, running=False, bell=False, label_=None):
+    """ปุ่มกดด่วน — ใต้ไอคอนคือ "ผ่านไปนานเท่าไหร่แล้ว" ซึ่งเป็นคำถามแรกตอนตีสาม
+    กำลังจับเวลาอยู่ = ทั้งใบเป็นสีของประเภทนั้น เห็นจากระยะไกล"""
+    name, _, fg, bg = KIND[kind]
+    b = ('<div style="position: absolute; top: -2px; right: 18px; width: 18px; height: 18px; border-radius: 9999px; '
+         'background: %s; border: 1.5px solid %s; display: flex; align-items: center; justify-content: center;">%s</div>'
+         ) % (IN6, WHITE, ic('bell', 11, WHITE, 2)) if bell else ''
+    tbg, tbd = (bg, fg) if running else (WHITE, CR200)
+    return ('<div style="position: relative; background: %s; border: 1px solid %s; border-radius: 14px; '
+            'padding: 12px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px;">%s%s'
+            '<span style="font-size: 13px; color: %s; font-weight: 500;">%s</span>'
+            '<span style="font-size: 12px; color: %s; font-weight: %s; text-align: center; line-height: 1.35; '
+            'font-variant-numeric: tabular-nums;">%s</span>%s</div>'
+            ) % (tbg, tbd, kbubble(kind, 44, running), b, IN9, label_ or name,
+                 fg if running else IN6, '600' if running else '400', since,
+                 ('<span style="font-size: 11px; color: %s;">%s</span>' % (IN4, sub)) if sub else '')
+
+def qgrid(tiles):
+    return ('<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">%s</div>'
+            ) % ''.join(tiles)
+
+# ---------- ข้อมูลตัวอย่างของไทม์ไลน์ ----------
+# (ประเภท, ชั่วโมงเริ่ม, ชั่วโมงจบ, ข้อมูลเสริม) — ชั่วโมงเป็นทศนิยม 13.5 = 13:30
+TODAY = [
+  ('sleep',0,2.3,None),('sleep',2.6,4.8,None),('sleep',5.3,7.0,None),('sleep',8.2,9.6,None),
+  ('sleep',10.4,12.1,None),('sleep',13.0,14.5,'run'),
+  ('breast',2.3,2.6,'L'),('breast',4.85,5.25,'R'),('breast',7.05,7.45,'L'),('breast',12.15,12.55,'R'),
+  ('bottle',9.7,None,'90'),('pump',7.6,None,None),('pump',11.0,None,None),
+  ('diaper',2.45,None,'wet'),('diaper',5.3,None,'both'),('diaper',7.5,None,'wet'),
+  ('diaper',9.8,None,'dirty'),('diaper',12.6,None,'wet'),('bath',9.9,None,None),
+]
+
+def gen_day(seed, end=24.0):
+    """วันจำลองสำหรับไทม์ไลน์หลายวัน — วงจร นอน → ตื่นกิน → เปลี่ยนผ้าอ้อม
+    ใช้ seed ตายตัวเพื่อให้ gen ซ้ำแล้วได้ไฟล์เดิมทุกครั้ง"""
+    import random
+    r = random.Random(seed)
+    ev, t = [], r.uniform(0, 0.8)
+    while t < end - 0.3:
+        night = t < 6 or t > 20
+        s = r.uniform(1.6, 3.0) if night else r.uniform(0.6, 1.9)
+        ev.append(('sleep', t, min(t+s, end), None)); t += s
+        if t >= end - 0.2: break
+        if r.random() < 0.72:
+            d = r.uniform(0.25, 0.45); ev.append(('breast', t, t+d, 'L' if r.random()<.5 else 'R'))
+        else:
+            d = 0.2; ev.append(('bottle', t, None, '90'))
+        if r.random() < 0.7:
+            ev.append(('diaper', t+d+0.05, None, r.choice(['wet','wet','dirty','both'])))
+        if r.random() < 0.3 and 6 < t < 22: ev.append(('pump', t+d+0.2, None, None))
+        t += d + r.uniform(0.3, 1.4 if not night else 0.4)
+    if seed % 3 == 0: ev.append(('bath', 10.2, None, None))
+    return ev
+
+def day_strip(evs, w=358, now=None, hours=True, compact=False, only=None):
+    """แถบ 24 ชม. สามเลน: กิน (เต้า/ขวด/ปั๊ม) · ผ้าอ้อม · นอน
+    แยกเลนแทนที่จะวางไอคอนซ้อนกันแบบแอปตัวอย่าง เพราะของตัวอย่างไอคอนทับกันจนอ่านไม่ออก
+    ช่วงกลางคืน 19:00–06:00 แรเงา"""
+    lh = 14 if compact else 18
+    top = 18 if hours else 2
+    H = top + lh*3 + 8
+    X = lambda h: h/24.0*w
+    o = ['<div style="position: relative; width: %dpx; height: %dpx; background: %s; border-radius: 8px; overflow: hidden;">' % (w, H, WHITE)]
+    for a,b in ((0,6),(19,24)):
+        o.append('<div style="position: absolute; left: %.1fpx; top: 0; width: %.1fpx; height: %dpx; background: %s;"></div>' % (X(a), X(b)-X(a), H, CR100))
+    for h in range(3, 24, 3):
+        o.append('<div style="position: absolute; left: %.1fpx; top: %dpx; width: 1px; height: %dpx; background: %s;"></div>' % (X(h), top, H-top, CR200))
+        if hours:
+            o.append('<span style="position: absolute; left: %.1fpx; top: 2px; width: 20px; margin-left: -10px; text-align: center; font-size: 10px; color: %s;">%d</span>' % (X(h), IN4, h))
+    lanes = {'breast':0,'bottle':0,'pump':0,'bath':1,'diaper':1,'sleep':2}
+    for k,a,b,x in evs:
+        if only and k not in only: continue
+        fg, bg = KIND[k][2], KIND[k][3]
+        y = top + 4 + lanes[k]*lh
+        if k == 'sleep':
+            run = x == 'run'
+            o.append('<div style="position: absolute; left: %.1fpx; top: %dpx; width: %.1fpx; height: %dpx; '
+                     'background: %s; border: 1px %s %s; border-radius: 4px; box-sizing: border-box;"></div>'
+                     % (X(a), y, max(3, X(b)-X(a)-1), lh-4, bg, 'dashed' if run else 'solid', fg))
+        elif k == 'breast':
+            o.append('<div style="position: absolute; left: %.1fpx; top: %dpx; width: %.1fpx; height: %dpx; '
+                     'background: %s; border-radius: 3px;"></div>' % (X(a), y+1, max(4, X(b)-X(a)), lh-6, fg))
+        else:
+            d = lh-6
+            if k == 'diaper' and x == 'wet':
+                st = 'background: %s; border: 1.5px solid %s;' % (WHITE, fg)
+            else:
+                st = 'background: %s;' % fg
+            o.append('<div style="position: absolute; left: %.1fpx; top: %dpx; width: %dpx; height: %dpx; margin-left: -%dpx; '
+                     'border-radius: %s; box-sizing: border-box; %s"></div>'
+                     % (X(a), y+1, d, d, d//2, '2px' if k in ('bottle','pump') else '9999px', st))
+    if now is not None:
+        o.append('<div style="position: absolute; left: %.1fpx; top: %dpx; width: 2px; height: %dpx; background: %s;"></div>' % (X(now), top-2, H-top+2, BR7))
+    o.append('</div>')
+    return ''.join(o)
+
+def legend():
+    def it(k, shape, t):
+        fg = KIND[k][2]
+        sw = {'bar': 'width: 14px; height: 7px; border-radius: 2px; background: %s;' % fg,
+              'sq': 'width: 8px; height: 8px; border-radius: 2px; background: %s;' % fg,
+              'dot': 'width: 8px; height: 8px; border-radius: 9999px; background: %s;' % fg,
+              'ring': 'width: 8px; height: 8px; border-radius: 9999px; border: 1.5px solid %s; box-sizing: border-box;' % fg,
+              'sleep': 'width: 16px; height: 8px; border-radius: 3px; background: %s; border: 1px solid %s; box-sizing: border-box;' % (KIND[k][3], fg)}[shape]
+        return '<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: %s;"><span style="%s"></span>%s</span>' % (IN6, sw, t)
+    return row(it('breast','bar','เต้า'), it('bottle','sq','ขวด'), it('pump','sq','ปั๊ม'),
+               it('diaper','ring','ฉี่'), it('diaper','dot','อึ'), it('sleep','sleep','นอน'), gap=10, wrap=True)
+
+def sum_row(kind, count, detail, sub=None):
+    return ('<div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid %s;">%s'
+            '<span style="font-size: 18px; font-weight: 600; color: %s; width: 22px; font-variant-numeric: tabular-nums;">%s</span>'
+            '<div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">'
+            '<span style="font-size: 14px; color: %s;">%s</span>%s</div></div>'
+            ) % (CR200, kbubble(kind, 30), IN9, count, IN9, detail,
+                 ('<span style="font-size: 12px; color: %s;">%s</span>' % (IN4, sub)) if sub else '')
+
+def log_row(kind, time_, what, who):
+    return ('<div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid %s;">%s'
+            '<div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">'
+            '<span style="font-size: 14px; color: %s;">%s</span>'
+            '<span style="font-size: 12px; color: %s;">%s · บันทึกโดย %s</span></div>%s</div>'
+            ) % (CR200, kbubble(kind, 30), IN9, what, IN4, time_, who, ic('chev', 18, IN4))
+
+def child_head(name='ต้องตา', age='อายุ 20 วัน', right=''):
+    return row(row(child_avatar('ต', 40), col(txt(name, 16, IN9, 600), txt(age, 12, IN6), gap=0), gap=10),
+               right, justify='space-between')
+
+def stepper(value, unit='มล.', big=True):
+    btn_ = lambda n: ('<div style="width: 48px; height: 48px; border-radius: 9999px; background: %s; border: 1px solid %s; '
+                      'display: flex; align-items: center; justify-content: center;">%s</div>') % (WHITE, BR3, ic(n, 22, BR7, 2))
+    return row(btn_('minus'),
+               row('<span style="font-size: %dpx; font-weight: 600; color: %s; font-variant-numeric: tabular-nums;">%s</span>' % (44 if big else 28, IN9, value),
+                   txt(unit, 16, IN6), gap=6, align='baseline'),
+               btn_('plus'), justify='space-between', extra='padding: 4px 8px;')
+
+def sheet(title_, *parts):
+    """bottom sheet ทับหน้าวันนี้ — กดบันทึกโดยไม่ต้องเปลี่ยนหน้า"""
+    return ('<div style="position: absolute; inset: 0; background: rgba(43,36,32,0.38);"></div>'
+            '<div style="position: absolute; left: 0; right: 0; bottom: 0; background: %s; border-radius: 20px 20px 0 0; '
+            'padding: 10px 16px 24px; display: flex; flex-direction: column; gap: 14px;">'
+            '<div style="width: 40px; height: 4px; border-radius: 9999px; background: %s; margin: 0 auto;"></div>'
+            '<div style="display: flex; align-items: center; justify-content: space-between;">'
+            '<span style="font-size: 17px; font-weight: 600; color: %s;">%s</span>%s</div>%s</div>'
+            ) % (WHITE, CR300, IN9, title_, ic('x', 22, IN6), ''.join(parts))
+
+def time_line(label_='เวลา', value='วันนี้ 14:35', note=None):
+    return row(row(ic('clock', 18, IN4, 1.9), txt(label_, 14, IN6), gap=8),
+               row(txt(value, 15, IN9, 500), ic('chev', 16, IN4), gap=4),
+               justify='space-between', extra='padding: 12px 14px; background: %s; border-radius: 10px;' % CR50)
+
+def today_bg():
+    """พื้นหลังจางๆ ใต้ sheet — แค่ให้รู้ว่าอยู่หน้าไหน ไม่ต้องอ่านออก"""
+    return body(child_head(), qgrid([qtile('breast','2 ชม. ที่แล้ว','ต่อไป: ซ้าย'), qtile('bottle','4 ชม. 50 น.'),
+                qtile('diaper','1 ชม. 55 น.'), qtile('sleep','1:30:12', running=True, label_='กำลังนอน'),
+                qtile('pump','3 ชม. 30 น.', bell=True), qtile('bath','4 ชม. 35 น.')]), gap=14)
+
+def baby_topbar(title_, right=''):
+    return topbar(title_, left=ic('chevL', 22, IN6), right=right or '<div style="width: 24px;"></div>')
+
+def info_note(t, icon_='alert', color=IN4):
+    return card(row(ic(icon_, 16, color, 1.9), txt(t, 12, IN6, extra='line-height: 1.6;'), gap=8, align='flex-start'),
+                pad=12, bg=CR100, border=CR200, gap=0)
+
+# ================= A. หน้าแรกหลังคลอด =================
+
+TODAY_TILES = [qtile('breast','2 ชม. ที่แล้ว','ต่อไป: ซ้าย'), qtile('bottle','4 ชม. 50 น.'),
+               qtile('diaper','1 ชม. 55 น.'), qtile('sleep','1:30:12', running=True, label_='กำลังนอน'),
+               qtile('pump','3 ชม. 30 น.', bell=True), qtile('bath','4 ชม. 35 น.')]
+
+def mom_appt(tag=None):
+    t = ('<span style="background: %s; color: %s; border-radius: 6px; padding: 2px 7px; font-size: 11px;">%s</span>'
+         % (PLUM1, '#7A6574', tag)) if tag else ''
+    return card(
+      row(txt('นัดหมายถัดไป', 14, IN6), badge('อีก 5 วัน', 'soft'), justify='space-between'),
+      row(('<div style="width: 46px; height: 52px; border-radius: 8px; background: %s; display: flex; '
+           'flex-direction: column; align-items: center; justify-content: center; gap: 1px; flex: none;">'
+           '<span style="font-size: 11px; color: %s;">พ.ย.</span>'
+           '<span style="font-size: 20px; font-weight: 600; color: %s; line-height: 1;">29</span></div>') % (BR1, BR7, BR9),
+          col(row(txt('09:30 · ฉีดวัคซีน 1 เดือน', 15, IN9, 500), t, gap=6, wrap=True),
+              row(ic('pin', 14, IN4, 1.9), txt('รพ.รามาธิบดี', 13, IN6), gap=5), gap=5, extra='flex: 1;'),
+          gap=12), pad=14, gap=10)
+
+write('BabyHome.dc.html', screen(
+  dash_topbar(),
+  body(
+    card(
+      child_head(right=row(txt('ดูทั้งวัน', 13, BR7, 500), ic('chev', 16, BR7), gap=2)),
+      qgrid(TODAY_TILES),
+      row(txt('วันนี้', 12, IN4), txt('กิน 5 · ผ้าอ้อม 5 · นอน 9 ชม. 40 น.', 12, IN6), gap=8,
+          extra='padding-top: 2px;'),
+      pad=14, gap=12, radius=16),
+    section_head('ของคุณ'),
+    mom_appt('ต้องตา'),
+    card(row(ic('pill', 18, BR7, 1.8), col(txt('ยาและวิตามิน', 14, IN9, 500), txt('วันนี้เหลือ 1 ครั้ง · 20:00', 12, IN6), gap=1),
+             gap=10), pad=14, gap=0),
+    gap=12),
+  bnav(0)), h=1060)
+
+write('BabyHomeTwins.dc.html', screen(
+  dash_topbar(),
+  body(
+    card(
+      # สลับลูกด้วยแถบบนการ์ด — แต่ละคนบอกสถานะล่าสุดไว้เลย
+      # จะได้รู้ว่าใครใกล้ถึงเวลากินโดยไม่ต้องกดสลับไปดูทีละคน
+      ('<div style="display: flex; gap: 6px; background: %s; border-radius: 12px; padding: 4px;">'
+       '<div style="flex: 1; background: %s; border-radius: 9px; padding: 8px; display: flex; align-items: center; gap: 8px; box-shadow: %s;">%s%s</div>'
+       '<div style="flex: 1; border-radius: 9px; padding: 8px; display: flex; align-items: center; gap: 8px;">%s%s</div></div>'
+       ) % (CR100, WHITE, SHADOW,
+            child_avatar('ข', 30), col(txt('ต้นข้าว', 14, IN9, 600), txt('กินล่าสุด 40 น.', 11, IN6), gap=0),
+            child_avatar('ก', 30, ring=False), col(txt('ต้นกล้า', 14, IN6, 500), txt('กำลังนอน 0:52', 11, KIND['sleep'][2]), gap=0)),
+      qgrid([qtile('breast','40 น. ที่แล้ว','ต่อไป: ขวา'), qtile('bottle','3 ชม. 10 น.'),
+             qtile('diaper','35 น.'), qtile('sleep','1 ชม. ที่แล้ว'),
+             qtile('pump','2 ชม. 05 น.', bell=True), qtile('bath','เมื่อวาน')]),
+      row(txt('วันนี้ · ต้นข้าว', 12, IN4), txt('กิน 6 · ผ้าอ้อม 7 · นอน 8 ชม.', 12, IN6), gap=8),
+      pad=14, gap=12, radius=16),
+    info_note('ปั๊มนมไม่ผูกกับลูกคนไหน เป็นของแม่ จะเห็นเวลาเดียวกันทั้งสองแท็บ', 'alert'),
+    section_head('ของคุณ'),
+    mom_appt(),
+    gap=12),
+  bnav(0)), h=1060)
+
+write('BabyHomeNoChild.dc.html', screen(
+  dash_topbar(),
+  body(
+    # การ์ดเดิมที่มีอยู่แล้วในแอป ถ้อยคำเป็นกลางเหมือนเดิม — เปลี่ยนแค่ปุ่ม
+    card(col(txt('บันทึกไว้ว่าคลอดแล้ว', 16, IN9, 600),
+             txt('หยุดนับอายุครรภ์แล้ว บันทึกเก่าทั้งหมดยังอยู่ครบ', 13, IN6, extra='line-height: 1.6;'), gap=4),
+         btn('เพิ่มข้อมูลลูก', 'secondary'),
+         txt('เพิ่มเมื่อพร้อม ใช้บันทึกการกิน การนอน ผ้าอ้อม และสมุดรูป', 12, IN4, extra='text-align: center;'),
+         pad=16, bg=CR100, border=CR200, gap=12),
+    section_head('ของคุณ'),
+    card(row(txt('นัดหมายถัดไป', 14, IN6), badge('อีก 14 วัน', 'soft'), justify='space-between'),
+         txt('10:00 · ตรวจหลังคลอด 6 สัปดาห์', 15, IN9, 500), pad=14, gap=8),
+    card(row(ic('pill', 18, BR7, 1.8), col(txt('ยาและวิตามิน', 14, IN9, 500), txt('วันนี้เหลือ 1 ครั้ง · 20:00', 12, IN6), gap=1),
+             gap=10), pad=14, gap=0),
+    gap=12),
+  bnav(0)), h=900)
+
+# ================= B. บันทึกประจำวัน (รอบ 1) =================
+
+write('BabyToday.dc.html', screen(
+  baby_topbar('ต้องตา', right=row(ic('bell', 21, IN6), ic('calendar', 21, IN6), gap=16)),
+  body(
+    row(txt('อายุ 20 วัน · สัปดาห์ที่ 3', 13, IN6), justify='center'),
+    qgrid(TODAY_TILES),
+    row(ic('chevL', 20, IN6), txt('วันนี้ · อา. 22 พ.ย.', 15, IN9, 500), ic('chev', 20, IN4), justify='space-between',
+        extra='padding: 4px 4px 0;'),
+    day_strip(TODAY, now=14.5),
+    legend(),
+    card(
+      txt('สรุปวันนี้', 14, IN6),
+      sum_row('breast', 4, '1 ชม. 18 น.', 'ซ้าย 38 น. · ขวา 40 น.'),
+      sum_row('bottle', 1, '90 มล.', 'นมแม่'),
+      sum_row('diaper', 5, 'ฉี่ 4 · อึ 2', 'นับรวมผืนที่มีทั้งสองอย่าง'),
+      sum_row('sleep', 6, '9 ชม. 40 น.', 'รวมรอบที่กำลังนอนอยู่'),
+      sum_row('pump', 2, '180 มล.', 'ซ้าย 80 · ขวา 100'),
+      sum_row('bath', 1, 'อาบน้ำ'),
+      pad=14, gap=0),
+    card(
+      txt('ล่าสุด', 14, IN6),
+      log_row('sleep', '13:00 – ยังนอนอยู่', 'นอน 1 ชม. 30 น.', 'พ่อ'),
+      log_row('diaper', '12:36', 'ผ้าอ้อม · ฉี่', 'แม่'),
+      log_row('breast', '12:09 – 12:33', 'เต้า · ขวา 24 น.', 'แม่'),
+      pad=14, gap=0),
+    gap=12),
+  bnav(0)), h=1500)
+
+def side_btn(side, time_, active=False, hint=None):
+    fg, bg = PE7, PE1
+    return ('<div style="flex: 1; height: 168px; border-radius: 22px; background: %s; border: %s; '
+            'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;">'
+            '<span style="font-size: 15px; color: %s; font-weight: 500;">%s</span>'
+            '<span style="font-size: 34px; font-weight: 600; color: %s; font-variant-numeric: tabular-nums; line-height: 1;">%s</span>'
+            '<span style="font-size: 12px; color: %s;">%s</span></div>'
+            ) % (fg if active else bg, 'none' if active else '1.5px solid %s' % PE3,
+                 WHITE if active else IN6, side, WHITE if active else IN9, time_,
+                 WHITE if active else IN4, hint or ('กำลังจับเวลา' if active else 'แตะเพื่อสลับ'))
+
+write('BabyBreast.dc.html', screen(
+  topbar('ให้นมแม่ · ต้องตา', left=ic('x', 22, IN6)),
+  body(
+    col(txt('รวม', 13, IN6, extra='text-align: center;'),
+        txt('08:42', 52, IN9, 600, 'text-align: center; font-variant-numeric: tabular-nums; line-height: 1.1;'),
+        gap=2, extra='padding-top: 8px;'),
+    row(side_btn('ซ้าย', '08:42', True), side_btn('ขวา', '0:00'), gap=12),
+    # เต้าที่ต้องเริ่มคือสิ่งที่แม่ลืมบ่อยที่สุด แอปจำให้ได้จากครั้งก่อน
+    info_note('ครั้งก่อนจบที่ข้างขวา (12:33) วันนี้จึงเริ่มที่ซ้ายให้ก่อน', 'swap', PE7),
+    time_line('เริ่ม', 'วันนี้ 14:32'),
+    row(txt('ลืมกดเริ่ม?', 13, IN4), txt('ใส่ย้อนหลังแทน', 13, BR7, 500), gap=6, justify='center'),
+    gap=14),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s; display: flex; '
+   'flex-direction: column; gap: 8px;">%s<div style="text-align: center; font-size: 12px; color: %s;">'
+   'ปิดหน้าจอไปก่อนได้ ระบบนับต่อให้ · คนอื่นในบ้านเห็นว่ากำลังให้นมอยู่</div></div>'
+   ) % (WHITE, CR200, btn('หยุดและบันทึก', 'primary', ic('stop', 17, WHITE, 1.9)), IN4)), h=900)
+
+write('BabyBottle.dc.html', screen(
+  baby_topbar('ต้องตา'),
+  today_bg(),
+  sheet('ขวดนม',
+    segmented(['นมแม่', 'นมผง', 'ผสม'], 0),
+    stepper('90'),
+    row(*[chip(v, v == '90') for v in ['60', '90', '120', '150']], gap=8, justify='center'),
+    txt('ปุ่มลัดจำค่าที่ใช้บ่อยของลูกคนนี้ไว้ให้', 12, IN4, extra='text-align: center;'),
+    time_line('เวลา', 'ตอนนี้ 14:35'),
+    btn('บันทึก', 'primary')),
+  h=900), h=900)
+
+def diaper_btn(t, sub, kind='wet'):
+    fg = KIND['diaper'][2]
+    dot = ('<span style="width: 14px; height: 14px; border-radius: 9999px; border: 2px solid %s; box-sizing: border-box;"></span>' % fg
+           if kind == 'wet' else
+           '<span style="width: 14px; height: 14px; border-radius: 9999px; background: %s;"></span>' % fg if kind == 'dirty' else
+           '<span style="display: flex; gap: 3px;"><span style="width: 12px; height: 12px; border-radius: 9999px; border: 2px solid %s; box-sizing: border-box;"></span>'
+           '<span style="width: 12px; height: 12px; border-radius: 9999px; background: %s;"></span></span>' % (fg, fg))
+    return ('<div style="flex: 1; height: 104px; border-radius: 16px; background: %s; border: 1px solid %s; '
+            'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">%s'
+            '<span style="font-size: 16px; font-weight: 600; color: %s;">%s</span>'
+            '<span style="font-size: 11px; color: %s;">%s</span></div>'
+            ) % (KIND['diaper'][3], '#C9D6C4', dot, IN9, t, IN6, sub)
+
+write('BabyDiaper.dc.html', screen(
+  baby_topbar('ต้องตา'),
+  today_bg(),
+  sheet('ผ้าอ้อม',
+    txt('แตะครั้งเดียวบันทึกเลย ไม่ต้องกดยืนยัน', 13, IN6),
+    row(diaper_btn('ฉี่', 'เปียก', 'wet'), diaper_btn('อึ', 'มีอุจจาระ', 'dirty'),
+        diaper_btn('ทั้งคู่', 'นับทั้งสอง', 'both'), gap=8),
+    time_line('เวลา', 'ตอนนี้ 14:40'),
+    # ตัวอย่างหลังแตะ — toast มีปุ่มเลิกทำ แทนหน้าต่างยืนยัน
+    ('<div style="background: %s; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; '
+     'justify-content: space-between;"><span style="font-size: 14px; color: %s;">บันทึกแล้ว · ฉี่ 14:40</span>'
+     '<span style="font-size: 14px; font-weight: 600; color: %s;">เลิกทำ</span></div>') % (IN9, WHITE, PE3),
+    txt('↑ แถบที่ขึ้นหลังแตะ ค้าง 5 วินาที', 11, IN4, extra='text-align: center;')),
+  h=900), h=900)
+
+write('BabySleep.dc.html', screen(
+  topbar('นอน · ต้องตา', left=ic('chevL', 22, IN6), right=ic('trash', 20, IN4)),
+  body(
+    # อีกคนในบ้านเปิดหน้านี้ = เห็นรอบเดียวกัน ไม่ได้เริ่มรอบใหม่ซ้อน
+    card(row(avatar('พ', 26, SKY5, WHITE, 12),
+             txt('พ่อเริ่มจับเวลาไว้ตอน 13:00 · หยุดจากเครื่องไหนก็ได้', 13, IN9, extra='line-height: 1.5;'),
+             gap=10), pad=12, bg=SKY1, border=SKY1, gap=0),
+    col(kbubble('sleep', 96, True),
+        txt('กำลังนอน', 15, KIND['sleep'][2], 500, 'text-align: center;'),
+        txt('1:30:12', 52, IN9, 600, 'text-align: center; font-variant-numeric: tabular-nums; line-height: 1.1;'),
+        gap=8, extra='align-items: center; padding: 18px 0 8px;'),
+    time_line('เริ่ม', 'วันนี้ 13:00'),
+    row(stat_pill('moon', 'วันนี้รวม', '9 ชม. 40 น.'), stat_pill('timer', 'รอบยาวสุด', '2 ชม. 18 น.'), gap=10),
+    gap=14),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s;">%s</div>'
+   ) % (WHITE, CR200, btn('ตื่นแล้ว · หยุด', 'primary', ic('stop', 17, WHITE, 1.9)))), h=900)
+
+write('BabyPump.dc.html', screen(
+  topbar('ปั๊มนม', left=ic('x', 22, IN6)),
+  body(
+    info_note('ปั๊มนมเป็นข้อมูลของแม่ ไม่ผูกกับลูกคนไหน', 'alert'),
+    col(label('ข้างซ้าย'), stepper('80', big=False), gap=4),
+    col(label('ข้างขวา'), stepper('100', big=False), gap=4),
+    card(row(txt('รวม', 14, IN6), txt('180 มล.', 20, IN9, 600), justify='space-between'), pad=14, gap=0),
+    time_line('เวลา', 'ตอนนี้ 14:50'),
+    field('ใช้เวลา (ไม่บังคับ)', '', 'เช่น 20', suffix='นาที'),
+    gap=14),
+  ('<div style="flex: none; padding: 12px 16px 20px; background: %s; border-top: 1px solid %s;">%s</div>'
+   ) % (WHITE, CR200, btn('บันทึก', 'primary'))), h=900)
+
+# ================= C. ดูย้อนหลัง + การแจ้งเตือน (รอบ 2) =================
+
+def kind_filter(sel=None):
+    out = [chip('ทั้งหมด', sel is None)]
+    for k in ('breast','bottle','diaper','sleep','pump'):
+        on = sel == k
+        out.append('<span style="display: inline-flex; align-items: center; gap: 5px; background: %s; border: 1px solid %s; '
+                   'border-radius: 9999px; padding: 5px 11px 5px 6px; font-size: 13px; color: %s; white-space: nowrap;">%s%s</span>'
+                   % (BR1 if on else WHITE, BR1 if on else CR200, BR9 if on else IN6, kbubble(k, 22), KIND[k][0]))
+    return row(*out, gap=6, extra='overflow: hidden;')
+
+DAYS = [('อา. 22', TODAY, 14.5), ('ส. 21', gen_day(21), None), ('ศ. 20', gen_day(20), None),
+        ('พฤ. 19', gen_day(19), None), ('พ. 18', gen_day(18), None), ('อ. 17', gen_day(17), None),
+        ('จ. 16', gen_day(16), None)]
+
+def multi_day(w=318):
+    rows_ = []
+    for i, (d, ev, now) in enumerate(DAYS):
+        rows_.append(row(txt(d.replace(' ', '<br>'), 11, IN6, extra='width: 30px; line-height: 1.3; text-align: center;'),
+                         day_strip(ev, w=w, now=now, hours=(i == 0), compact=True), gap=6))
+    return col(*rows_, gap=6)
+
+write('BabyTimeline.dc.html', screen(
+  baby_topbar('ไทม์ไลน์ · ต้องตา', right=ic('download', 21, IN6)),
+  body(
+    kind_filter(),
+    row(ic('chevL', 20, IN6), txt('16 – 22 พ.ย.', 15, IN9, 500), ic('chev', 20, IN4), justify='space-between'),
+    multi_day(),
+    legend(),
+    card(txt('7 วันนี้ เฉลี่ยต่อวัน', 14, IN6),
+         row(stat_pill('breast', 'กิน', '8 ครั้ง'), stat_pill('moon', 'นอน', '14 ชม.'), gap=8),
+         row(stat_pill('diaper', 'ฉี่', '7 ผืน'), stat_pill('moon', 'นอนยาวสุด', '3 ชม. 05 น.'), gap=8),
+         pad=14, gap=10),
+    txt('ตัวเลขเทียบกับลูกคุณเองในสัปดาห์ก่อนๆ เท่านั้น ไม่ได้เทียบกับเกณฑ์', 12, IN4, extra='line-height: 1.6;'),
+    gap=12),
+  bnav(0)), h=1100)
+
+def remind_card(kind, title_, next_, every, quiet, on=True):
+    tg = ('<div style="width: 44px; height: 26px; border-radius: 9999px; background: %s; position: relative; flex: none;">'
+          '<div style="position: absolute; top: 3px; %s: 3px; width: 20px; height: 20px; border-radius: 9999px; background: %s;"></div></div>'
+          ) % (BR7 if on else CR200, 'right' if on else 'left', WHITE)
+    return card(row(row(kbubble(kind, 40), col(txt(title_, 15, IN9 if on else IN4, 500),
+                        txt(next_, 13, IN9 if on else IN4), gap=1), gap=12), tg, justify='space-between', align='flex-start'),
+                row(row(ic('clock', 14, IN4, 1.9), txt(every, 12, IN6), gap=5),
+                    row(ic('moon', 14, IN4, 1.9), txt(quiet, 12, IN6), gap=5), gap=14, extra='padding-left: 52px;'),
+                pad=14, gap=8)
+
+write('BabyReminders.dc.html', screen(
+  baby_topbar('การแจ้งเตือน · ต้องตา', right=ic('plus', 22, BR7, 2)),
+  body(
+    info_note('เตือนเฉพาะเครื่องของคุณ คนอื่นในบ้านตั้งของตัวเองแยกได้ ตอนตีสามจะได้ไม่ปลุกทั้งบ้าน', 'bell', BR7),
+    remind_card('pump', 'ปั๊มนม', 'อีก 35 นาที · 17:20', 'ทุก 3 ชม. หลังครั้งล่าสุด', 'งดเตือน 23:00–07:00'),
+    remind_card('breast', 'ให้นม', 'อีก 1 ชม. 10 น. · 17:55', 'ทุก 3 ชม. หลังครั้งล่าสุด', 'เตือนตลอด'),
+    remind_card('diaper', 'เปลี่ยนผ้าอ้อม', 'ปิดอยู่', 'ทุก 2 ชม. หลังครั้งล่าสุด', 'งดเตือน 22:00–06:00', on=False),
+    txt('บันทึกใหม่เมื่อไหร่ เวลาเตือนเลื่อนตามเอง ไม่ต้องตั้งใหม่', 12, IN4, extra='text-align: center;'),
+    gap=12),
+  bnav(0)), h=900)
+
+write('BabyReminderForm.dc.html', screen(
+  topbar('ตั้งการแจ้งเตือน', left=ic('x', 22, IN6), right=txt('บันทึก', 15, BR7, 600)),
+  body(
+    col(label('เตือนเรื่อง'), qgrid([
+        ('<div style="border: %s; border-radius: 12px; padding: 10px 4px; display: flex; flex-direction: column; '
+         'align-items: center; gap: 4px; background: %s;">%s<span style="font-size: 12px; color: %s;">%s</span></div>'
+        ) % ('1.5px solid %s' % BR7 if k == 'pump' else '1px solid %s' % CR200, BR1 if k == 'pump' else WHITE,
+             kbubble(k, 34), IN9, KIND[k][0])
+        for k in ('breast','bottle','diaper','sleep','pump','bath')]), gap=6),
+    col(label('เตือนเมื่อผ่านไป'), segmented(['2 ชม.', '2.5 ชม.', '3 ชม.', '4 ชม.'], 2),
+        txt('นับจากครั้งล่าสุดที่บันทึกปั๊มนม ไม่ใช่เวลาตายตัว', 12, IN4), gap=6),
+    col(label('งดเตือนช่วง'),
+        row(('<div style="flex: 1; height: 44px; background: %s; border: 1px solid %s; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; font-size: 16px; color: %s;">23:00</div>' % (CR50, CR200, IN9)), txt('ถึง', 14, IN6), ('<div style="flex: 1; height: 44px; background: %s; border: 1px solid %s; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; font-size: 16px; color: %s;">07:00</div>' % (CR50, CR200, IN9)), gap=10),
+        txt('ถ้าครบกำหนดระหว่างนี้ จะเตือนตอน 07:00 ครั้งเดียว', 12, IN4), gap=6),
+    card(row(ic('user', 18, IN6, 1.8), col(txt('ส่งเข้า', 13, IN6), txt('เครื่องนี้ของคุณเท่านั้น', 15, IN9, 500), gap=1), gap=10),
+         pad=14, gap=0),
+    gap=18),
+  ), h=900)
+
+# ================= D. ลูกในนัด / ยา / สุขภาพ (ข้อ 3) =================
+
+def who_pick(sel=1):
+    opts = [('ญ', 'แม่', BR3, False), ('ต', 'ต้องตา', None, True)]
+    out = []
+    for i, (ini, n, bg, kid) in enumerate(opts):
+        on = i == sel
+        av = child_avatar(ini, 28, ring=False) if kid else avatar(ini, 28, bg, WHITE, 12)
+        out.append('<div style="flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; '
+                   'border: %s; background: %s;">%s<span style="font-size: 14px; color: %s; font-weight: %s;">%s</span></div>'
+                   % ('1.5px solid %s' % BR7 if on else '1px solid %s' % CR200, BR1 if on else WHITE, av,
+                      IN9, '600' if on else '400', n))
+    return row(*out, gap=8)
+
+write('ChildAppt.dc.html', screen(
+  topbar('เพิ่มนัดหมาย', left=ic('x', 22, IN6), right=txt('บันทึก', 15, BR7, 600)),
+  body(
+    col(label('นัดของใคร'), who_pick(1),
+        txt('นัดของลูก ทุกคนในบ้านเห็นและได้รับเตือน', 12, IN4), gap=6),
+    field('เรื่อง', 'ฉีดวัคซีน 1 เดือน'),
+    row(field('วันที่', 'ส. 29 พ.ย. 2569', icon_right=ic('calendar', 18, IN4)), field('เวลา', '09:30'), gap=10),
+    field('สถานที่', 'รพ.รามาธิบดี · คลินิกเด็กสุขภาพดี'),
+    field('แพทย์', '', 'ไม่บังคับ'),
+    col(label('เตือนก่อน'), row(chip('1 วัน', True), chip('2 ชม.', True), chip('30 นาที'), gap=6), gap=6),
+    card(row(ic('alert', 16, IN4, 1.9),
+             txt('ค่าใช้จ่ายของนัดลูกแยกยอดได้ ด้วยกลุ่มการรักษา "ลูก" ที่สร้างให้อัตโนมัติ', 12, IN6, extra='line-height: 1.6;'),
+             gap=8, align='flex-start'), pad=12, bg=CR100, border=CR200, gap=0),
+    gap=16),
+  ), h=900)
+
+def dose_row(t, who, ok=True):
+    return row(row(ic('check', 16, OK, 2), txt(t, 14, IN9), gap=8), txt('โดย ' + who, 13, IN6), justify='space-between',
+               extra='padding: 10px 0; border-top: 1px solid %s;' % CR200)
+
+write('ChildMeds.dc.html', screen(
+  baby_topbar('ยาของต้องตา', right=ic('plus', 22, BR7, 2)),
+  body(
+    info_note('ยาของลูกทุกคนในบ้านเห็น ต่างจากยาของคุณเองที่เห็นแค่คุณ', 'eye'),
+    card(
+      row(row(('<div style="width: 40px; height: 40px; border-radius: 9999px; background: %s; display: flex; '
+               'align-items: center; justify-content: center;">%s</div>') % (BR1, ic('pill', 20, BR7, 1.8)),
+              col(txt('ยาลดไข้ (น้ำ)', 15, IN9, 600), txt('ครั้งละ 1.2 มล. · ให้เมื่อมีไข้', 12, IN6), gap=1), gap=10),
+          badge('ตามอาการ', 'soft'), justify='space-between'),
+      card(col(txt('ให้ล่าสุด 10:15 โดยแม่', 15, IN9, 500),
+               txt('ผ่านมา 4 ชม. 20 น. · ช่วงห่างที่ตั้งไว้ 4 ชม.', 13, IN6), gap=2),
+           pad=12, bg=CR50, border=CR200, gap=0),
+      btn('บันทึกว่าให้ยาแล้ว', 'primary', ic('check', 18, WHITE, 2)),
+      col(txt('วันนี้', 13, IN4), dose_row('10:15', 'แม่'), dose_row('04:40', 'พ่อ'), gap=0),
+      pad=16, gap=12),
+    card(row(row(('<div style="width: 40px; height: 40px; border-radius: 9999px; background: %s; display: flex; '
+                  'align-items: center; justify-content: center;">%s</div>') % (CR100, ic('pill', 20, IN6, 1.8)),
+                 col(txt('วิตามินดี (หยด)', 15, IN9, 500), txt('วันละครั้ง · 09:00', 12, IN6), gap=1), gap=10),
+             badge('ให้แล้ววันนี้', 'soft'), justify='space-between'), pad=14, gap=0),
+    gap=12),
+  bnav(1)), h=1000)
+
+write('ChildMedsDouble.dc.html', screen(
+  baby_topbar('ยาของต้องตา'),
+  body(card(txt('ยาลดไข้ (น้ำ)', 15, IN9, 600), pad=14, gap=0), gap=0),
+  ('<div style="position: absolute; inset: 0; background: rgba(43,36,32,0.42);"></div>'
+   '<div style="position: absolute; left: 20px; right: 20px; top: 210px; background: %s; border-radius: 18px; padding: 20px; '
+   'display: flex; flex-direction: column; gap: 14px;">%s</div>') % (WHITE, ''.join([
+     row(ic('alert', 22, WARN, 1.9), txt('พ่อเพิ่งให้ยานี้ไป', 17, IN9, 600), gap=8),
+     # ข้อเท็จจริงล้วน — ใครให้ เมื่อไหร่ ห่างกี่นาที และช่วงห่างที่ "คุณ" ตั้งไว้
+     # แอปไม่ตัดสินแทนว่าให้ได้หรือไม่ได้ เพราะขนาดยาเด็กเป็นเรื่องของแพทย์
+     card(col(row(txt('ให้ล่าสุด', 13, IN6), txt('13:55 โดยพ่อ', 14, IN9, 500), justify='space-between'),
+              row(txt('ผ่านมา', 13, IN6), txt('40 นาที', 14, BAD, 600), justify='space-between'),
+              row(txt('ช่วงห่างที่ตั้งไว้', 13, IN6), txt('4 ชม.', 14, IN9, 500), justify='space-between'), gap=8),
+          pad=12, bg=CR50, border=CR200, gap=0),
+     txt('ถ้าไม่แน่ใจ ให้ถามพ่อก่อน หรือโทรถามแพทย์/เภสัชกร', 13, IN6, extra='line-height: 1.6;'),
+     btn('ยังไม่ให้', 'primary'),
+     btn('บันทึกต่อ (เช่น เวลาก่อนหน้าผิด)', 'ghost')])),
+  h=844), h=844)
+
+write('ChildTemp.dc.html', screen(
+  topbar('บันทึกไข้ · ต้องตา', left=ic('x', 22, IN6), right=txt('บันทึก', 15, BR7, 600)),
+  body(
+    col(label('อุณหภูมิ'), stepper('38.2', '°C'), gap=4),
+    col(label('วัดที่'), segmented(['รักแร้', 'หู', 'หน้าผาก', 'ทวาร'], 0), gap=6),
+    col(label('อาการอื่น'), row(chip('ดูดนมน้อยลง', True), chip('ซึม'), chip('ร้องไม่หยุด'), chip('ผื่น'),
+                                chip('อาเจียน'), chip('+ พิมพ์เอง'), gap=6, wrap=True), gap=6),
+    # ลูกอายุ < 2 เดือน: ตัวร้อนอยู่ในรายการ WHO IMNCI ของหน้าอาการที่มีอยู่แล้ว
+    # ไม่ใส่ตัวเลขเกณฑ์เองในการ์ดนี้ ใช้ถ้อยคำเดียวกับหน้าอาการ ต้องผ่านแพทย์ตรวจก่อน
+    escalate_card('ลูกอายุต่ำกว่า 2 เดือน',
+                  'ตัวร้อน และดูดนมน้อยลง อยู่ในรายการอาการที่ต้องพาไปโรงพยาบาล '
+                  'วัยนี้อาการมักไม่ชัด แค่ดูไม่เหมือนเดิมก็ควรพาไป', urgent=True),
+    row(txt('ดูรายการอาการทั้งหมด', 14, BR7, 500), ic('chev', 16, BR7), gap=2, justify='center'),
+    time_line('เวลา', 'ตอนนี้ 15:05'),
+    gap=16),
+  ), h=980)
+
+BABY_HEIGHTS = {'BabyHome.dc.html':844,'BabyHomeTwins.dc.html':844,'BabyHomeNoChild.dc.html':844,
+                'BabyToday.dc.html':1300,'BabyBreast.dc.html':900,'BabyBottle.dc.html':900,'BabyDiaper.dc.html':900,
+                'BabySleep.dc.html':900,'BabyPump.dc.html':900,
+                'BabyTimeline.dc.html':950,'BabyReminders.dc.html':844,'BabyReminderForm.dc.html':900,
+                'ChildAppt.dc.html':900,'ChildMeds.dc.html':844,'ChildMedsDouble.dc.html':870,'ChildTemp.dc.html':980}
+BABY_TITLES = {'BabyHome.dc.html':'A1 · หน้าแรก มีลูก 1 คน','BabyHomeTwins.dc.html':'A2 · หน้าแรก ลูกแฝด/หลายคน',
+               'BabyHomeNoChild.dc.html':'A3 · หน้าแรก ยังไม่เพิ่มลูก',
+               'BabyToday.dc.html':'B1 · หน้าวันนี้ของลูก','BabyBreast.dc.html':'B2 · ให้นมแม่ (จับเวลา)',
+               'BabyBottle.dc.html':'B3 · ขวดนม (sheet)','BabyDiaper.dc.html':'B4 · ผ้าอ้อม (แตะเดียว)',
+               'BabySleep.dc.html':'B5 · นอน (อีกคนเริ่มไว้)','BabyPump.dc.html':'B6 · ปั๊มนม',
+               'BabyTimeline.dc.html':'C1 · ไทม์ไลน์ 7 วัน','BabyReminders.dc.html':'C2 · รายการแจ้งเตือน',
+               'BabyReminderForm.dc.html':'C3 · ตั้งการแจ้งเตือน',
+               'ChildAppt.dc.html':'D1 · นัดหมายของลูก','ChildMeds.dc.html':'D2 · ยาของลูก + ใครให้ไปแล้ว',
+               'ChildMedsDouble.dc.html':'D3 · กันให้ยาซ้ำ','ChildTemp.dc.html':'D4 · บันทึกไข้ → หน้าอาการ'}
+
+BABY_GROUPS = [
+ ('baby-home', ['BabyHome.dc.html','BabyHomeTwins.dc.html','BabyHomeNoChild.dc.html'],
+  """A. หน้าแรกหลังคลอด (ข้อ 6) — 3 หน้า
+การ์ดลูกขึ้นแทนการ์ดอายุครรภ์ เฉพาะเมื่อมีคนกดเพิ่มลูกแล้ว
+ปุ่มกดด่วน 6 อย่าง ใต้ปุ่มบอกว่าผ่านไปนานแค่ไหน · ปุ่มที่กำลังจับเวลาอยู่เป็นสีเต็มใบ
+เต้า: บอกข้างถัดไปเลย (ต่อไป: ซ้าย) ไม่ใช่แค่ข้างล่าสุด
+ของแม่ (นัด ยา) ยังอยู่ แต่เลื่อนลงไปใต้การ์ดลูก"""),
+ ('baby-log', ['BabyToday.dc.html','BabyBreast.dc.html','BabyBottle.dc.html','BabyDiaper.dc.html',
+               'BabySleep.dc.html','BabyPump.dc.html'],
+  """B. บันทึกประจำวัน รอบ 1 (ข้อ 4) — 6 หน้า
+B1 คือหน้าหลักของลูก · B2–B6 คือสิ่งที่เปิดจากปุ่มกดด่วน
+ของที่จับเวลา (เต้า นอน) เปิดเต็มจอ · ของที่จบในแตะเดียว (ขวด ผ้าอ้อม) เป็น sheet
+หนึ่งรอบต่อประเภทต่อลูก — อีกคนเปิดมาเห็นรอบเดียวกัน (B5) ไม่เริ่มซ้อน
+หน่วย มล. อย่างเดียว · ทุกรายการบอกว่าใครบันทึก"""),
+ ('baby-history', ['BabyTimeline.dc.html','BabyReminders.dc.html','BabyReminderForm.dc.html'],
+  """C. ดูย้อนหลัง + การแจ้งเตือน รอบ 2 — 3 หน้า
+ไทม์ไลน์แยกเลน กิน / ผ้าอ้อม / นอน ไม่ซ้อนไอคอนแบบแอปตัวอย่าง
+แจ้งเตือนนับจากครั้งล่าสุด มีช่วงงดเตือน และส่งเข้าเครื่องคนตั้งเท่านั้น
+ตัวเลขเฉลี่ยเทียบกับลูกตัวเอง ไม่เทียบเกณฑ์"""),
+ ('baby-care', ['ChildAppt.dc.html','ChildMeds.dc.html','ChildMedsDouble.dc.html','ChildTemp.dc.html'],
+  """D. ลูกในนัด / ยา / สุขภาพ (ข้อ 3) — 4 หน้า
+นัด: เลือกว่าเป็นของใคร · ยาลูก: ทั้งบ้านเห็น (ต่างจากยาของผู้ใหญ่)
+D3 กันให้ยาซ้ำ — บอกแค่ข้อเท็จจริง ใครให้ เมื่อไหร่ ไม่ตัดสินแทนว่าให้ได้ไหม
+D4 ไข้ในลูกอายุต่ำกว่า 2 เดือน พาไปหน้าอาการที่มีอยู่แล้ว"""),
+]
+
+BABY_SUMMARY = """หลังคลอด · ลูก — รวม 16 หน้าจอ 4 กลุ่ม (ยังไม่ได้ลงมือ รอ approve)
+A. หน้าแรกหลังคลอด 3 หน้า · B. บันทึกประจำวัน 6 หน้า · C. ย้อนหลัง + แจ้งเตือน 3 หน้า · D. ลูกในนัด/ยา/สุขภาพ 4 หน้า
+ลำดับลงมือที่เสนอ: A + B (รอบ 1) → C (รอบ 2) → D (รอบ 3)"""
+
+BABY_DECISIONS = """ค่าที่เลือกไว้ก่อนสำหรับคำถามที่ยังไม่ได้ตอบ — เปลี่ยนได้ทุกข้อ
+1. ปั๊มนมเป็นของแม่ ไม่ผูกกับลูกคนไหน (แฝดไม่ต้องเลือก) แต่กดได้จากหน้าลูก
+2. viewer ดูได้อย่างเดียว ไม่เห็นปุ่มกดด่วน ตามหลักเดิมของหน้าแรก
+3. แจ้งเตือนส่งเข้าเครื่องคนตั้งเท่านั้น
+4. ตัดไอคอนที่ 7 ของแอปตัวอย่างออกไปก่อน (ยังไม่รู้ว่าคืออะไร)
+5. ไทม์ไลน์หลายวันอยู่รอบ 2
+
+ยังห้ามทำจนกว่าแพทย์ตรวจถ้อยคำ: เกณฑ์ผ้าอ้อมเปียกต่อวัน · แถบเทียบสีอุจจาระของสมุดสีชมพู · เกณฑ์ไข้เป็นตัวเลข"""
+
+
 # ---------- canvas.json ----------
 GROUPS = [
  ('auth', 'Auth + Onboarding',
@@ -3337,13 +3991,28 @@ notes.append({"id":"note-logo","x":0,"y":-200,"w":900,"page":"logo",
 arts.append({"file": "Components.dc.html", "x": 0, "y": 0, "w": 900, "h": 1720,
              "title": "Component Library", "page": "components"})
 
+# ---------- page: หลังคลอด · ลูก ----------
+# แยก page ออกจาก "หน้าจอ" เพื่อให้กลุ่มที่เกี่ยวกันอยู่ด้วยกัน ไม่ต้องเลื่อนผ่าน 58 หน้าเดิม
+notes.append({"id": "note-baby-summary", "x": 0, "y": -420, "w": 1400, "page": "baby", "text": BABY_SUMMARY})
+by = 0
+for gid, files, note in BABY_GROUPS:
+    notes.append({"id": "note-" + gid, "x": 0, "y": by - 190, "w": 600, "page": "baby", "text": note})
+    bx = 0
+    for f in files:
+        arts.append({"file": f, "x": bx, "y": by, "w": 390, "h": BABY_HEIGHTS[f],
+                     "title": BABY_TITLES[f], "page": "baby"})
+        bx += 470
+    by += max(BABY_HEIGHTS[f] for f in files) + 420
+notes.append({"id": "note-baby-decide", "x": 0, "y": by - 340, "w": 1400, "page": "baby", "text": BABY_DECISIONS})
+
 canvas = {
   "artboards": arts,
   "annotations": notes,
   "pages": [{"id":"logo","name":"โลโก้ Pre Care"},
             {"id":"screens","name":"หน้าจอ"},
-            {"id":"components","name":"Component Library"}],
-  "launch": {"view":"canvas","page":"screens"}
+            {"id":"components","name":"Component Library"},
+            {"id":"baby","name":"หลังคลอด · ลูก"}],
+  "launch": {"view":"canvas","page":"baby"}
 }
 open(os.path.join(OUT,'canvas.json'),'w',encoding='utf-8').write(json.dumps(canvas, ensure_ascii=False, indent=2))
 print('generated %d artboards + canvas.json' % len(arts))
