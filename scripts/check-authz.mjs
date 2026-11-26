@@ -30,6 +30,8 @@ const PAGE_RULES = {
   "appointments/[id]/edit": "editor",
   "album/upload": "editor",
   "baby/pump": "editor",
+  "baby/[id]/meds/new": "editor",
+  "baby/[id]/meds/[mid]": "editor",
 };
 /** หน้าที่แก้ข้อมูลของตัวเอง ไม่ผูกกับ family จึงใช้แค่ session */
 // หน้าที่ผูกกับ "ผู้ใช้" ไม่ใช่ "ครอบครัว" — ใช้ getSessionUser พอ
@@ -71,6 +73,8 @@ const ACTION_RULES = {
   "baby-log.ts": ["editorAction"],
   // เตือนบันทึกลูกเป็นของคนตั้งคนเดียว viewer ตั้งให้ตัวเองได้ (ไม่แก้ข้อมูลครอบครัว)
   "baby-reminder.ts": ["memberAction"],
+  // ยาและไข้ของลูก — ของครอบครัว ทุกคนเห็น viewer บันทึกไม่ได้
+  "child-care.ts": ["editorAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],

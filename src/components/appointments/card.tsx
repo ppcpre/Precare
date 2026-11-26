@@ -15,7 +15,10 @@ export function AppointmentCard({
   days,
   past,
   canEdit,
+  childName,
 }: {
+  /** นัดของลูก — ขึ้นป้ายบอกว่าของใคร นัดของแม่ไม่มีป้าย (แบบเดิม) */
+  childName?: string;
   appt: Appointment;
   days: number;
   /**
@@ -43,6 +46,11 @@ export function AppointmentCard({
 
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-x-2">
+            {childName && (
+              <span className="rounded-[6px] bg-plum-100 px-[7px] py-0.5 text-[11px] text-plum-700">
+                ของ{childName}
+              </span>
+            )}
             <span className="font-semibold text-ink-900">{timeOf(appt.apptDatetime)}</span>
             {appt.title && (
               <>

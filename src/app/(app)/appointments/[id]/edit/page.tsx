@@ -7,6 +7,7 @@ import {
   listAppointmentMedia,
   listAppointmentReceipts,
   listCareGroups,
+  listChildren,
   requireFamilyContext,
 } from "@/lib/queries";
 import { can } from "@/lib/authz";
@@ -31,12 +32,13 @@ export default async function EditAppointmentPage({
     redirect("/appointments");
   }
 
-  const [appt, groups, media, receipts, mediaBase] = await Promise.all([
+  const [appt, groups, media, receipts, mediaBase, kids] = await Promise.all([
     getAppointmentById(ctx.db, ctx.familyId, id),
     listCareGroups(ctx.db, ctx.familyId),
     listAppointmentMedia(ctx.db, ctx.familyId, id),
     listAppointmentReceipts(ctx.db, ctx.familyId, id),
     familyMediaBase(ctx.familyId),
+    listChildren(ctx.db, ctx.familyId),
   ]);
   if (!appt) notFound();
 
@@ -44,6 +46,7 @@ export default async function EditAppointmentPage({
     <AppointmentForm
       appt={appt}
       groups={groups}
+      kids={kids.map((k) => ({ id: k.id, name: k.name }))}
       receipts={
         <AppointmentReceipts
           appointmentId={id}

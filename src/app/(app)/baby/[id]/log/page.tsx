@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Bell, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bell, CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Pill, Thermometer } from "lucide-react";
 import { getChild, requireFamilyContext } from "@/lib/queries";
 import { latestBabyLogs, listBabyLogs, listMyReminders } from "@/lib/baby-queries";
 import { can } from "@/lib/authz";
@@ -131,6 +131,35 @@ export default async function BabyLogPage({
       <DayStrip marks={marks} nowMin={isToday ? secondsBetween(from, nowIso) / 60 : null} />
       <DaySummaryCard s={summary} title={isToday ? "สรุปวันนี้" : `สรุป ${thaiDate(day)}`} />
       <RecentList rows={dayRows} meId={ctx.user.id} canWrite={canWrite} />
+
+      {/* ดูแลลูก (D) — ยาและไข้เป็นของทั้งบ้าน · เพิ่มนัดเฉพาะคนที่เขียนได้ */}
+      <nav aria-label="ดูแลลูก" className="grid grid-cols-3 gap-2">
+        <CareLink href={`/baby/${child.id}/meds`} label="ยาของลูก" icon={<Pill size={20} strokeWidth={1.8} />} />
+        <CareLink
+          href={`/baby/${child.id}/temp`}
+          label={canWrite ? "บันทึกไข้" : "ไข้"}
+          icon={<Thermometer size={20} strokeWidth={1.8} />}
+        />
+        {canWrite && (
+          <CareLink
+            href={`/appointments/new?child=${child.id}`}
+            label="เพิ่มนัดของลูก"
+            icon={<CalendarPlus size={20} strokeWidth={1.8} />}
+          />
+        )}
+      </nav>
     </div>
+  );
+}
+
+function CareLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-md border border-cream-200 bg-white p-2 text-center text-[13px] text-ink-900"
+    >
+      <span className="text-brown-700">{icon}</span>
+      {label}
+    </Link>
   );
 }

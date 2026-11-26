@@ -5,7 +5,7 @@
  * integer timestamp เพราะ adapter ของ Better Auth กำหนดมาแบบนั้น)
  * เก็บเป็น text เพื่อให้อ่านออกตอนเปิดดูใน D1 console และใช้ฟังก์ชันวันที่ของ SQLite ได้ตรงๆ
  */
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { user } from "./auth";
 
@@ -239,6 +239,14 @@ export const appointments = sqliteTable(
 
     /** null = ยังไม่ได้เลือกกลุ่ม แสดงเป็น "ทั่วไป" ไม่บังคับให้เลือก */
     groupId: text("group_id").references(() => careGroups.id, { onDelete: "set null" }),
+
+    /**
+     * นัดของลูกคนไหน — null = นัดของแม่/ครอบครัว (แบบเดิมทั้งหมด)
+     *
+     * นัดเป็นของครอบครัวอยู่แล้ว ทุกคนเห็นและได้เตือนเหมือนกัน ช่องนี้แค่บอกว่า
+     * "ของใคร" ไม่ได้เปลี่ยนว่าใครเห็น · ลบลูกแล้วนัดยังอยู่ กลับเป็นของครอบครัว
+     */
+    childId: text("child_id").references((): AnySQLiteColumn => children.id, { onDelete: "set null" }),
 
     /**
      * ค่าใช้จ่ายเก็บเป็นจำนวนเต็ม "สตางค์" ห้ามใช้ REAL เด็ดขาด
@@ -935,4 +943,90 @@ export const babyReminders = sqliteTable(
     index("idx_baby_reminders_user").on(t.userId, t.familyId),
     index("idx_baby_reminders_active").on(t.active),
   ],
+);
+
+/**
+ * ยาของลูก — ของครอบครัว ทุกคนในบ้านเห็น
+ *
+ * ต่างจาก medications (ยาของผู้ใหญ่ เห็นเฉพาะเจ้าของ) โดยตั้งใจ: ยาลูกต้องรู้กันทั้งบ้าน
+ * ไม่งั้นพ่อกับแม่ให้ยาลดไข้ซ้ำกันห่างกันไม่กี่นาทีโดยไม่มีใครรู้
+ *
+ * ⚠️ แอปไม่ตัดสินว่า "ให้ได้/ไม่ได้" — ขนาดยาเด็กเป็นเรื่องของแพทย์
+ *    ช่วงห่าง (min_gap_min) เป็นค่าที่ผู้ใช้ตั้งเองตามที่แพทย์/ฉลากบอก
+ *    แอปแค่บอกข้อเท็จจริงว่าใครให้ไปเมื่อไหร่ ห่างกี่นาที
+ */
+export const CHILD_MED_MODES = ["prn", "daily"] as const;
+export const childMeds = sqliteTable(
+  "child_meds",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** "1.2 มล." — ข้อความอิสระ หน่วยยาเด็กไม่เป็นมาตรฐาน */
+    dose: text("dose"),
+    /** prn = ให้ตามอาการ · daily = ให้ทุกวันตามเวลา */
+    mode: text("mode", { enum: CHILD_MED_MODES }).notNull(),
+    /** prn: ช่วงห่างที่ผู้ใช้ตั้งไว้ (นาที) — ใช้แค่บอก ไม่ได้ห้าม */
+    minGapMin: integer("min_gap_min"),
+    /** daily: เวลา HH:MM คั่นด้วยจุลภาค "09:00,21:00" */
+    times: text("times"),
+    note: text("note"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_meds_child").on(t.familyId, t.childId)],
+);
+
+/** หนึ่งครั้งที่ให้ยา — ใครให้ เมื่อไหร่ (เวลาท้องถิ่นจาก client) */
+export const childMedDoses = sqliteTable(
+  "child_med_doses",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    medId: text("med_id")
+      .notNull()
+      .references(() => childMeds.id, { onDelete: "cascade" }),
+    givenAt: text("given_at").notNull(),
+    givenBy: text("given_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_med_doses_med").on(t.medId, t.givenAt)],
+);
+
+/**
+ * วัดไข้ลูก
+ *
+ * ⚠️ ไม่มีเกณฑ์ "มีไข้" เป็นตัวเลขในตารางหรือโค้ด — รอแพทย์ตรวจถ้อยคำ
+ *    หน้าจอพาไปหน้าอาการที่มีอยู่แล้ว (src/data/danger-signs.ts) แทนการตัดสินเอง
+ */
+export const TEMP_SITES = ["armpit", "ear", "forehead", "rectal"] as const;
+export const childTemps = sqliteTable(
+  "child_temps",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    measuredAt: text("measured_at").notNull(),
+    /** ทศนิยมหนึ่งตำแหน่งเก็บเป็นจำนวนเต็ม 382 = 38.2 °C — ไม่ใช้ REAL */
+    tempTenths: integer("temp_tenths").notNull(),
+    site: text("site", { enum: TEMP_SITES }).notNull(),
+    /** JSON array ของอาการที่เลือก */
+    symptoms: text("symptoms"),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_temps_child").on(t.familyId, t.childId, t.measuredAt)],
 );

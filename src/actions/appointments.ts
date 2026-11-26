@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { appointmentReminders, appointments, careGroups, photos } from "@/db/schema";
+import { appointmentReminders, appointments, careGroups, children, photos } from "@/db/schema";
 import { deleteObject } from "@/lib/storage";
 import { editorAction, AppError } from "@/lib/safe-action";
 import type { Db } from "@/db";
@@ -44,15 +44,53 @@ async function assertGroupOwned(
   if (!g) throw new AppError("ไม่พบกลุ่มการรักษานี้");
 }
 
+/** ชื่อกลุ่มการรักษาที่สร้างให้เองเมื่อมีนัดของลูกครั้งแรก — ใช้แยกยอดค่าใช้จ่าย */
+const CHILD_CARE_GROUP = "ลูก";
+
+/**
+ * childId มาจาก client — ต้องเป็นลูกของครอบครัวนี้จริง
+ *
+ * นัดของลูกที่ยังไม่ได้เลือกกลุ่ม ผูกกับกลุ่ม "ลูก" ให้เอง (สร้างถ้ายังไม่มี)
+ * ค่าใช้จ่ายของนัดลูกจะได้แยกยอดออกจากค่าฝากครรภ์โดยไม่ต้องไปตั้งกลุ่มเอง
+ * ถ้าเลือกกลุ่มไว้แล้วไม่ไปยุ่ง — คนเลือกเองรู้ดีกว่า
+ */
+async function resolveChild(
+  db: Db,
+  familyId: string,
+  childId: string | null | undefined,
+  groupId: string | null | undefined,
+): Promise<{ childId: string | null; groupId: string | null }> {
+  if (!childId) return { childId: null, groupId: groupId ?? null };
+  const kid = await db
+    .select({ id: children.id })
+    .from(children)
+    .where(and(eq(children.id, childId), eq(children.familyId, familyId)))
+    .get();
+  if (!kid) throw new AppError("ไม่พบข้อมูลลูกคนนี้");
+  if (groupId) return { childId: kid.id, groupId };
+
+  const existing = await db
+    .select({ id: careGroups.id })
+    .from(careGroups)
+    .where(and(eq(careGroups.familyId, familyId), eq(careGroups.name, CHILD_CARE_GROUP)))
+    .get();
+  if (existing) return { childId: kid.id, groupId: existing.id };
+  const id = newId();
+  await db.insert(careGroups).values({ id, familyId, name: CHILD_CARE_GROUP, color: "sky" });
+  return { childId: kid.id, groupId: id };
+}
+
 export const createAppointment = editorAction
   .metadata({ name: "createAppointment" })
   .inputSchema(appointmentInput)
   .action(async ({ parsedInput, ctx }) => {
     const { reminderOffsets, ...fields } = parsedInput;
     await assertGroupOwned(ctx.db, ctx.familyId, fields.groupId);
+    const who = await resolveChild(ctx.db, ctx.familyId, fields.childId, fields.groupId);
     const id = newId();
     await ctx.db.insert(appointments).values({
       ...fields,
+      ...who,
       id,
       familyId: ctx.familyId,
       createdBy: ctx.user.id,
@@ -69,9 +107,10 @@ export const updateAppointment = editorAction
   .action(async ({ parsedInput, ctx }) => {
     const { id, reminderOffsets, ...rest } = parsedInput;
     await assertGroupOwned(ctx.db, ctx.familyId, rest.groupId);
+    const who = await resolveChild(ctx.db, ctx.familyId, rest.childId, rest.groupId);
     const res = await ctx.db
       .update(appointments)
-      .set(rest)
+      .set({ ...rest, ...who })
       .where(and(eq(appointments.id, id), eq(appointments.familyId, ctx.familyId)));
     if (!res.meta.changes) throw new AppError("ไม่พบนัดหมายนี้");
     // เขียนใหม่ทั้งชุด ซึ่งล้างสถานะ "เตือนแล้ว" ไปด้วย (ดู writeReminders)

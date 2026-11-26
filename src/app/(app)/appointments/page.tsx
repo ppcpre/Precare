@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AppointmentCard } from "@/components/appointments/card";
 import { NotifyBanner } from "@/components/appointments/notify-banner";
 import { bucketOf, daysFromNow, isPastAppt } from "@/lib/appt-days";
-import { listAppointmentCosts, listAppointments, requireFamilyContext } from "@/lib/queries";
+import { listAppointmentCosts, listAppointments, listChildren, requireFamilyContext } from "@/lib/queries";
 import { CostEntryButton } from "@/components/costs/entry-button";
 import { can } from "@/lib/authz";
 import { cn } from "@/lib/cn";
@@ -36,10 +36,12 @@ export default async function AppointmentsPage({
 
   // now มาจาก query ไม่ใช่เรียก Date.now() ใน render
   // ดึงคู่กันไปเลย แถบค่าใช้จ่ายต้องนับทุกนัดไม่ใช่แค่แท็บที่เปิดอยู่
-  const [{ items, now }, costItems] = await Promise.all([
+  const [{ items, now }, costItems, kids] = await Promise.all([
     listAppointments(ctx.db, ctx.familyId, past ? "past" : "upcoming"),
     listAppointmentCosts(ctx.db, ctx.familyId),
+    listChildren(ctx.db, ctx.familyId),
   ]);
+  const kidName = new Map(kids.map((k) => [k.id, k.name]));
   const canWrite = can.writeRecords(ctx.role);
 
   const groups = new Map<string, { appt: Appointment; days: number; isPast: boolean }[]>();
@@ -124,6 +126,7 @@ export default async function AppointmentsPage({
                 days={days}
                 past={isPast}
                 canEdit={canWrite}
+                childName={appt.childId ? kidName.get(appt.childId) : undefined}
               />
             ))}
           </section>

@@ -13,6 +13,10 @@ import { createAppointment, updateAppointment, deleteAppointment } from "@/actio
 import type { Appointment } from "@/types";
 
 const TITLE_SUGGESTIONS = ["ตรวจครรภ์ตามนัด", "อัลตราซาวด์", "ตรวจเลือด", "ฉีดวัคซีน"] as const;
+/** นัดของลูกส่วนใหญ่คือวัคซีนกับตรวจพัฒนาการตามสมุดสีชมพู */
+const CHILD_TITLE_SUGGESTIONS = ["ฉีดวัคซีน", "ตรวจสุขภาพเด็กดี", "ตรวจตามนัด"] as const;
+
+export type ChildOption = { id: string; name: string };
 const REMINDERS = [
   { m: 30, label: "30 นาที" },
   { m: 60, label: "1 ชม." },
@@ -35,11 +39,17 @@ const splitIso = (iso?: string) => {
 export function AppointmentForm({
   appt,
   groups = [],
+  kids = [],
+  initialChildId = null,
   media,
   receipts,
 }: {
   appt?: Appointment;
   groups?: CareGroupOption[];
+  /** ลูกของครอบครัว — ไม่มีลูก = ไม่ขึ้นช่อง "นัดของใคร" เลย */
+  kids?: ChildOption[];
+  /** เปิดมาจากหน้าลูก (?child=) เลือกลูกคนนั้นไว้ให้ก่อน */
+  initialChildId?: string | null;
   /** ไฟล์แนบ — เป็น server component จึงรับมาเป็น slot ไม่ได้ import เข้ามาตรงนี้ */
   media?: React.ReactNode;
   /**
@@ -56,6 +66,10 @@ export function AppointmentForm({
   const [title, setTitle] = useState(appt?.title ?? "");
   const [doctor, setDoctor] = useState(appt?.doctorName ?? "");
   const [groupId, setGroupId] = useState<string | null>(appt?.groupId ?? null);
+  const [childId, setChildId] = useState<string | null>(
+    appt ? (appt.childId ?? null) : kids.some((k) => k.id === initialChildId) ? initialChildId : null,
+  );
+  const suggestions = childId ? CHILD_TITLE_SUGGESTIONS : TITLE_SUGGESTIONS;
   const [location, setLocation] = useState(appt?.location ?? "");
   const [remind, setRemind] = useState(appt?.reminderEnabled ?? true);
   /** เวลาเตือน เลือกได้หลายครั้ง สูงสุด MAX_REMINDERS */
@@ -104,6 +118,7 @@ export function AppointmentForm({
       reminderEnabled: isPast ? false : remind,
       reminderOffsets: offsets,
       groupId,
+      childId,
     };
     if (appt) update.execute({ ...payload, id: appt.id });
     else create.execute(payload);
@@ -128,6 +143,35 @@ export function AppointmentForm({
           <p role="alert" className="rounded-sm border border-danger bg-cream-100 px-3.5 py-3 text-sm">
             {error}
           </p>
+        )}
+
+        {kids.length > 0 && (
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 text-sm text-ink-600">นัดของใคร</legend>
+            <div className="flex flex-wrap gap-2">
+              {[{ id: null, name: "แม่" }, ...kids].map((k) => {
+                const on = childId === k.id;
+                return (
+                  <button
+                    key={k.id ?? "mom"}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setChildId(k.id)}
+                    className={`flex min-h-11 flex-1 items-center justify-center rounded-md px-3 text-sm ${
+                      on
+                        ? "border-[1.5px] border-brown-700 bg-brown-100 font-semibold text-ink-900"
+                        : "border border-cream-200 bg-white text-ink-900"
+                    }`}
+                  >
+                    {k.name}
+                  </button>
+                );
+              })}
+            </div>
+            {childId && (
+              <p className="text-xs text-ink-400">นัดของลูก ทุกคนในบ้านเห็นและได้รับเตือน</p>
+            )}
+          </fieldset>
         )}
 
         <div className="flex gap-3">
@@ -159,7 +203,7 @@ export function AppointmentForm({
             maxLength={120}
           />
           <div className="flex flex-wrap gap-1.5">
-            {TITLE_SUGGESTIONS.map((t) => (
+            {suggestions.map((t) => (
               <Chip key={t} active={title === t} onClick={() => setTitle(t)}>
                 {t}
               </Chip>
@@ -168,6 +212,11 @@ export function AppointmentForm({
         </div>
 
         <GroupPicker groups={groups} value={groupId} onChange={setGroupId} />
+        {childId && !groupId && (
+          <p className="-mt-3 rounded-sm border border-cream-200 bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
+            ไม่ได้เลือกกลุ่ม จะใส่ไว้ในกลุ่มการรักษา &quot;ลูก&quot; ให้เอง ค่าใช้จ่ายของนัดลูกจะได้แยกยอดได้
+          </p>
+        )}
 
         <Field
           label="แพทย์"
