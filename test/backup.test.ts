@@ -210,3 +210,14 @@ describe("สำรอง D1 ขึ้น R2", () => {
     expect(dayBefore(new Date("2026-01-01T12:00:00.000Z"), 1)).toBe("2025-12-31");
   });
 });
+
+describe("รอบสำรองข้อมูลอยู่ใน cron 5 นาทีตัวเดียว", () => {
+  it("เฉพาะรอบ 19:20 UTC (02:20 เวลาไทย) ครั้งเดียวต่อวัน", async () => {
+    const { isBackupTick } = await import("../workers/cron/index");
+    const at = (h: number, m: number) => Date.UTC(2026, 10, 26, h, m, 0);
+    expect(isBackupTick(at(19, 20))).toBe(true);
+    // cron ยิงช้าได้ไม่กี่วินาที แต่ยังอยู่ในรอบเดิม
+    expect(isBackupTick(at(19, 20) + 3_000)).toBe(true);
+    for (const [h, m] of [[19, 15], [19, 25], [2, 20], [20, 20]] as const) expect(isBackupTick(at(h, m))).toBe(false);
+  });
+});

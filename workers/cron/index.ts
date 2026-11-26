@@ -13,10 +13,19 @@ import { runChildMedReminders } from "./child-meds";
 import { runBackup, type BackupEnv } from "./backup";
 
 /**
- * ตารางเดินรอบ — ต้องตรงกับ `triggers.crons` ใน wrangler.jsonc ทุกตัวอักษร
- * Cloudflare ส่งสตริงเดิมกลับมาใน event.cron จึงใช้แยกงานได้
+ * รอบสำรองข้อมูล = รอบ 5 นาทีที่ตกช่วง 19:20–19:24 UTC (02:20 เวลาไทย)
+ *
+ * เดิมแยกเป็น cron ตัวที่สอง ("20 19 * * *") แต่บัญชี Workers Free มี cron trigger
+ * ได้แค่ 5 ตัวทั้งบัญชี — สองตัวต่อ worker × production + dev ทำให้ deploy dev ล้ม
+ * ตั้งแต่เพิ่มรอบสำรอง (code 10072) จึงรวมเหลือ cron เดียวต่อ worker แล้วแยกงานด้วยเวลาแทน
+ *
+ * รอบนี้ไม่ทำงานเตือน เหมือนตอนแยก cron — ระหว่าง export D1 ตอบคำขออื่นไม่ได้
+ * งานเตือนทุกตัวมีช่วงผ่อนผัน รอบ 02:25 จึงตามส่งให้ ไม่มีอะไรหาย
  */
-const BACKUP_CRON = "20 19 * * *";
+export const isBackupTick = (scheduledTime: number) => {
+  const d = new Date(scheduledTime);
+  return d.getUTCHours() === 19 && d.getUTCMinutes() >= 20 && d.getUTCMinutes() < 25;
+};
 
 export default {
   async scheduled(event: ScheduledController, env: CronEnv & BackupEnv, ctx: ExecutionContext) {
@@ -26,7 +35,7 @@ export default {
      * เลือกตีสองกว่าเพราะเอกสารของ D1 บอกว่าระหว่าง export ฐานจะตอบคำขออื่น
      * ไม่ได้ — ชั่วโมงที่คนใช้แอปน้อยที่สุดจึงเป็นเวลาที่เจ็บน้อยที่สุด
      */
-    if (event.cron === BACKUP_CRON) {
+    if (isBackupTick(event.scheduledTime)) {
       ctx.waitUntil(
         runBackup(env).then((r) => {
           // ไม่มีข้อมูลผู้ใช้ในบรรทัดนี้ และผลเต็มๆ อยู่ในตาราง backup_runs
