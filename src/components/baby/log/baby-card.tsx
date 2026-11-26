@@ -13,6 +13,7 @@ export type BabyCardData = {
   birthDate: string;
   latest: Partial<Record<BabyLogKind, BabyLogView>>;
   summary: DaySummary;
+  reminded: BabyLogKind[];
 };
 
 /**
@@ -51,7 +52,7 @@ export function BabyCard({
           <ChevronRight size={17} />
         </Link>
       </div>
-      <QuickGrid childId={child.id} latest={child.latest} canWrite={canWrite} />
+      <QuickGrid childId={child.id} latest={child.latest} canWrite={canWrite} reminded={child.reminded} />
       <p className="text-[13px] text-ink-600">
         <span className="text-ink-400">วันนี้</span> {summaryLine(child.summary)}
       </p>

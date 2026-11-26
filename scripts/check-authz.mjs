@@ -69,6 +69,8 @@ const ACTION_RULES = {
   "children.ts": ["editorAction"],
   // บันทึกประจำวันลูก (กิน ผ้าอ้อม นอน ปั๊ม) — ของครอบครัว viewer ดูได้อย่างเดียว
   "baby-log.ts": ["editorAction"],
+  // เตือนบันทึกลูกเป็นของคนตั้งคนเดียว viewer ตั้งให้ตัวเองได้ (ไม่แก้ข้อมูลครอบครัว)
+  "baby-reminder.ts": ["memberAction"],
   "visit.ts": ["editorAction"],
   "labor.ts": ["editorAction"],
   "receipts.ts": ["editorAction"],

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Images } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { getChild, requireFamilyContext } from "@/lib/queries";
-import { latestBabyLogs, listBabyLogs } from "@/lib/baby-queries";
+import { latestBabyLogs, listBabyLogs, listMyReminders } from "@/lib/baby-queries";
 import { can } from "@/lib/authz";
 import { ageLabel } from "@/lib/child-age";
 import { isValidDay, localNowIso, shiftDay } from "@/lib/local-time";
@@ -49,9 +49,10 @@ export default async function BabyLogPage({
   const from = `${day}T00:00:00`;
   const to = addSeconds(from, 86_400);
 
-  const [rows, { latest }] = await Promise.all([
+  const [rows, { latest }, reminders] = await Promise.all([
     listBabyLogs(ctx.db, ctx.familyId, child.id, from, to),
     latestBabyLogs(ctx.db, ctx.familyId, child.id),
+    listMyReminders(ctx.db, ctx.familyId, ctx.user.id, child.id),
   ]);
 
   // ดูวันเก่า = ตัดที่สิ้นวันนั้น ไม่ใช่ตอนนี้ — ไม่งั้นรอบที่ค้างยาวผิดวัน
@@ -74,17 +75,31 @@ export default async function BabyLogPage({
           <ChevronLeft size={22} />
         </Link>
         <h1 className="truncate text-xl font-semibold text-ink-900">{child.name}</h1>
-        <Link
-          href={`/baby/${child.id}`}
-          aria-label={`สมุดรูปของ${child.name}`}
-          className="-mr-2 flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
-        >
-          <Images size={20} strokeWidth={1.9} />
-        </Link>
+        <span className="-mr-2 flex">
+          <Link
+            href={`/baby/${child.id}/reminders`}
+            aria-label="การแจ้งเตือน"
+            className="flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
+          >
+            <Bell size={20} strokeWidth={1.9} />
+          </Link>
+          <Link
+            href={`/baby/${child.id}/log/week`}
+            aria-label="ไทม์ไลน์ 7 วัน"
+            className="flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
+          >
+            <CalendarDays size={20} strokeWidth={1.9} />
+          </Link>
+        </span>
       </header>
       <p className="-mt-2 text-center text-[13px] text-ink-600">{ageLabel(child.birthDate, today)}</p>
 
-      <QuickGrid childId={child.id} latest={latest} canWrite={canWrite} />
+      <QuickGrid
+        childId={child.id}
+        latest={latest}
+        canWrite={canWrite}
+        reminded={reminders.filter((r) => r.active).map((r) => r.kind)}
+      />
 
       <nav className="flex items-center justify-between" aria-label="เลือกวัน">
         <Link

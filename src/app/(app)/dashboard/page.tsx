@@ -19,7 +19,7 @@ import { averageMs } from "@/lib/kicks";
 import { can } from "@/lib/authz";
 import { familyMediaBase } from "@/lib/media-base";
 import { listChildren } from "@/lib/queries";
-import { latestBabyLogs, listBabyLogs } from "@/lib/baby-queries";
+import { latestBabyLogs, listBabyLogs, listMyReminders } from "@/lib/baby-queries";
 import { addSeconds, summarizeDay } from "@/lib/baby-log";
 import { localNowIso } from "@/lib/local-time";
 import { BabyCard, type BabyCardData } from "@/components/baby/log/baby-card";
@@ -63,11 +63,17 @@ export default async function DashboardPage() {
   const dayFrom = `${today}T00:00:00`;
   const babies: BabyCardData[] = await Promise.all(
     kids.map(async (k) => {
-      const [{ latest }, rows] = await Promise.all([
+      const [{ latest }, rows, reminders] = await Promise.all([
         latestBabyLogs(db, familyId, k.id),
         listBabyLogs(db, familyId, k.id, dayFrom, addSeconds(dayFrom, 86_400)),
+        listMyReminders(db, familyId, user.id, k.id),
       ]);
-      return { ...k, latest, summary: summarizeDay(rows, today, nowIso) };
+      return {
+        ...k,
+        latest,
+        summary: summarizeDay(rows, today, nowIso),
+        reminded: reminders.filter((r) => r.active).map((r) => r.kind),
+      };
     }),
   );
   // null เมื่ออายุครรภ์ยังไม่ถึง 4 สัปดาห์ หรือเลย 40 ไปแล้ว — การ์ดจะไม่ขึ้น

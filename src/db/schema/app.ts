@@ -894,3 +894,45 @@ export const babyLogs = sqliteTable(
     index("idx_baby_logs_open").on(t.familyId, t.endedAt),
   ],
 );
+
+/**
+ * การแจ้งเตือนของบันทึกประจำวันลูก — "ผ่านไป X ชม. นับจากครั้งล่าสุด"
+ *
+ * ⚠️ เป็นของ **คนตั้ง** ไม่ใช่ของครอบครัว และยิงเข้าเครื่องของคนตั้งเท่านั้น
+ *    ตีสามจะได้ไม่ปลุกทั้งบ้าน — ทุกทางเข้ากรองด้วย user_id คู่กับ family_id
+ *
+ * ไม่มีเวลาตายตัว: เวลาเตือนคิดใหม่ทุกครั้งจากบันทึกล่าสุดของประเภทนั้น
+ * (ดู src/lib/baby-reminder.ts) บันทึกใหม่เมื่อไหร่ เวลาเตือนเลื่อนตามเอง
+ */
+export const babyReminders = sqliteTable(
+  "baby_reminders",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** null เฉพาะปั๊มนม — ปั๊มเป็นของแม่ ไม่ผูกลูก (ตรงกับ baby_logs) */
+    childId: text("child_id").references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: BABY_LOG_KINDS }).notNull(),
+    everyMin: integer("every_min").notNull(),
+    /** HH:MM เวลาไทย · ทั้งคู่ null = เตือนตลอด · ข้ามเที่ยงคืนได้ (23:00–07:00) */
+    quietFrom: text("quiet_from"),
+    quietTo: text("quiet_to"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    /**
+     * เวลาตั้งต้น (anchor) ของบันทึกที่จัดการไปแล้ว — กันเตือนซ้ำจากบันทึกเดิม
+     * บันทึกใหม่ = anchor ใหม่ = นับรอบใหม่เอง
+     */
+    lastAnchor: text("last_anchor"),
+    /** ยิง push ล่าสุดเมื่อไหร่ (UTC) — /api/push/next ใช้หาว่า push ใบนี้เรื่องอะไร */
+    lastSentAt: text("last_sent_at"),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    index("idx_baby_reminders_user").on(t.userId, t.familyId),
+    index("idx_baby_reminders_active").on(t.active),
+  ],
+);

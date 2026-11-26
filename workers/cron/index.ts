@@ -8,6 +8,7 @@
  */
 import { runReminders, type CronEnv } from "./reminders";
 import { runMedicationReminders } from "./medications";
+import { runBabyReminders } from "./baby";
 import { runBackup, type BackupEnv } from "./backup";
 
 /**
@@ -49,6 +50,15 @@ export default {
     ctx.waitUntil(
       runMedicationReminders(env).then((r) => {
         console.log(`medications due=${r.due} sent=${r.sent} removed=${r.removed}${r.skipped ? ` skipped=${r.skipped}` : ""}`);
+      }),
+    );
+
+    // เตือนบันทึกลูก — แยก waitUntil ด้วยเหตุผลเดียวกัน
+    ctx.waitUntil(
+      runBabyReminders(env).then((r) => {
+        console.log(
+          `baby due=${r.due} sent=${r.sent} late=${r.skippedLate} removed=${r.removed}${r.skipped ? ` skipped=${r.skipped}` : ""}`,
+        );
       }),
     );
   },

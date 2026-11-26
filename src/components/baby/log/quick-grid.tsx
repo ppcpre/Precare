@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { Minus, Plus } from "lucide-react";
+import { Bell, Minus, Plus } from "lucide-react";
 import type { BabyLogKind } from "@/db/schema";
 import { addBabyLog, deleteBabyLog } from "@/actions/baby-log";
 import {
@@ -49,10 +49,13 @@ export function QuickGrid({
   childId,
   latest,
   canWrite,
+  reminded = [],
 }: {
   childId: string;
   latest: Latest;
   canWrite: boolean;
+  /** ประเภทที่ "ฉัน" ตั้งเตือนไว้และเปิดอยู่ — ขึ้นกระดิ่งเล็กที่มุมปุ่ม */
+  reminded?: BabyLogKind[];
 }) {
   const router = useRouter();
   const now = useNow();
@@ -95,6 +98,7 @@ export function QuickGrid({
             nowIso={nowIso}
             hint={k === "breast" ? nextSide(latest.breast) : null}
             canWrite={canWrite}
+            reminded={reminded.includes(k)}
             href={
               k === "breast" || k === "sleep"
                 ? `/baby/${childId}/log/${k}`
@@ -179,9 +183,11 @@ function Tile({
   nowIso,
   hint,
   canWrite,
+  reminded,
   href,
   onTap,
 }: {
+  reminded: boolean;
   kind: BabyLogKind;
   row: BabyLogView | undefined;
   nowIso: string | null;
@@ -213,6 +219,14 @@ function Tile({
 
   const body = (
     <>
+      {reminded && (
+        <Bell
+          aria-label="ตั้งเตือนไว้"
+          size={13}
+          strokeWidth={2}
+          className={cn("absolute top-2 right-2", running ? "text-white" : "text-ink-400")}
+        />
+      )}
       {running ? (
         <span className={cn("flex size-10 items-center justify-center rounded-full bg-white/20 text-white")}>
           <KindIcon kind={kind} size={20} />
@@ -238,7 +252,7 @@ function Tile({
   );
 
   const cls = cn(
-    "flex min-h-[7.5rem] flex-col items-center justify-center gap-1 rounded-md border p-2 text-center",
+    "relative flex min-h-[7.5rem] flex-col items-center justify-center gap-1 rounded-md border p-2 text-center",
     running ? cn(tone.solid, "border-transparent") : "border-cream-200 bg-white",
   );
 

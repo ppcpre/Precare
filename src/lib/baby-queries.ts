@@ -6,7 +6,7 @@
  */
 import { and, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import type { Db } from "@/db";
-import { BABY_LOG_KINDS, babyLogs, user, type BabyLogKind } from "@/db/schema";
+import { BABY_LOG_KINDS, babyLogs, babyReminders, user, type BabyLogKind } from "@/db/schema";
 import { addSeconds, type BabyLogView } from "@/lib/baby-log";
 
 const cols = {
@@ -122,4 +122,44 @@ export async function lastPump(db: Db, familyId: string) {
     .orderBy(desc(babyLogs.startedAt))
     .limit(1);
   return row ?? null;
+}
+
+export type BabyReminderView = {
+  id: string;
+  kind: BabyLogKind;
+  everyMin: number;
+  quietFrom: string | null;
+  quietTo: string | null;
+  active: boolean;
+};
+
+/**
+ * การแจ้งเตือนของ "ฉัน" สำหรับลูกคนนี้ + ปั๊มนม (ไม่ผูกลูก)
+ * ของคนอื่นในบ้านไม่ขึ้น — แต่ละคนตั้งของตัวเอง
+ */
+export async function listMyReminders(
+  db: Db,
+  familyId: string,
+  userId: string,
+  childId: string,
+): Promise<BabyReminderView[]> {
+  const rows = await db
+    .select({
+      id: babyReminders.id,
+      kind: babyReminders.kind,
+      everyMin: babyReminders.everyMin,
+      quietFrom: babyReminders.quietFrom,
+      quietTo: babyReminders.quietTo,
+      active: babyReminders.active,
+    })
+    .from(babyReminders)
+    .where(
+      and(
+        eq(babyReminders.familyId, familyId),
+        eq(babyReminders.userId, userId),
+        or(eq(babyReminders.childId, childId), isNull(babyReminders.childId)),
+      ),
+    );
+  const order = BABY_LOG_KINDS as readonly string[];
+  return rows.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
 }

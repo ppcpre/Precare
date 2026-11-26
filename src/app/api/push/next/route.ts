@@ -1,7 +1,9 @@
-import { and, asc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   appointments,
+  babyReminders,
+  children,
   familyMembers,
   medicationDoses,
   medicationTimes,
@@ -11,6 +13,7 @@ import {
 import { getSessionUser } from "@/lib/session";
 import { thaiDate, timeOf } from "@/lib/format";
 import { localNowIso } from "@/lib/local-time";
+import { REMIND_TITLE, hoursLabel } from "@/lib/baby-reminder";
 
 /**
  * บอก service worker ว่าจะเตือนเรื่องอะไร
@@ -32,6 +35,47 @@ export async function GET() {
   const nowLocal = localNowIso();
   const today = nowLocal.slice(0, 10);
   const nowHm = nowLocal.slice(11, 16);
+
+  /**
+   * เตือนบันทึกลูกที่ cron เพิ่งยิงให้คนนี้ — มาก่อนทุกเรื่อง
+   *
+   * cron จด last_sent_at ก่อนยิง push จึงรู้ได้ว่า push ใบที่เพิ่งมาถึงคือเรื่องนี้
+   * 10 นาทีพอสำหรับเครื่องที่ตื่นช้า แต่ไม่นานจนไปทับ push เรื่องอื่นที่ตามมา
+   * กรองด้วยครอบครัวที่ยังเป็นสมาชิกอยู่ ไม่ใช่แค่ user_id
+   */
+  const recent = new Date(Date.now() - 10 * 60_000).toISOString();
+  const baby = await db
+    .select({
+      kind: babyReminders.kind,
+      everyMin: babyReminders.everyMin,
+      childId: babyReminders.childId,
+      childName: children.name,
+    })
+    .from(babyReminders)
+    .innerJoin(
+      familyMembers,
+      and(
+        eq(familyMembers.familyId, babyReminders.familyId),
+        eq(familyMembers.userId, me.id),
+        eq(familyMembers.status, "active"),
+      ),
+    )
+    .leftJoin(children, eq(children.id, babyReminders.childId))
+    .where(and(eq(babyReminders.userId, me.id), gte(babyReminders.lastSentAt, recent)))
+    .orderBy(desc(babyReminders.lastSentAt))
+    .limit(1)
+    .get();
+
+  if (baby) {
+    return Response.json(
+      {
+        title: `ถึงเวลา${REMIND_TITLE[baby.kind]}`,
+        body: `ผ่านไป ${hoursLabel(baby.everyMin)} แล้วนับจากครั้งล่าสุด${baby.childName ? ` · ${baby.childName}` : ""}`,
+        url: baby.childId ? `/baby/${baby.childId}/log` : "/baby/pump",
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
 
   /**
    * ยาที่ถึงเวลาแล้ววันนี้และยังไม่ได้ติ๊กว่ากิน — ตอบก่อนนัดหมาย

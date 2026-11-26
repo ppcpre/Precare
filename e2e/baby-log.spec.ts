@@ -60,8 +60,12 @@ test("บันทึกประจำวันลูก: ผ้าอ้อม
   });
 
   await test.step("หน้าวันนี้: มีแค่ฉี่ (อึถูกเลิกทำ) และบอกว่าใครบันทึก", async () => {
-    await page.getByRole("link", { name: "ดูทั้งวัน" }).click();
-    await page.waitForURL(/\/baby\/[0-9a-f-]+\/log$/, { timeout: 30_000 });
+    // บันทึกเมื่อกี้สั่ง router.refresh() — กดลิงก์ระหว่าง refresh ยังไม่จบ การนำทางโดนยกเลิก
+    // (เห็นเฉพาะตอนเครื่องช้า) จึงกดซ้ำจนกว่า URL จะเปลี่ยนจริง
+    await expect(async () => {
+      await page.getByRole("link", { name: "ดูทั้งวัน" }).click();
+      await page.waitForURL(/\/baby\/[0-9a-f-]+\/log$/, { timeout: 8_000 });
+    }).toPass({ timeout: 45_000 });
     await expect(page.getByText("ผ้าอ้อม · ฉี่")).toBeVisible();
     await expect(page.getByText("ผ้าอ้อม · อึ")).toHaveCount(0);
     await expect(page.getByText("ขวดนม · 120 มล. · นมผง")).toBeVisible();
