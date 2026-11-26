@@ -9,6 +9,7 @@
 import { runReminders, type CronEnv } from "./reminders";
 import { runMedicationReminders } from "./medications";
 import { runBabyReminders } from "./baby";
+import { runChildMedReminders } from "./child-meds";
 import { runBackup, type BackupEnv } from "./backup";
 
 /**
@@ -50,6 +51,13 @@ export default {
     ctx.waitUntil(
       runMedicationReminders(env).then((r) => {
         console.log(`medications due=${r.due} sent=${r.sent} removed=${r.removed}${r.skipped ? ` skipped=${r.skipped}` : ""}`);
+      }),
+    );
+
+    // ยาประจำของลูก — เตือนทั้งบ้าน (คนที่บันทึกได้)
+    ctx.waitUntil(
+      runChildMedReminders(env).then((r) => {
+        console.log(`child-meds due=${r.due} sent=${r.sent} removed=${r.removed}${r.skipped ? ` skipped=${r.skipped}` : ""}`);
       }),
     );
 

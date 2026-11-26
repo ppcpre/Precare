@@ -13,7 +13,7 @@ import {
 } from "@/db/schema";
 import { AppError, editorAction } from "@/lib/safe-action";
 import { localNowIso } from "@/lib/local-time";
-import { secondsBetween } from "@/lib/baby-log";
+import { secondsBetween, shiftBreastStart } from "@/lib/baby-log";
 
 /**
  * เวลามาจาก client เสมอ (worker รันใน UTC — ดู src/actions/kicks.ts)
@@ -203,6 +203,55 @@ export const setSleepStart = editorAction
     if (!res.meta.changes) throw new AppError("รอบนี้จบไปแล้ว");
     revalidatePath("/dashboard");
     return { ok: true };
+  });
+
+/**
+ * แก้เวลาเริ่มของรอบเต้าที่ยังจับอยู่ — ส่วนต่างไปตกที่ข้างปัจจุบัน (ดู shiftBreastStart)
+ *
+ * กันชนกับการแตะสลับข้างจากอีกเครื่อง: อัปเดตเฉพาะเมื่อ sideStartedAt ยังเป็นค่าเดิม
+ */
+export const setBreastStart = editorAction
+  .metadata({ name: "setBreastStart" })
+  .inputSchema(z.object({ logId: id, at: localTime }))
+  .action(async ({ parsedInput: p, ctx }) => {
+    const row = await ctx.db
+      .select()
+      .from(babyLogs)
+      .where(
+        and(
+          eq(babyLogs.id, p.logId),
+          eq(babyLogs.familyId, ctx.familyId),
+          eq(babyLogs.kind, "breast"),
+          isNull(babyLogs.endedAt),
+        ),
+      )
+      .get();
+    if (!row) throw new AppError("รอบนี้จบไปแล้ว");
+    const next = shiftBreastStart(
+      {
+        startedAt: row.startedAt,
+        leftSec: row.leftSec ?? 0,
+        rightSec: row.rightSec ?? 0,
+        side: row.side ?? "left",
+        sideStartedAt: row.sideStartedAt,
+      },
+      p.at,
+      localNowIso(),
+    );
+    const res = await ctx.db
+      .update(babyLogs)
+      .set(next)
+      .where(
+        and(
+          eq(babyLogs.id, row.id),
+          eq(babyLogs.familyId, ctx.familyId),
+          isNull(babyLogs.endedAt),
+          row.sideStartedAt ? eq(babyLogs.sideStartedAt, row.sideStartedAt) : isNull(babyLogs.sideStartedAt),
+        ),
+      );
+    if (!res.meta.changes) throw new AppError("มีคนแตะสลับข้างพอดี ลองอีกครั้ง");
+    revalidatePath("/dashboard");
+    return next;
   });
 
 /**

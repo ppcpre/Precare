@@ -3,6 +3,8 @@ import { getDb } from "@/db";
 import {
   appointments,
   babyReminders,
+  childMedSent,
+  childMeds,
   children,
   familyMembers,
   medicationDoses,
@@ -44,6 +46,39 @@ export async function GET() {
    * กรองด้วยครอบครัวที่ยังเป็นสมาชิกอยู่ ไม่ใช่แค่ user_id
    */
   const recent = new Date(Date.now() - 10 * 60_000).toISOString();
+
+  /**
+   * ยาประจำของลูกที่ cron เพิ่งเตือนทั้งบ้าน — มาก่อนเรื่องอื่น เพราะผูกกับเวลาตายตัว
+   * กรองด้วยครอบครัวที่คนนี้ยังเป็นสมาชิกอยู่
+   */
+  const kidMed = await db
+    .select({ name: childMeds.name, dose: childMeds.dose, childId: childMeds.childId, childName: children.name, at: childMedSent.at })
+    .from(childMedSent)
+    .innerJoin(childMeds, eq(childMeds.id, childMedSent.medId))
+    .innerJoin(children, eq(children.id, childMeds.childId))
+    .innerJoin(
+      familyMembers,
+      and(
+        eq(familyMembers.familyId, childMeds.familyId),
+        eq(familyMembers.userId, me.id),
+        eq(familyMembers.status, "active"),
+      ),
+    )
+    .where(gte(childMedSent.sentAt, recent))
+    .orderBy(desc(childMedSent.sentAt))
+    .limit(1)
+    .get();
+
+  if (kidMed) {
+    return Response.json(
+      {
+        title: `ถึงเวลาให้${kidMed.name} · ${kidMed.childName}`,
+        body: `${kidMed.at} น.${kidMed.dose ? ` · ครั้งละ ${kidMed.dose}` : ""} · ยังไม่มีใครบันทึกว่าให้แล้ว`,
+        url: `/baby/${kidMed.childId}/meds`,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
   const baby = await db
     .select({
       kind: babyReminders.kind,

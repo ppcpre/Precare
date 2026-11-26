@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
 import { ArrowLeftRight, Square } from "lucide-react";
-import { addBabyLog, deleteBabyLog, startBabyTimer, stopBabyTimer, tapBreastSide } from "@/actions/baby-log";
-import { SIDE_LABEL, breastTotals, clockSec, secondsBetween, type BreastSide } from "@/lib/baby-log";
+import { addBabyLog, deleteBabyLog, setBreastStart, startBabyTimer, stopBabyTimer, tapBreastSide } from "@/actions/baby-log";
+import { SIDE_LABEL, breastTotals, clockSec, secondsBetween, shiftBreastStart, type BreastSide } from "@/lib/baby-log";
 import { localIso } from "@/lib/kicks";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
-import { atFromTime } from "./time-field";
+import { TimeField, atFromTime } from "./time-field";
 
 export type BreastState = {
   id: string | null;
@@ -63,6 +63,11 @@ export function BreastTimer({
   const tap = useAction(tapBreastSide, { onError: fail });
   const stop = useAction(stopBabyTimer, { onSuccess: () => router.push(back), onError: fail });
   const discard = useAction(deleteBabyLog, { onSuccess: () => router.push(back) });
+  // เซิร์ฟเวอร์คิดเองแล้วตอบค่าจริงกลับมา — ถ้าไม่ตรงกับที่หน้าจอเดาไว้ ใช้ของเซิร์ฟเวอร์
+  const fixStart = useAction(setBreastStart, {
+    onSuccess: ({ data }) => data && setS((cur) => (cur ? { ...cur, ...data } : cur)),
+    onError: fail,
+  });
 
   function onSide(side: BreastSide) {
     if (!canWrite) return;
@@ -106,12 +111,11 @@ export function BreastTimer({
           const on = active === side;
           const hint = !s && suggested === side;
           return (
-            <button
+            <SideTile
               key={side}
-              type="button"
-              disabled={!canWrite}
+              canWrite={canWrite}
               onClick={() => onSide(side)}
-              aria-pressed={on}
+              pressed={on}
               className={cn(
                 "flex min-h-40 flex-col items-center justify-center gap-1 rounded-lg border-2 transition-colors active:scale-[0.98]",
                 on ? "border-transparent bg-peach-700 text-white" : "bg-peach-100 text-ink-900",
@@ -123,9 +127,19 @@ export function BreastTimer({
                 {clockSec(side === "left" ? totals.left : totals.right)}
               </span>
               <span className={cn("text-xs", on ? "text-white/85" : "text-ink-600")}>
-                {on ? "กำลังจับเวลา · แตะเพื่อพัก" : hint ? "แนะนำข้างนี้ก่อน" : s ? "แตะเพื่อสลับ" : "แตะเพื่อเริ่ม"}
+                {!canWrite
+                  ? on
+                    ? "กำลังจับเวลา"
+                    : ""
+                  : on
+                    ? "กำลังจับเวลา · แตะเพื่อพัก"
+                    : hint
+                      ? "แนะนำข้างนี้ก่อน"
+                      : s
+                        ? "แตะเพื่อสลับ"
+                        : "แตะเพื่อเริ่ม"}
               </span>
-            </button>
+            </SideTile>
           );
         })}
       </div>
@@ -137,12 +151,30 @@ export function BreastTimer({
         </p>
       )}
 
+      {s && canWrite && s.id && nowIso && (
+        <TimeField
+          label="เริ่ม"
+          value={s.startedAt.slice(11, 16)}
+          nowIso={nowIso}
+          onChange={(v) => {
+            if (!v || !s.id) return;
+            const at = atFromTime(v, localIso());
+            // เดาก่อนให้ตัวเลขขยับทันที แล้วรอค่าจริงจากเซิร์ฟเวอร์
+            setS({ ...s, ...shiftBreastStart(s, at, localIso()) });
+            fixStart.execute({ logId: s.id, at });
+          }}
+        />
+      )}
+      {fixStart.result.serverError && (
+        <p role="alert" className="text-center text-[13px] text-danger">
+          {fixStart.result.serverError}
+        </p>
+      )}
       {s && (
         <p className="text-center text-[13px] text-ink-600">
-          เริ่ม {s.startedAt.slice(11, 16)} น.
+          {!(canWrite && s.id) && <>เริ่ม {s.startedAt.slice(11, 16)} น.</>}
           {canWrite && s.id && (
             <>
-              {" · "}
               <button
                 type="button"
                 className="text-brown-700 underline-offset-2 hover:underline"
@@ -192,6 +224,28 @@ export function BreastTimer({
         กลับหน้าวันนี้
       </Link>
     </div>
+  );
+}
+
+/** viewer เห็นเป็นการ์ดสถานะ ไม่ใช่ปุ่มที่กดไม่ได้ — หลักเดิมของแอปคือซ่อน ไม่ใช่ disabled */
+function SideTile({
+  canWrite,
+  onClick,
+  pressed,
+  className,
+  children,
+}: {
+  canWrite: boolean;
+  onClick: () => void;
+  pressed: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (!canWrite) return <div className={className}>{children}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-pressed={pressed} className={className}>
+      {children}
+    </button>
   );
 }
 

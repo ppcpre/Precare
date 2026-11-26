@@ -297,3 +297,28 @@ export function detailLabel(r: BabyLogView, now: string): string {
       return "";
   }
 }
+
+/**
+ * แก้เวลาเริ่มของรอบเต้าที่ยังจับอยู่ — "ลืมกดเริ่ม เริ่มจริงเมื่อห้านาทีก่อน"
+ *
+ * เวลาแยกข้าง เลื่อนแค่ startedAt ไม่พอ ส่วนต่างต้องไปตกที่ข้างที่กำลังให้อยู่
+ * - กำลังจับอยู่: เลื่อน sideStartedAt ตาม (ไม่ก่อนเวลาเริ่มใหม่ และไม่ล้ำตอนนี้)
+ * - พักอยู่: บวก/ลบเข้าเวลาของข้างล่าสุด (ไม่ติดลบ)
+ */
+export function shiftBreastStart(
+  s: { startedAt: string; leftSec: number; rightSec: number; side: BreastSide; sideStartedAt: string | null },
+  at: string,
+  now: string,
+): { startedAt: string; leftSec: number; rightSec: number; sideStartedAt: string | null } {
+  const delta = Math.round((ms(s.startedAt) - ms(at)) / 1000); // บวก = เริ่มเร็วขึ้น
+  if (s.sideStartedAt) {
+    let side = addSeconds(s.sideStartedAt, -delta);
+    if (side < at) side = at;
+    if (side > now) side = now;
+    return { startedAt: at, leftSec: s.leftSec, rightSec: s.rightSec, sideStartedAt: side };
+  }
+  const key = s.side === "left" ? "leftSec" : "rightSec";
+  const next = { leftSec: s.leftSec, rightSec: s.rightSec };
+  next[key] = Math.max(0, next[key] + delta);
+  return { startedAt: at, ...next, sideStartedAt: null };
+}

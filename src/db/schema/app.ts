@@ -1030,3 +1030,27 @@ export const childTemps = sqliteTable(
   },
   (t) => [index("idx_child_temps_child").on(t.familyId, t.childId, t.measuredAt)],
 );
+
+/**
+ * ยาประจำของลูกที่ cron เตือนไปแล้ว — หนึ่งแถวต่อยา ต่อวัน ต่อเวลา
+ *
+ * เตือนทั้งบ้าน (คนที่บันทึกได้) เพราะยาลูกใครก็ให้ได้ แต่ถ้ามีคนบันทึกว่าให้แล้ว
+ * ในช่วงนั้นจะไม่เตือนเลย · แถวนี้กันเตือนซ้ำทุก 5 นาที
+ */
+export const childMedSent = sqliteTable(
+  "child_med_sent",
+  {
+    id: text("id").primaryKey(),
+    medId: text("med_id")
+      .notNull()
+      .references(() => childMeds.id, { onDelete: "cascade" }),
+    dueOn: text("due_on").notNull(),
+    at: text("at").notNull(),
+    /** UTC — /api/push/next ใช้หาว่า push ใบนี้เรื่องอะไร */
+    sentAt: text("sent_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_child_med_sent").on(t.medId, t.dueOn, t.at),
+    index("idx_child_med_sent_at").on(t.sentAt),
+  ],
+);

@@ -80,3 +80,25 @@ export function ruleLabel(med: ChildMedRule & { dose: string | null }): string {
   }
   return [dose, how].filter(Boolean).join(" · ");
 }
+
+/** ยิงเตือนยาประจำช้าได้นานสุดเท่าไหร่ — ตรงกับเตือนยาของผู้ใหญ่ (LATE_MINUTES) */
+export const CHILD_MED_LATE_MIN = 60;
+/** ให้ก่อนเวลาไม่เกินเท่านี้ถือว่าเป็นของรอบนี้ (ให้ 08:40 แทน 09:00 ไม่ต้องเตือน) */
+export const CHILD_MED_EARLY_MIN = 60;
+
+/**
+ * เวลาของยาประจำที่ควรเตือนตอนนี้
+ *
+ * ถึงเวลาแล้วไม่เกิน CHILD_MED_LATE_MIN นาที และยังไม่มีใครบันทึกว่าให้
+ * ตั้งแต่ CHILD_MED_EARLY_MIN นาทีก่อนเวลานั้น — มีคนให้แล้ว ไม่ต้องปลุกคนอื่น
+ */
+export function dueSlots(times: string | null, givenAts: string[], now: string): string[] {
+  const day = now.slice(0, 10);
+  const nowMs = Date.parse(`${now}Z`);
+  return parseTimes(times).filter((t) => {
+    const slot = Date.parse(`${day}T${t}:00Z`);
+    if (slot > nowMs || nowMs - slot > CHILD_MED_LATE_MIN * 60_000) return false;
+    const from = slot - CHILD_MED_EARLY_MIN * 60_000;
+    return !givenAts.some((g) => Date.parse(`${g}Z`) >= from);
+  });
+}

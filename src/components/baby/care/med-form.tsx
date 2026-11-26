@@ -161,6 +161,9 @@ export function MedForm({ childId, med }: { childId: string; med: ChildMedView |
             </button>
           )}
           {v?.times?._errors?.[0] && <p className="text-xs text-danger">{v.times._errors[0]}</p>}
+          <p className="text-xs text-ink-400">
+            ถึงเวลาแล้วยังไม่มีใครบันทึก จะเตือนเครื่องของคนในบ้านที่บันทึกได้ — มีคนให้แล้วจะไม่เตือน
+          </p>
         </div>
       )}
 

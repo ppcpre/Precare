@@ -178,3 +178,32 @@ describe("แถบ 24 ชั่วโมง", () => {
     ]);
   });
 });
+
+describe("แก้เวลาเริ่มของรอบเต้า", () => {
+  const base = {
+    startedAt: "2026-11-22T10:00:00",
+    leftSec: 300,
+    rightSec: 0,
+    side: "right" as const,
+    sideStartedAt: "2026-11-22T10:05:00",
+  };
+
+  it("กำลังจับข้างขวา เริ่มเร็วขึ้น 5 นาที = เวลาเพิ่มที่ข้างขวา ข้างซ้ายเท่าเดิม", async () => {
+    const { shiftBreastStart } = await import("@/lib/baby-log");
+    const r = shiftBreastStart(base, "2026-11-22T09:55:00", "2026-11-22T10:10:00");
+    expect(r).toEqual({ startedAt: "2026-11-22T09:55:00", leftSec: 300, rightSec: 0, sideStartedAt: "2026-11-22T10:00:00" });
+  });
+
+  it("พักอยู่ = บวกเข้าข้างล่าสุด · เลื่อนช้าลงเกินเวลาที่มีไม่ติดลบ", async () => {
+    const { shiftBreastStart } = await import("@/lib/baby-log");
+    const paused = { ...base, side: "left" as const, sideStartedAt: null };
+    expect(shiftBreastStart(paused, "2026-11-22T09:58:00", "2026-11-22T10:10:00").leftSec).toBe(420);
+    expect(shiftBreastStart(paused, "2026-11-22T10:20:00", "2026-11-22T10:30:00").leftSec).toBe(0);
+  });
+
+  it("เลื่อนช้าลง: ข้างที่กำลังจับไม่เริ่มก่อนเวลาเริ่มใหม่ และไม่ล้ำตอนนี้", async () => {
+    const { shiftBreastStart } = await import("@/lib/baby-log");
+    const r = shiftBreastStart(base, "2026-11-22T10:08:00", "2026-11-22T10:10:00");
+    expect(r.sideStartedAt).toBe("2026-11-22T10:10:00");
+  });
+});
