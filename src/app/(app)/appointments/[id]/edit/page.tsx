@@ -1,0 +1,73 @@
+import { notFound, redirect } from "next/navigation";
+import { AppointmentForm } from "@/components/appointments/form";
+import { AppointmentMedia } from "@/components/appointments/media-strip";
+import { AppointmentReceipts } from "@/components/appointments/receipts";
+import {
+  getAppointmentById,
+  listAppointmentMedia,
+  listAppointmentReceipts,
+  listCareGroups,
+  listChildren,
+  requireFamilyContext,
+} from "@/lib/queries";
+import { can } from "@/lib/authz";
+import { familyMediaBase } from "@/lib/media-base";
+
+export const metadata = { title: "แก้ไขนัดหมาย · Pre Care" };
+
+export default async function EditAppointmentPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  let ctx;
+  try {
+    ctx = await requireFamilyContext("editor");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    redirect("/appointments");
+  }
+
+  const [appt, groups, media, receipts, mediaBase, kids] = await Promise.all([
+    getAppointmentById(ctx.db, ctx.familyId, id),
+    listCareGroups(ctx.db, ctx.familyId),
+    listAppointmentMedia(ctx.db, ctx.familyId, id),
+    listAppointmentReceipts(ctx.db, ctx.familyId, id),
+    familyMediaBase(ctx.familyId),
+    listChildren(ctx.db, ctx.familyId),
+  ]);
+  if (!appt) notFound();
+
+  return (
+    <AppointmentForm
+      appt={appt}
+      groups={groups}
+      kids={kids.map((k) => ({ id: k.id, name: k.name }))}
+      receipts={
+        <AppointmentReceipts
+          appointmentId={id}
+          items={receipts}
+          costSatang={appt.costSatang}
+          claimStatus={appt.claimStatus}
+          canWrite={can.writeRecords(ctx.role)}
+          mediaBase={mediaBase}
+        />
+      }
+      media={
+        <AppointmentMedia
+          appointmentId={id}
+          // วันที่ของนัดเป็นค่าตั้งต้นของ "วันที่ถ่าย" — ไฟล์จากวันตรวจ
+          // ย่อมเป็นของวันนั้น ไม่ใช่วันที่คนนึกได้แล้วมาอัป
+          takenAt={appt.apptDatetime.slice(0, 10)}
+          items={media}
+          canWrite={can.writeRecords(ctx.role)}
+          mediaBase={mediaBase}
+        />
+      }
+    />
+  );
+}

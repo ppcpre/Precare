@@ -1,0 +1,81 @@
+import { expect, test } from "@playwright/test";
+import { completeOnboarding, gotoApp, signUp, uniqueEmail } from "./helpers";
+
+/**
+ * T6.5 — security headers
+ *
+ * เทสต์นี้ไม่ได้แค่ดูว่ามี header ครบ แต่ดูว่า CSP ที่ใส่ไปแล้วแอปยังทำงานได้
+ * CSP ที่เข้มเกินจะทำให้ script ของ Next ถูกบล็อกแล้วหน้าไม่ hydrate
+ * ซึ่งเป็นวิธีพังที่เงียบที่สุด — หน้าดูปกติทุกอย่างแต่กดอะไรไม่ได้เลย
+ */
+test("หน้าล็อกอินส่ง security header ครบ", async ({ page }) => {
+  const res = await page.goto("/login");
+  const h = res!.headers();
+
+  expect(h["x-frame-options"]).toBe("DENY");
+  expect(h["x-content-type-options"]).toBe("nosniff");
+  expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(h["strict-transport-security"]).toContain("max-age=");
+
+  const csp = h["content-security-policy"];
+  expect(csp).toContain("frame-ancestors 'none'");
+  expect(csp).toContain("object-src 'none'");
+  expect(csp).toContain("base-uri 'self'");
+  // nonce ต้องสุ่มใหม่ทุก request ไม่ใช่ค่าคงที่ที่เดาได้
+  expect(csp).toMatch(/'nonce-[a-f0-9]{32}'/);
+  expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+
+  // regression: CSP รอบแรกลืมโฮสต์รูปโปรไฟล์ของ Google
+  // avatar เลยกลายเป็นไอคอนรูปพังบน header ทุกหน้าสำหรับคนที่ล็อกอินด้วย Google
+  expect(csp).toContain("googleusercontent.com");
+  expect(csp).toMatch(/img-src[^;]*blob:/);
+
+  // regression: ไม่มี media-src -> ตกไปใช้ default-src 'self' ซึ่งไม่รวม blob:
+  // แล้ว <video> ที่ชี้ไป URL.createObjectURL จะยิง error เงียบๆ
+  // ทำให้ mp4 ที่ปกติดีทุกไฟล์ขึ้นว่า "เปิดไฟล์วิดีโอไม่ได้" (เจอบนเครื่องจริง)
+  // อ่านความยาวคลิปกับดึงเฟรมมาทำหน้าปกจึงพังทั้งคู่ = อัปคลิปไม่ได้เลย
+  expect(csp).toMatch(/media-src[^;]*blob:/);
+
+  /**
+   * regression: worker เสิร์ฟไฟล์อยู่คนละ origin กับแอป
+   *
+   * ลืมใส่ต้นทางของมันใน img-src/media-src แล้วรูปทุกใบหายเงียบ ไม่มี error
+   * ในหน้า ไม่มีคำขอใน network — เบราว์เซอร์บล็อกก่อนยิง (เจอตอนต่อครั้งแรก)
+   * เทสต์นี้ผูกกับค่าที่ worker ได้รับจริง ไม่ใช่ค่าคงที่ในเทสต์
+   */
+  const mediaOrigin = "http://localhost:8789";
+  expect(csp, "img-src ต้องอนุญาตต้นทางของ worker เสิร์ฟไฟล์").toMatch(
+    new RegExp(`img-src[^;]*${mediaOrigin}`),
+  );
+  expect(csp, "media-src ต้องอนุญาตต้นทางของ worker เสิร์ฟไฟล์").toMatch(
+    new RegExp(`media-src[^;]*${mediaOrigin}`),
+  );
+});
+
+test("nonce ต้องไม่ซ้ำกันระหว่าง request", async ({ page }) => {
+  const first = (await page.goto("/login"))!.headers()["content-security-policy"];
+  const second = (await page.goto("/signup"))!.headers()["content-security-policy"];
+  const nonceOf = (csp: string) => csp.match(/'nonce-([a-f0-9]{32})'/)?.[1];
+
+  expect(nonceOf(first)).toBeTruthy();
+  expect(nonceOf(first)).not.toBe(nonceOf(second));
+});
+
+test("CSP ต้องไม่บล็อก script ของแอปจนใช้งานไม่ได้", async ({ page }) => {
+  const violations: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && /Content Security Policy|CSP/i.test(m.text())) {
+      violations.push(m.text());
+    }
+  });
+
+  // เดินเส้นทางที่ใช้ทั้ง client component, Server Action และ blob: preview
+  await signUp(page, uniqueEmail("csp"), "แม่ซีเอสพี");
+  await completeOnboarding(page, "ครอบครัวซีเอสพี");
+  await gotoApp(page, "/health/new");
+  await page.getByLabel("น้ำหนัก").fill("61.5");
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+  await page.waitForURL(/\/health$/, { timeout: 30_000 });
+
+  expect(violations, `CSP บล็อกของที่แอปต้องใช้:\n${violations.join("\n")}`).toEqual([]);
+});

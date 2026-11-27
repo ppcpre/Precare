@@ -1,0 +1,99 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "precare",
+  "main": ".open-next/worker.js",
+
+  // ต้อง >= 2024-09-23 และเปิด nodejs_compat ไม่งั้น @opennextjs/cloudflare ทำงานไม่ได้
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // static assets ไม่นับรวมใน bundle limit 3 MiB ของ worker script
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": { "enabled": true },
+
+  // ค่าที่ไม่เป็นความลับใส่ตรงนี้ได้ — ส่วน SECRET ใช้ `wrangler secret put` เท่านั้น
+  "vars": {
+    "BETTER_AUTH_URL": "https://precare.precare.workers.dev",
+    // client_id ของ Google เป็นค่าสาธารณะโดยการออกแบบ — โผล่ใน URL ที่เบราว์เซอร์
+    // ของผู้ใช้ทุกคนเห็นตอนกดล็อกอิน จึงใส่ใน config ได้
+    // ส่วน GOOGLE_CLIENT_SECRET ต้องใช้ `wrangler secret put` เท่านั้น ห้ามใส่ที่นี่
+    "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com",
+    // ต้นทางของ worker เสิร์ฟไฟล์ (workers/media) — ไม่ใช่ความลับ เป็นแค่ที่อยู่
+    // ถ้าไม่ได้ตั้ง แอปจะกลับไปเสิร์ฟไฟล์เองที่ /api/media เหมือนเดิม
+    "MEDIA_ORIGIN": "https://precare-media.precare.workers.dev"
+  },
+
+  // ---------------------------------------------------------------
+  // top-level = production (deploy จาก branch `main` เท่านั้น)
+  // TODO(T0.6): สร้าง D1 ก่อน แล้วเอา id จริงมาใส่
+  //   npx wrangler d1 create precare-db
+  // ระหว่างที่ยังเป็น placeholder: `--local` ใช้ได้ปกติ แต่ `--remote` จะ error
+  // ---------------------------------------------------------------
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "precare-db",
+      "database_id": "906981f7-827b-4456-b586-a9d9717eae56",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // R2 — แยก 2 bucket เพราะ access model ต่างกันคนละแบบ
+  //   assets = public, cache ยาว, ไม่มีข้อมูลส่วนตัว
+  //   photos = private, ต้องผ่าน authz ทุก request, ห้าม cache แบบ public
+  "r2_buckets": [
+    { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
+    { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
+  ],
+
+  // อ่านยอดรวมจากรูปใบเสร็จ — ดู src/lib/receipt.ts
+  // remote: true เพราะ AI binding ไม่มีแบบ local อยู่แล้ว ใส่ไว้ให้ชัดว่าเรียกออกไปจริง
+  // E2E รัน wrangler dev ด้วย --local ซึ่งปิด remote binding ทั้งหมด
+  // CI จึงไม่ต้องมี token ตอนเทสต์ และเทสต์ได้ทางถอยตอนอ่านไม่ได้แทน
+  "ai": { "binding": "AI", "remote": true },
+
+  // ---------------------------------------------------------------
+  // environment `dev` — worker + D1 คนละตัวกับ production
+  //   deploy จาก branch `dev` และ PR preview (`versions upload --env dev`)
+  //   d1_databases เป็น non-inheritable key ของ wrangler ต้องประกาศซ้ำในนี้เสมอ
+  //
+  // TODO(T0.7): สร้าง D1 ของ dev แล้วเอา id จริงมาใส่
+  //   npx wrangler d1 create precare-dev-db
+  //   npx wrangler secret put BETTER_AUTH_SECRET --env dev   (secret แยกจาก production)
+  // ---------------------------------------------------------------
+  "env": {
+    "dev": {
+      "name": "precare-dev",
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+      "observability": { "enabled": true },
+      "vars": {
+        "BETTER_AUTH_URL": "https://precare-dev.precare.workers.dev",
+        "GOOGLE_CLIENT_ID": "1053131727969-qhtlkthgl84p9f3nk570520ku1fhrf6s.apps.googleusercontent.com",
+        "VAPID_PUBLIC_KEY": "BD2xUeHqOZSEEkIHIlW7V9tqkR6HmO9X48kEgdft-r4XHDQhqSuByEU1IlqhPDhvQK8a8ZuiTCncjMVVEVsmUs0",
+        "VAPID_SUBJECT": "mailto:pp.cpre@gmail.com",
+        "MEDIA_ORIGIN": "https://precare-media-dev.precare.workers.dev"
+      },
+      "r2_buckets": [
+        { "binding": "ASSETS_BUCKET", "bucket_name": "precare-assets" },
+        { "binding": "PHOTOS_BUCKET", "bucket_name": "precare-photos" }
+      ],
+      // binding ไม่สืบทอดจากชั้นบนใน env ของ wrangler ต้องประกาศซ้ำ
+      "ai": { "binding": "AI", "remote": true },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "precare-dev-db",
+          "database_id": "ed7a37a6-37ae-4a48-baa0-b78a311402fd",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}

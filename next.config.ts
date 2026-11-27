@@ -1,0 +1,88 @@
+import type { NextConfig } from "next";
+
+/**
+ * รหัสบิลด์ — ตัวเดียวกันทั้งฝั่ง server และ client ของ deploy ครั้งนั้น
+ *
+ * ใช้ commit sha ตอนรันบน CI เพื่อให้คาดเดาได้และตรงกับโค้ดที่ deploy จริง
+ * ส่วนบนเครื่องตัวเองใช้เวลาแทน เพราะ build ซ้ำโดยโค้ดไม่เปลี่ยนก็ควรเป็นคนละบิลด์
+ *
+ * มีไว้เพื่อให้แอปที่เปิดค้างอยู่รู้ตัวว่าเซิร์ฟเวอร์เปลี่ยนบิลด์ไปแล้ว
+ * (ดู src/components/build-watch.tsx)
+ */
+const BUILD_ID = process.env.GITHUB_SHA?.slice(0, 8) ?? `local-${Date.now().toString(36)}`;
+
+const nextConfig: NextConfig = {
+  generateBuildId: async () => BUILD_ID,
+  // ฝังรหัสเดียวกันลงไปในบันเดิลฝั่ง client เพื่อให้เทียบกับของเซิร์ฟเวอร์ได้
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
+  experimental: {
+    // ค่า default ของ Server Action คือ 1 MB ซึ่งน้อยกว่ารูปชุดเดียวที่ย่อแล้ว
+    // (10 ใบ x ~300 KB) การอัปโหลดจะถูกปฏิเสธก่อนถึง action ด้วยซ้ำ
+    serverActions: { bodySizeLimit: "20mb" },
+  },
+  // ไม่ใช้ output: "export" อีกแล้ว — เดิมเป็น static export สำหรับ Firebase Hosting
+  // ตอนนี้รัน SSR บน Cloudflare Workers ผ่าน @opennextjs/cloudflare
+  // better-auth ลาก adapter ทุกตัวมาเป็น dependency แต่เราใช้แค่ drizzle
+  // kysely อย่างเดียว 3.4 MB — ต้อง stub ทิ้งเพราะเพดาน worker มีแค่ 3 MiB (gzip)
+  turbopack: {
+    resolveAlias: {
+      kysely: "./src/stubs/kysely.ts",
+      "@better-auth/kysely-adapter": "./src/stubs/kysely-adapter.ts",
+    },
+  },
+  /**
+   * T6.5 — security headers
+   *
+   * CSP แบบเข้ม (มี nonce) อยู่ใน src/middleware.ts แล้วตั้งแต่ T6.5
+   * ต้องอยู่ที่นั่นเพราะ nonce ต้องสุ่มใหม่ทุก request ทำใน config ไม่ได้
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // กันเว็บอื่นเอาแอปเราไปฝัง iframe แล้วหลอกให้คลิก
+          // CSP เต็มรูปแบบอยู่ใน src/middleware.ts เพราะต้องใช้ nonce ต่อ request
+          // ตรงนี้เหลือไว้เป็นตาข่ายสำหรับ path ที่ middleware ไม่ได้ครอบ (static asset)
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          // กันเบราว์เซอร์เดาชนิดไฟล์เอง เช่น มองรูปที่ผู้ใช้อัปโหลดเป็น script
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // ไม่ส่ง URL เต็มไปเว็บอื่น — URL ของเรามี id ของบันทึกสุขภาพอยู่
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
+          {
+            key: "Permissions-Policy",
+            // ปิดทุกอย่างที่แอปไม่ได้ใช้ · camera ปล่อยไว้เพราะจะใช้ตอนถ่ายรูปอัปโหลด
+            value: "geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()",
+          },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
+      {
+        // ห้าม CDN หรือ proxy ไหนเก็บ response ของ API ไว้แจกซ้ำ
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store" }],
+      },
+    ];
+  },
+
+  images: {
+    // next/image ยังไม่มี loader ของ Cloudflare ที่ใช้ฟรีได้ — Phase 1 ใช้รูปที่ resize มาแล้ว
+    unoptimized: true,
+  },
+};
+
+export default nextConfig;
+
+// ทำให้ `next dev` เข้าถึง binding ของ Cloudflare (D1/R2) ได้เหมือนตอน deploy จริง
+//
+// remoteBindings: false — ต้องปิด เพราะไฟล์นี้ถูกโหลดตอน `next build` ด้วย
+// ไม่ใช่แค่ตอน `next dev` พอมี AI binding (remote) มันจะพยายามต่อไป Cloudflare
+// ตั้งแต่ตอน build ซึ่งใน CI ไม่มี token ในขั้นนั้น build จึงล้มด้วย
+// "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN"
+// (เครื่องที่ล็อกอิน wrangler อยู่จะไม่เจอ — เจอครั้งแรกบน CI run 60)
+// ผลคือ `next dev` อ่านใบเสร็จอัตโนมัติไม่ได้ ซึ่งตกไปทางกรอกเองตามปกติ
+// ถ้าจะลองอ่านใบเสร็จจริงบนเครื่อง ให้รันผ่าน `wrangler dev` (ไม่ใส่ --local)
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+void initOpenNextCloudflareForDev({ remoteBindings: false });

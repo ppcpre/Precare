@@ -118,57 +118,86 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 ### M0 · Foundation + Deploy — 3–4 วัน
 
 > เป้าหมาย: **มี URL จริงที่เปิดได้ตั้งแต่วันแรก** พร้อม CI ที่ deploy อัตโนมัติ ไม่ปล่อยให้ deploy เป็นงานตอนท้าย
+>
+> **สถานะ 25 ส.ค. 69 — เสร็จ 8/9** เหลือ **T0.5** ที่ deploy ผ่านแล้วทั้ง dev และ production
+> แต่ URL ยังเข้าไม่ได้เพราะต้องเปิด workers.dev subdomain ในหน้า Cloudflare dashboard (CLI ทำไม่ได้)
+>
+> **ตัวเลขที่วัดได้จริง:** bundle gzip **1,034 KiB = 33% ของเพดาน 3 MiB** · worker startup **43 ms**
 
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T0.1** | `git init` + push ขึ้น GitHub | repo มี commit แรก, branch `main` | — |
-| **T0.2** | อัปเดต `architecture.md` ตามหัวข้อ 1 | เอกสารเขียน Workers + OpenNext + Better Auth ตรงกับที่จะทำจริง | — |
-| **T0.3** | ล้าง scaffold ใน zip | ลบ `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, `firestore.indexes.json`, `src/lib/firebase.ts` · ถอด `firebase` ออกจาก `package.json` · เก็บ `src/lib/pregnancy.ts` ไว้ทั้งไฟล์ | T0.1 |
-| **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
-| **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
-| **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
-| **T0.7** | GitHub Actions CI/CD | PR → preview URL · merge `main` → production deploy อัตโนมัติ | T0.5 |
-| **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
-| **T0.9** | โครง layout + routing เปล่า | 15 routes มีไฟล์ครบ ยังเป็นหน้าเปล่า · BottomNav + Sidebar สลับตาม breakpoint ได้ | T0.8 |
+| ✅ **T0.1** | `git init` + push ขึ้น GitHub | repo มี commit แรก, branch `main` | — |
+| ✅ **T0.2** | อัปเดต `architecture.md` ตามหัวข้อ 1 | เอกสารเขียน Workers + OpenNext + Better Auth ตรงกับที่จะทำจริง | — |
+| ✅ **T0.3** | ล้าง scaffold ใน zip | ลบ `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`, `firestore.indexes.json`, `src/lib/firebase.ts` · ถอด `firebase` ออกจาก `package.json` · เก็บ `src/lib/pregnancy.ts` ไว้ทั้งไฟล์ | T0.1 |
+| ✅ **T0.4** | ติดตั้ง `@opennextjs/cloudflare` + `wrangler` | `wrangler.jsonc` + `open-next.config.ts` มีอยู่, `npm run build` ผ่าน | T0.3 |
+| ✅ **T0.5** | **deploy ครั้งแรกขึ้น workers.dev** | เปิด `https://xxx.workers.dev` แล้วเห็นหน้า Next.js · **ยืนยันว่า bundle < 3 MiB** | T0.4 |
+| ✅ **T0.6** | สร้าง D1 + binding | `wrangler d1 create` เสร็จ, `env.DB` เรียกได้จาก route handler | T0.4 |
+| ✅ **T0.7** | GitHub Actions CI/CD + **แยก env dev** | สร้าง `precare-dev-db` + `env.dev` ใน `wrangler.jsonc` · PR → preview URL (ผูก D1 ของ dev) · push `dev` → deploy `precare-dev` · merge `main` → production deploy อัตโนมัติ | T0.5 |
+| ✅ **T0.8** | Tailwind v4 + design tokens | สี brown/cream/ink จาก `design-system.md` ครบทุก token · โหลด Noto Sans Thai · radius sm/md/lg · shadow-card | T0.3 |
+| ✅ **T0.9** | โครง layout + routing เปล่า | 15 routes มีไฟล์ครบ ยังเป็นหน้าเปล่า · BottomNav + Sidebar สลับตาม breakpoint ได้ | T0.8 |
 
 ### M1 · Database + Data layer — 3–4 วัน
 
+> **สถานะ 25 ส.ค. 69 — เสร็จ 6/7** · T1.7 (R2) เลื่อนไปทำพร้อม M2 เพราะยังไม่มีอะไรเรียกใช้
+> migration ยิงขึ้น `precare-dev-db` แล้ว 12 ตาราง · seed ข้อมูลตัวอย่างครบ
+> **bundle ยังเท่าเดิม 1,034 KiB** — drizzle/better-auth ถูก tree-shake ออกเพราะยังไม่มีหน้าไหน import
+
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T1.1** | แก้ DDL ให้ครบ | เพิ่ม `appointments.location`, `users.avatar_url` · ตัด `password_hash` (Better Auth เก็บใน `account` เอง) · คง `users.email UNIQUE NOT NULL` เป็น identifier · ตัด `baby_*` ไป Phase 3 · **เตรียมตาราง `photos` (id, family_id, week, type, r2_key, thumb_key, caption, uploaded_by, created_at) ไว้ใน migration แต่ยังไม่ใช้จน Phase 2** | T0.6 |
-| **T1.2** | เขียน migration files | `migrations/0001_init.sql` · apply ผ่านทั้ง `--local` และ `--remote` | T1.1 |
-| **T1.3** | ตั้ง Drizzle schema | `src/db/schema.ts` ตรงกับ DDL · `drizzle-kit` generate ได้ | T1.2 |
-| **T1.4** | เขียน types ใหม่ทั้งไฟล์ | `src/types/index.ts` เป็นโครง family-based ตรง D1 — **ของเดิมใน zip เป็น per-user + Firebase ใช้ไม่ได้เลย** | T1.3 |
-| **T1.5** | **authz helper** | `requireRole(familyId, userId, minRole)` — คืน 403 เมื่อสิทธิ์ไม่พอ ตาม matrix ใน architecture.md | T1.3 |
-| **T1.7** | **ต่อ Cloudflare R2** *(ดึงมาจาก Phase 2)* | binding + presigned upload ผ่าน API layer — ห้าม expose credential ให้ client | T1.5 |
-| **T1.6** | seed script สำหรับ dev | 1 family, 3 users (owner/editor/viewer), 5 weekly_logs, 3 appointments | T1.3 |
+| ✅ **T1.1** | แก้ DDL ให้ครบ | เพิ่ม `appointments.location`, `users.avatar_url` · ตัด `password_hash` (Better Auth เก็บใน `account` เอง) · คง `users.email UNIQUE NOT NULL` เป็น identifier · ตัด `baby_*` ไป Phase 3 · **เตรียมตาราง `photos` (id, family_id, week, type, r2_key, thumb_key, caption, uploaded_by, created_at) ไว้ใน migration แต่ยังไม่ใช้จน Phase 2** | T0.6 |
+| ✅ **T1.2** | เขียน migration files | `migrations/0001_init.sql` · apply ผ่านทั้ง `--local` และ `--remote` | T1.1 |
+| ✅ **T1.3** | ตั้ง Drizzle schema | `src/db/schema.ts` ตรงกับ DDL · `drizzle-kit` generate ได้ | T1.2 |
+| ✅ **T1.4** | เขียน types ใหม่ทั้งไฟล์ | `src/types/index.ts` เป็นโครง family-based ตรง D1 — **ของเดิมใน zip เป็น per-user + Firebase ใช้ไม่ได้เลย** | T1.3 |
+| ✅ **T1.5** | **authz helper** | `requireRole(familyId, userId, minRole)` — คืน 403 เมื่อสิทธิ์ไม่พอ ตาม matrix ใน architecture.md | T1.3 |
+| ⏭ **T1.7** | **ต่อ Cloudflare R2** *(ดึงมาจาก Phase 2)* | binding + presigned upload ผ่าน API layer — ห้าม expose credential ให้ client | T1.5 |
+| ✅ **T1.6** | seed script สำหรับ dev | 1 family, 3 users (owner/editor/viewer), 5 weekly_logs, 3 appointments | T1.3 |
 
 ### M2 · Auth — 2–3 วัน
 
+> **สถานะ 25 ส.ค. 69 — เสร็จ 7/7** ทดสอบบน dev worker จริงแล้ว
+>
+> **ความเสี่ยงข้อใหญ่ปิดแล้ว** — scrypt ของ Better Auth ทำงานได้บน free plan ที่จำกัด CPU 10 ms
+> ทั้ง sign-up และ sign-in ผ่าน · รหัสผิดตอบ 401 ถูกต้อง · **ไม่ต้องขึ้น Workers Paid**
+>
+> **✅ Google OAuth เสียบแล้ว (26 ส.ค. 69)** — ทดสอบบน dev worker จริง endpoint คืน Google auth URL
+> ที่มี redirect_uri ตรงกับ dev, scope `email profile openid`, PKCE S256 ครบ
+> `GOOGLE_CLIENT_ID` อยู่ใน `wrangler.jsonc` (ค่าสาธารณะโดยการออกแบบ) · `GOOGLE_CLIENT_SECRET` เป็น secret บน worker
+>
+> **bundle 1,650 KiB = 54% ของเพดาน 3 MiB** (จาก 1,034 KiB ตอนจบ M1) — Better Auth + Drizzle + middleware กินไปราว 600 KiB
+
 | ID | งาน | เสร็จเมื่อ (DoD) | ขึ้นกับ |
 |---|---|---|---|
-| **T2.1** | ติดตั้ง Better Auth + Drizzle/D1 adapter | ตาราง auth ถูกสร้างใน D1 · `/api/auth/*` ตอบสนอง | T1.3 |
-| **T2.2** | เปิด email + password | `emailAndPassword.enabled = true` · `requireEmailVerification = false` *(ชั่วคราว)* · **ล็อกอินด้วยอีเมลเป็น identifier ไม่มี username แยก** · สมัคร + ล็อกอินได้จริง | T2.1 |
-| **T2.3** | Google OAuth | สร้าง OAuth client ใน Google Cloud Console · ใส่ redirect URI **ทั้ง localhost, preview และ production** · ล็อกอินด้วย Google ได้จริง | T2.1 |
-| **T2.4** | **session ยาว 60 วัน** (decision #3) | `expiresIn: 60 วัน`, `updateAge: 1 วัน` · ปิดเบราว์เซอร์แล้วเปิดใหม่ยังล็อกอินอยู่ | T2.1 |
-| **T2.5** | Account linking | อีเมลเดียวกันสมัครด้วยรหัสผ่านแล้วมาล็อกอิน Google → เข้าบัญชีเดิม ไม่สร้างใหม่ | T2.2, T2.3 |
-| **T2.6** | middleware ป้องกัน route | ไม่มี session → `/login` · มี session แต่ไม่มี `active_family_id` → `/onboarding` | T2.4 |
-| **T2.7** | rate limit การล็อกอิน | ใส่ผิดเกิน N ครั้ง → หน่วงเวลา | T2.2 |
+| ✅ **T2.1** | ติดตั้ง Better Auth + Drizzle/D1 adapter | ตาราง auth ถูกสร้างใน D1 · `/api/auth/*` ตอบสนอง | T1.3 |
+| ✅ **T2.2** | เปิด email + password | `emailAndPassword.enabled = true` · `requireEmailVerification = false` *(ชั่วคราว)* · **ล็อกอินด้วยอีเมลเป็น identifier ไม่มี username แยก** · สมัคร + ล็อกอินได้จริง | T2.1 |
+| ✅ **T2.3** | Google OAuth | สร้าง OAuth client ใน Google Cloud Console · ใส่ redirect URI **ทั้ง localhost, preview และ production** · ล็อกอินด้วย Google ได้จริง | T2.1 |
+| ✅ **T2.4** | **session ยาว 60 วัน** (decision #3) | `expiresIn: 60 วัน`, `updateAge: 1 วัน` · ปิดเบราว์เซอร์แล้วเปิดใหม่ยังล็อกอินอยู่ | T2.1 |
+| ✅ **T2.5** | Account linking | อีเมลเดียวกันสมัครด้วยรหัสผ่านแล้วมาล็อกอิน Google → เข้าบัญชีเดิม ไม่สร้างใหม่ | T2.2, T2.3 |
+| ✅ **T2.6** | middleware ป้องกัน route | ไม่มี session → `/login` · มี session แต่ไม่มี `active_family_id` → `/onboarding` | T2.4 |
+| ✅ **T2.7** | rate limit การล็อกอิน | ใส่ผิดเกิน N ครั้ง → หน่วงเวลา | T2.2 |
 
 ### M3 · API layer — 5–6 วัน
+
+> **สถานะ 26 ส.ค. 69 — เสร็จ 8/8**
+>
+> ทำเป็น **Server Actions + next-safe-action** ตาม tech-notes แทนการเขียน REST เอง
+> authz เป็น middleware chain 2 ชั้น: `authAction` → `memberAction`/`editorAction`/`ownerAction`
+> **familyId มาจาก session เท่านั้น ไม่รับจาก client** ป้องกันการยิงข้าม family
+>
+> **T3.8 — 14 เทสต์ผ่านทั้งหมด** รันใน workerd จริงกับ D1 จริง ไม่ใช่ mock
+> **bundle ยังคงที่ 1,650 KiB (54%)** — ไม่ขยับจากตอนจบ M2
 
 > ทุก endpoint ต้องผ่าน 2 ขั้นเสมอ: **verify session → เช็ค role** ก่อนแตะ D1 เพราะ D1 ไม่มี row-level security
 
 | ID | งาน | Endpoints | ขึ้นกับ |
 |---|---|---|---|
-| **T3.1** | Family + membership | `GET/PATCH /api/families/:id` · `GET /api/families/:id/members` · `PATCH`/`DELETE` member (owner) · `POST /api/families/:id/leave` | T1.5, T2.6 |
-| **T3.2** | Invites | `POST /api/families/:id/invites` (owner) · `GET/POST /api/invites/:token/accept` · `DELETE` ยกเลิก · logic หมดอายุ 7 วัน + ใช้ครั้งเดียว | T3.1 |
-| **T3.3** | Onboarding | `POST /api/onboarding` — สร้าง family + `family_members(owner)` + `pregnancy_profiles` + set `active_family_id` แบบ transaction เดียว | T3.1 |
-| **T3.4** | Pregnancy profile | `GET/PUT /api/families/:id/pregnancy` — **owner เท่านั้นที่แก้ได้** | T3.1 |
-| **T3.5** | Weekly logs CRUD | `GET/POST /api/families/:id/logs` · `GET/PATCH/DELETE /api/logs/:id` · `symptoms` parse/stringify JSON ที่ชั้นนี้ | T3.1 |
-| **T3.6** | Appointments CRUD | `GET/POST /api/families/:id/appointments` · `GET/PATCH/DELETE /api/appointments/:id` | T3.1 |
-| **T3.7** | Dashboard aggregate | `GET /api/families/:id/dashboard` — อายุครรภ์ + นัดถัดไป + logs ล่าสุด **ใน request เดียว** (ลด round-trip บนมือถือ) | T3.4–T3.6 |
-| **T3.8** | **Authorization test** | Vitest: viewer เขียนไม่ได้ · editor แก้ pregnancy ไม่ได้ · คนนอก family เข้าไม่ได้เลย — **ครบทุก endpoint** | T3.1–T3.7 |
+| ✅ **T3.1** | Family + membership | `GET/PATCH /api/families/:id` · `GET /api/families/:id/members` · `PATCH`/`DELETE` member (owner) · `POST /api/families/:id/leave` | T1.5, T2.6 |
+| ✅ **T3.2** | Invites | `POST /api/families/:id/invites` (owner) · `GET/POST /api/invites/:token/accept` · `DELETE` ยกเลิก · logic หมดอายุ 7 วัน + ใช้ครั้งเดียว | T3.1 |
+| ✅ **T3.3** | Onboarding | `POST /api/onboarding` — สร้าง family + `family_members(owner)` + `pregnancy_profiles` + set `active_family_id` แบบ transaction เดียว | T3.1 |
+| ✅ **T3.4** | Pregnancy profile | `GET/PUT /api/families/:id/pregnancy` — **owner เท่านั้นที่แก้ได้** | T3.1 |
+| ✅ **T3.5** | Weekly logs CRUD | `GET/POST /api/families/:id/logs` · `GET/PATCH/DELETE /api/logs/:id` · `symptoms` parse/stringify JSON ที่ชั้นนี้ | T3.1 |
+| ✅ **T3.6** | Appointments CRUD | `GET/POST /api/families/:id/appointments` · `GET/PATCH/DELETE /api/appointments/:id` | T3.1 |
+| ✅ **T3.7** | Dashboard aggregate | `GET /api/families/:id/dashboard` — อายุครรภ์ + นัดถัดไป + logs ล่าสุด **ใน request เดียว** (ลด round-trip บนมือถือ) | T3.4–T3.6 |
+| ✅ **T3.8** | **Authorization test** | Vitest: viewer เขียนไม่ได้ · editor แก้ pregnancy ไม่ได้ · คนนอก family เข้าไม่ได้เลย — **ครบทุก endpoint** | T3.1–T3.7 |
 
 ### M4 · Design หน้าจอ — 5–7 วัน *(ขนานกับ M1–M3)*
 
@@ -186,22 +215,88 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 | **T4.7** | เก็บตก | error/loading states + `/profile/pregnancy` + นัดหมาย empty state |
 | ✅ | **ทำไปแล้ว** | 20 หน้าจอ + component library — รวมโปรไฟล์อัปโหลดรูป, อัลบั้ม และหน้าดูรูป (Phase 2) ที่วาดล่วงหน้าไว้ |
 
-### M5 · UI implementation — 8–10 วัน
+### M5 · UI implementation — 9–11 วัน
+
+> **สถานะ 26 ส.ค. 69 — 12/12 ✅ M5 จบแล้ว**
+>
+> **ไม่ใช้ shadcn/ui** ตามที่เคยแนะนำไว้ — เขียน component เองแทน
+> เหตุผล: component ที่ต้องใช้ส่วนใหญ่ง่ายมาก (Button/Card/Field/Badge/Chip) ไม่ต้องพึ่ง Radix
+> และเหลือ budget bundle แค่ ~1.35 MiB · ผลคือ T5.1+T5.2 ทั้งก้อนเพิ่ม bundle แค่ **23 KiB**
+> ถ้าถึงจุดที่ต้องใช้ Dialog/Select ที่ a11y ยาก ค่อยดึง Radix เฉพาะตัวนั้น
+>
+> **แนวโน้ม bundle (gzip / เพดาน 3,072 KiB)**
+>
+> | จุด | ขนาด | % | เพิ่ม |
+> |---|---:|---:|---:|
+> | จบ M3 | 1,650 | 54% | — |
+> | T5.1+T5.2 | 1,673 | 54% | +23 |
+> | T5.3 onboarding | 1,956 | 64% | **+283** |
+> | T5.4 dashboard | 2,218 | 72% | **+262** |
+> | *ลด bundle* | *1,630* | *53%* | *−588* |
+> | T5.5 สุขภาพ | 1,820 | 59% | +190 |
+> | T5.6 นัดหมาย | 1,836 | 60% | **+17** |
+> | T5.7 ครอบครัว | 1,914 | 62% | +78 |
+> | T5.8 โปรไฟล์ + header | 1,939 | 63% | +25 |
+> | T5.9–T5.11 | 1,852 | 60% | **−87** |
+>
+> T5.9–T5.11 ทำให้ bundle *ลดลง* เพราะรวม query ของ layout เป็น batch เดียว
+>
+> **โควตาพื้นที่เก็บไฟล์ (26 ส.ค. 69)** — ตั้งเพดานเองต่ำกว่าที่ Cloudflare ให้ เพื่อกันบิลบานปลาย
+>
+> | ระดับ | ค่า | พฤติกรรม |
+> |---|---:|---|
+> | เตือน | 4 GB | ป้ายเตือนขึ้นทุกหน้า บอกยอดที่ใช้ไป |
+> | เพดาน | 5 GB | อัปโหลดไม่ได้ ปฏิเสธก่อนแตะ R2 |
+> | ต่อไฟล์ | 5 MB | ปฏิเสธก่อนอัปโหลด |
+> | R2 free tier | 10 GB | เผื่อระยะปลอดภัยไว้ครึ่งหนึ่ง |
+>
+> นับยอดจากตาราง `storage_objects` ใน D1 (R2 ไม่มี API ถามยอดแบบเร็วต่อ request)
+> **ทุกการเขียน/ลบต้องผ่าน `src/lib/storage.ts` เท่านั้น** ห้ามเรียก `bucket.put()` ตรง ไม่งั้นยอดเพี้ยน
+> รูปถูกย่อในเบราว์เซอร์เหลือด้านยาว 512px + webp ก่อนส่ง (จาก 3–5 MB เหลือ 30–60 KB)
+>
+> ตรวจแล้วว่า **ไม่ใช่** lucide (Next optimize ให้อยู่แล้ว ปรับ `optimizePackageImports` ไม่ขยับเลยสักไบต์)
+> และ **ไม่ใช่** `next-safe-action/hooks` (ถอดออกแล้วประหยัดแค่ 1.76 KiB)
+>
+> **✅ แก้แล้ว — bundle ลดจาก 2,218 เหลือ 1,630 KiB (-588 KiB / -27%)** ดูหัวข้อ "การลด bundle" ด้านล่าง
+>
+> **⚠️ สมมติฐาน "ต้นทุนครั้งเดียว" ผิด** — T5.4 เพิ่มอีก 262 KiB แปลว่าโตเชิงเส้นราว 260 KiB ต่อกลุ่มหน้า
+>
+> **สาเหตุที่หาเจอ:** `better-auth` ถูก bundle ซ้ำทุก route ที่ import `getAuth()`
+> ในไฟล์ worker ที่ bundle ออกมา `INVALID_EMAIL_OR_PASSWORD` โผล่ **16 ครั้ง** และ `getAuthTables` **24 ครั้ง**
+> แถม `kysely` โผล่ **184 ครั้ง** ทั้งที่เราใช้ Drizzle ไม่ได้ใช้ Kysely เลย (Better Auth ลากมาเอง)
+>
+> **ลองแก้แล้วไม่ได้:** `serverExternalPackages: ["better-auth"]` ทำให้ OpenNext build พัง
+> (`Could not resolve "@better-auth/core/instrumentation"`)
+>
+> **การลด bundle (26 ส.ค. 69)** — เลือกอยู่ free tier แล้วลดของ ไม่ขึ้น Workers Paid
+>
+> | สิ่งที่ทำ | ผล |
+> |---|---:|
+> | stub `kysely` + `@better-auth/kysely-adapter` ทิ้ง (better-auth ลาก adapter ทุกตัวมาแม้ใช้แค่ drizzle) | −107 KiB |
+> | หน้าเว็บ + Server Action เลิก import `getAuth()` เปลี่ยนไปอ่าน session จาก D1 ตรง | −481 KiB |
+> | **รวม** | **−588 KiB (−27%)** |
+>
+> ผลลัพธ์: **1,630 KiB = 53%** ต่ำกว่าตอนจบ M3 (1,650) ทั้งที่มี onboarding + dashboard เพิ่มมา
+> `getAuthTables` เหลือ 9 ครั้ง (จาก 24) · `kysely` เหลือ 30 (จาก 184)
+>
+> **วิธีอ่าน session ใหม่:** cookie เก็บเป็น `<token>.<signature>` โดย token คือค่าสุ่ม 32 ตัวอักษร
+> ที่อยู่ในตาราง `session` — ค้นเจอแถวที่ token ตรงและยังไม่หมดอายุ = ยืนยัน session ได้ในตัว
+> **ข้อจำกัด:** ไม่ต่ออายุ session ให้ (better-auth ที่ `/api/auth/*` ยังทำหน้าที่นั้น) และไม่ตรวจ signature
 
 | ID | งาน | ขึ้นกับ |
 |---|---|---|
-| **T5.1** | Component library เป็นโค้ดจริง | T4.1, T0.8 |
-| **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
-| **T5.3** | Onboarding 4 ขั้น + คำนวณ LMP↔EDD | T4.6, T3.3 |
-| **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
-| **T5.5** | Health list + form | T4.3, T3.5 |
-| **T5.6** | Appointments list + form | T4.4, T3.6 |
-| **T5.7** | Family + invite + copy link | T4.5, T3.2 |
-| **T5.8** | Profile + pregnancy settings | T4.7, T3.4 |
-| **T5.9** | **Role-based rendering ทั้งแอป** — viewer ต้องไม่เห็นปุ่มเลย ไม่ใช่ disabled | T5.4–T5.8 |
-| **T5.10** | Browser Notification สำหรับนัดหมาย | T5.6 |
-| **T5.11** | Loading / empty / error states ครบทุกหน้า | T5.4–T5.8 |
-| **T5.12** | **อัปโหลดรูปโปรไฟล์** — resize ฝั่ง client (ด้านยาว ≤ 1600px) → R2 → `users.avatar_url` | T1.7, T5.8 |
+| ✅ **T5.1** | Component library เป็นโค้ดจริง | T4.1, T0.8 |
+| ✅ **T5.2** | หน้า Auth (`/login`, `/signup`) | T4.6, T2.2, T2.3 |
+| ✅ **T5.3** | Onboarding 4 ขั้น + คำนวณ LMP↔EDD | T4.6, T3.3 |
+| ✅ **T5.4** | Dashboard + hero + progress bar | T4.2, T3.7 |
+| ✅ **T5.5** | Health list + form | T4.3, T3.5 |
+| ✅ **T5.6** | Appointments list + form | T4.4, T3.6 |
+| ✅ **T5.7** | Family + invite + copy link | T4.5, T3.2 |
+| ✅ **T5.8** | Profile + pregnancy settings | T4.7, T3.4 |
+| ✅ **T5.9** | **Role-based rendering ทั้งแอป** — viewer ต้องไม่เห็นปุ่มเลย ไม่ใช่ disabled | T5.4–T5.8 |
+| ✅ **T5.10** | Browser Notification สำหรับนัดหมาย | T5.6 |
+| ✅ **T5.11** | Loading / empty / error states ครบทุกหน้า | T5.4–T5.8 |
+| ✅ **T5.12** | **อัปโหลดรูปโปรไฟล์** — resize ฝั่ง client (ด้านยาว ≤ 1600px) → R2 → `users.avatar_url` | T1.7, T5.8 |
 
 ### M6 · Test + Go live — 3–4 วัน
 
@@ -209,24 +304,32 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 |---|---|---|
 | **T6.1** | Unit test | `lib/pregnancy.ts` (มีอยู่แล้ว เขียน test ได้เลย) + query builders |
 | **T6.2** | Integration test | API routes ผ่าน `wrangler dev` + local D1 |
-| **T6.3** | **E2E (Playwright)** | signup → onboarding → บันทึกสุขภาพ → นัดหมาย → เชิญสมาชิก → รับคำเชิญ ครบ 1 รอบ |
+| ✅ **T6.3** | **E2E (Playwright)** | ครบ 1 รอบ + regression ของอัลบั้ม · รันกับ workerd จริง · เป็น gate ก่อน deploy ทั้ง CI และ dev |
 | **T6.4** | ทดสอบบนมือถือจริง | iOS Safari + Android Chrome · touch target ≥ 44px · bottom nav ไม่ทับ safe area |
-| **T6.5** | Production hardening | error boundary, 404/500, security headers, rate limit |
-| **T6.6** | Go-live checklist | ตามหัวข้อ 5.5 |
+| ✅ **T6.5** | Production hardening | error boundary, 404/500, CSP+nonce, ปิดช่องโหว่ /api/media, error log ที่ตามรอยได้ |
+
+> **สถานะ 26 ส.ค. 69 — T6.1–T6.3, T6.5 เสร็จ** เหลือ T6.4 (มือถือจริง) และ T6.6 (go-live)
+>
+> E2E 4 เทสต์ × 2 ขนาดจอ ใช้เวลา ~45 วินาที รันกับ worker ที่ build จริง
+> พิสูจน์แล้วว่าจับบั๊กอัปโหลดรูปทั้งสองตัวได้ ด้วยการใส่บั๊กกลับเข้าไปแล้วดูให้แดง
+| 🔶 **T6.6** | Go-live checklist | `npm run go-live` ตรวจอัตโนมัติแล้ว · เหลือข้อที่ต้องกดใน dashboard/Google Console |
 
 ---
 
 ## 5. Deploy Plan
 
-### 5.1 สามสภาพแวดล้อม
+### 5.1 สี่สภาพแวดล้อม
 
-| Env | ที่อยู่ | Database | Deploy เมื่อ |
-|---|---|---|---|
-| **Local** | `localhost:3000` | D1 local (`--local`) ในเครื่อง | `npm run dev` |
-| **Preview** | `<hash>-health-tracking.workers.dev` | D1 **ตัวเดียวกับ production** ⚠️ | เปิด PR |
-| **Production** | `health-tracking.<subdomain>.workers.dev` | D1 production | merge เข้า `main` |
+| Env | Worker | ที่อยู่ | Database | Deploy เมื่อ |
+|---|---|---|---|---|
+| **Local** | — | `localhost:3000` | D1 local (`--local`) ในเครื่อง | `npm run dev` |
+| **Preview** | `precare-dev` (version) | `<hash>-precare-dev.workers.dev` | `precare-dev-db` | เปิด PR |
+| **Dev** | `precare-dev` | `precare-dev.<subdomain>.workers.dev` | `precare-dev-db` | push เข้า `dev` |
+| **Production** | `precare` | `precare.<subdomain>.workers.dev` | `precare-db` | merge `dev` → `main` |
 
-> ⚠️ **D1 ไม่มี branching แบบ Neon/PlanetScale** — preview จะชี้ไปที่ DB เดียวกับ production ถ้าไม่อยากให้ปนกัน ให้สร้าง D1 ตัวที่สอง (`health-tracking-preview`) แล้วผูกใน environment `preview` ของ `wrangler.jsonc` **แนะนำให้ทำตั้งแต่ T0.7** จะได้ไม่ต้องแก้ทีหลัง
+> **D1 ไม่มี branching แบบ Neon/PlanetScale** — จึงแยกเป็น DB คนละตัวไปเลย: `env.dev` ใน `wrangler.jsonc` ผูก `precare-dev-db` ส่วน top-level (production) ผูก `precare-db` ทั้ง PR preview และ dev deploy ยิงลง `precare-dev-db` เท่านั้น ไม่มีทางแตะข้อมูล production
+>
+> ⚠️ `d1_databases` / `vars` / `r2_buckets` เป็น **non-inheritable key** ของ wrangler — เพิ่ม binding ใหม่ต้องเพิ่มทั้งใน top-level และใน `env.dev` เสมอ ไม่งั้น dev จะขาด binding นั้นเงียบๆ · secret ก็แยกเช่นกัน (`wrangler secret put <NAME> --env dev`)
 
 ### 5.2 คำสั่งที่ใช้จริง
 
@@ -236,14 +339,28 @@ M6  Test + Go live         ███░░░░░░░   3–4 วัน
 npx wrangler d1 create precare-db
 ```
 
-รัน migration (local ตอน dev / remote ตอน deploy):
+สร้าง D1 ของ dev (ทำครั้งเดียว — เอา id ที่ได้ไปใส่ `env.dev` ใน `wrangler.jsonc`):
 
 ```bash
-npx wrangler d1 migrations apply precare-db --local
+npx wrangler d1 create precare-dev-db
 ```
 
+รัน migration — local:
+
 ```bash
-npx wrangler d1 migrations apply precare-db --remote
+npm run db:migrate:local
+```
+
+dev (remote):
+
+```bash
+npm run db:migrate:dev
+```
+
+production (remote):
+
+```bash
+npm run db:migrate:remote
 ```
 
 ดูตัวอย่างจริงก่อน deploy (รันด้วย Workers runtime ในเครื่อง):
@@ -252,10 +369,16 @@ npx wrangler d1 migrations apply precare-db --remote
 npx opennextjs-cloudflare build && npx opennextjs-cloudflare preview
 ```
 
+deploy ขึ้น dev ด้วยมือ (ปกติปล่อยให้ CI ทำจาก branch `dev`):
+
+```bash
+npm run deploy:dev
+```
+
 deploy ขึ้น production:
 
 ```bash
-npx opennextjs-cloudflare deploy
+npm run deploy
 ```
 
 ### 5.3 Secrets & Environment Variables
@@ -274,31 +397,56 @@ npx opennextjs-cloudflare deploy
 
 ### 5.4 CI/CD (T0.7)
 
-```
-PR เปิด/อัปเดต
-  └→ install → lint → test → opennextjs-cloudflare build
-      └→ wrangler versions upload  →  คอมเมนต์ preview URL ใน PR
+**สายงาน branch:** `feature/*` → PR เข้า `dev` → `dev` → PR เข้า `main` → production
+`main` เป็น production ล้วน ห้าม push ตรง
 
-merge เข้า main
-  └→ install → lint → test → build
-      └→ wrangler d1 migrations apply --remote
+```
+PR เปิด/อัปเดต  (ci.yml)
+  └→ install → lint → typecheck → test → build → bundle size gate
+      └→ wrangler versions upload --env dev  →  คอมเมนต์ preview URL ใน PR
+
+push เข้า dev  (deploy-dev.yml)
+  └→ install → lint → typecheck → test → build
+      └→ wrangler d1 migrations apply precare-dev-db --remote --env dev
+          └→ opennextjs-cloudflare deploy -- --env dev  →  precare-dev
+
+merge เข้า main  (deploy.yml)
+  └→ install → lint → typecheck → test → build
+      └→ wrangler d1 migrations apply precare-db --remote
           └→ opennextjs-cloudflare deploy  →  production
 ```
+
+ทั้งสามใช้ `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` ชุดเดียวกัน ต่างกันที่ GitHub Environment (`dev` / `production`) และ variable ของ smoke check (`DEV_URL` / `PRODUCTION_URL`)
 
 **กติกา:** migration ต้องรัน **ก่อน** deploy โค้ดใหม่เสมอ และต้องเขียนแบบ backward-compatible (เพิ่ม column ได้ / อย่าลบหรือ rename ใน migration เดียวกับที่โค้ดเปลี่ยน) เพราะ D1 ไม่มี rollback อัตโนมัติ
 
 ### 5.5 Go-live Checklist (T6.6)
 
-- [ ] `wrangler d1 migrations apply --remote` รันครบทุกไฟล์
-- [ ] Secrets ครบทั้ง 5 ตัวใน production
-- [ ] Google OAuth redirect URI มี production URL แล้ว
-- [ ] bundle < 3 MiB (gzip) — ถ้าเกินตัดสินใจเรื่อง Workers Paid
-- [ ] Authorization test ผ่านทั้งชุด (T3.8) — **ข้อนี้ห้ามข้าม**
-- [ ] E2E ผ่านบน production URL จริง
-- [ ] ทดสอบบนมือถือจริงอย่างน้อย 2 เครื่อง
-- [ ] `.dev.vars` และ secret ทั้งหมดไม่หลุดขึ้น git
-- [ ] เปิดใช้ Cloudflare Web Analytics (ฟรี)
-- [ ] ตั้ง billing alert ไว้กันเซอร์ไพรส์
+**รันด้วย `npm run go-live`** — เขียนเป็นสคริปต์แทน checklist ที่ไล่ติ๊กมือ
+เพราะสิ่งที่ทำให้ production ใช้ไม่ได้จริงคือ worker ถูก deploy ขึ้นไปแล้ว
+แต่ **ไม่มี secret และ D1 ยังไม่ได้ migrate เลยสักไฟล์** ซึ่งอยู่ใน checklist
+อยู่แล้วแต่ไม่มีใครไปเปิดดู หน้าเว็บตอบ 200 ได้เพราะ `/login` แทบไม่แตะ DB
+
+| ข้อ | ตรวจโดย | สถานะ (27 ส.ค. 69) |
+|---|---|---|
+| secret ของ worker ครบ 2 ตัว | สคริปต์ | ❌ production ยังว่างเปล่า |
+| migration ของ `precare-db` ครบ | สคริปต์ | ❌ ค้าง 3 ไฟล์ (workflow รันให้เองตอน merge) |
+| bundle < 3 MiB gzip | สคริปต์ | ✅ 2,055 KiB (67%) |
+| `.dev.vars` ไม่หลุดขึ้น git | สคริปต์ | ✅ |
+| `BETTER_AUTH_URL` ตรงกับที่ deploy | สคริปต์ | ✅ |
+| lint + authz check + 82 unit test | CI | ✅ |
+| E2E 22 เทสต์ | CI (gate ก่อน deploy ทั้ง 3 workflow) | ✅ |
+| Google OAuth redirect URI + Publishing status | **คน** | 🔲 |
+| Cloudflare Web Analytics | **คน** | 🔲 |
+| Billing alert | **คน** | 🔲 |
+| ทดสอบมือถือจริง (T6.4) | **คน** | 🔲 |
+
+สองข้อแรกต้องรันเองเพราะเป็นค่าลับ:
+
+```bash
+npx wrangler secret put BETTER_AUTH_SECRET     # สุ่มด้วย openssl rand -base64 32
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+```
 
 ---
 
@@ -308,7 +456,7 @@ merge เข้า main
 |---|---|:---:|:---:|---|
 | 1 | **bundle เกิน 3 MiB** บน Workers free | กลาง | สูง — deploy ไม่ได้ | เจอตั้งแต่ **T0.5** ไม่ใช่ตอนท้าย · ถ้าเกิน → Workers Paid $5/เดือน (10 MiB) |
 | 2 | **ไม่มีปุ่มลืมรหัสผ่าน** | สูง | กลาง | ออกแบบข้อความชี้ทางไป Google login ในหน้า login (ดูหัวข้อ 0) + เร่ง Phase 1.5 |
-| 3 | **preview ใช้ D1 ร่วมกับ production** | สูง | กลาง | สร้าง D1 แยกสำหรับ preview ตั้งแต่ T0.7 |
+| 3 | ~~**preview ใช้ D1 ร่วมกับ production**~~ | — | — | ✅ ปิดแล้ว — แยก `env.dev` + `precare-dev-db` ทั้ง preview และ dev deploy · ที่เหลือคือ **อย่าลืมเพิ่ม binding/secret ใหม่ใน `env.dev` ด้วย** เพราะ wrangler ไม่ inherit ให้ |
 | 4 | **D1 ไม่มี row-level security** | — | สูง | authz check ทุก endpoint (T1.5) + **T3.8 เป็นงานบังคับ ห้ามตัดทิ้ง** |
 | 5 | Browser Notification ไม่ทำงานตอนปิดแท็บ | สูง | ต่ำ | สื่อสารในหน้าตั้งค่าให้ชัด · แก้จริงด้วย Web Push + Service Worker ใน Phase 2 |
 | 6 | Better Auth ต่างจากที่ architecture.md เขียนไว้ | — | ต่ำ | T0.2 อัปเดตเอกสารก่อนเริ่ม |
@@ -316,9 +464,590 @@ merge เข้า main
 
 ---
 
-## 6.5 Phase 2 — อัลบั้มและรูปภาพ
 
-โครงหน้าจอวาดเสร็จแล้วตั้งแต่ Phase 1 (ดู `/album`, `/album/[id]`, `/profile/edit` ใน design canvas) เหลือแต่ลงมือทำ
+## 6.6 วิดีโอ + ไฟล์แนบนัดหมาย ✅ **ทำเสร็จแล้ว**
+
+| ทำอะไร | รายละเอียด |
+|---|---|
+| วิดีโอในอัลบั้ม | mp4 และ mov ยาวไม่เกิน 30 วินาที ไม่เกิน 40 MB ครั้งละหนึ่งคลิป |
+| .mov ที่เครื่องอ่านไม่ได้ | ยังอัปได้ แต่ไม่มีหน้าปกและไม่รู้ความยาว · บอกไว้ตอนเลือกไฟล์ |
+| ไฟล์แนบนัดหมาย | อยู่ในหน้าแก้ไขนัด · ไฟล์ขึ้นในอัลบั้มด้วย ใช้วันที่นัดเป็นวันที่ถ่าย |
+| ปุ่ม + ต่อวัน | หัวแถวของแต่ละวันในอัลบั้ม กดแล้วได้วันที่ของแถวนั้นเลย |
+| สวิตช์ "วิดีโอ" | แยกจากชิปประเภท ใช้ร่วมกันได้ |
+
+**โควตารวมยังเป็น 5 GB เท่าเดิม ไม่ได้ขยับ** — วิดีโอต้องอยู่ในงบก้อนเดิม
+เพดานต่อคลิป (40 MB) จึงถูกเลือกให้ 5 GB ยังเก็บได้อย่างน้อย 128 คลิป
+
+**ยังเป็นโควตาก้อนเดียวทั้งแอป ไม่ได้แยกรายครอบครัว** — ปัญหานี้มีมาก่อนวิดีโอ
+แต่วิดีโอทำให้แรงขึ้นมาก คลิปหนึ่งกินเท่ารูปสองร้อยใบ ถ้าจะเปิดให้คนนอกใช้
+ต้องแยกโควตารายครอบครัวก่อน — อยู่ในความเสี่ยงที่ยังไม่ได้จัดการ
+
+เหตุผลทางเทคนิคทั้งหมดอยู่ใน [tech-notes §3.12](./tech-notes.md)
+
+## 6.8 สรุปก่อนพบแพทย์ ✅ **ทำเสร็จแล้ว**
+
+| ทำอะไร | รายละเอียด |
+|---|---|
+| หน้าสรุป `/visit` | น้ำหนัก · ความดัน · ลูกดิ้น · อาการ ตั้งแต่นัดที่ผ่านมาล่าสุด |
+| สิ่งที่ควรบอกหมอ | คัดของผิดปกติขึ้นบนสุด ไม่ให้หมอไล่หาเอง |
+| คำถามที่อยากถาม `/visit/questions` | จดล่วงหน้า ติ๊กว่าถามแล้วโดยไม่ลบทิ้ง |
+| ทางเข้า | อยู่บนการ์ดนัดหมายที่หน้าแรก ทั้งตอนมีนัดและยังไม่มีนัด |
+
+**ไม่เพิ่มโครงข้อมูลของสุขภาพใหม่เลย** ใช้ `weekly_logs` กับ `tracking_sessions`
+ที่มีอยู่แล้วทั้งหมด มีตารางใหม่ตัวเดียวคือ `visit_questions`
+
+**เกณฑ์ทั้งหมดอยู่ใน `src/lib/visit.ts` ที่เดียว พร้อมที่มา** — วันหนึ่งหมอบอกว่า
+เกณฑ์ควรเป็นอีกค่า จะได้แก้จุดเดียว เกณฑ์ลูกดิ้นไม่ประกาศซ้ำ ใช้ตัวเดียวกับ
+หน้านับลูกดิ้น (`SLOW_VS_AVERAGE`)
+
+⚠️ **ตัวเลขเกณฑ์ยังไม่ผ่านการตรวจโดยคนที่รู้จริง** ใช้ได้ตอนทดลองในครอบครัวตัวเอง
+แต่ต้องให้หมอตรวจก่อนเปิดให้คนนอกใช้ — เหมือนกรณี PDPA
+
+**ยังไม่ทำ: การแชร์** ดีไซน์วางปุ่มแชร์ไว้แต่ยังไม่เปิด เพราะลิงก์อ่านอย่างเดียว
+แปลว่าเปิดข้อมูลสุขภาพให้คนที่ไม่ได้ล็อกอิน ต้องคิดให้จบก่อน
+ตอนนี้เปิดหน้าจอให้หมอดูตรงๆ พอ
+
+## 6.9 จับเวลาการบีบตัวของมดลูก ✅ **ทำเสร็จแล้ว**
+
+| ทำอะไร | รายละเอียด |
+|---|---|
+| `/labor` | ปุ่มเดียวทำสองหน้าที่ — กดตอนเริ่มบีบ กดอีกทีตอนคลาย |
+| เกณฑ์ 5-1-1 | ห่างไม่เกิน 5 นาที · นานอย่างน้อย 1 นาที · ต่อเนื่อง 1 ชั่วโมง |
+| เปิดใช้สัปดาห์ 36 | ก่อนหน้านั้นหน้าจอ**พาไปหาหมอ** ไม่ใช่แค่บอกว่ายังไม่ถึงเวลา |
+| กันจอดับ | Wake Lock พร้อมทางถอยเมื่อเบราว์เซอร์ไม่รองรับ |
+
+**ไม่ต้อง migrate** ใช้ `tracking_sessions` ที่ออกแบบเผื่อไว้ตั้งแต่ทำนับลูกดิ้น
+(`kind: "contraction"` และ `events` เป็น JSON) — เก็บคู่ `{at, to}` แทนจุดเวลาเดียว
+
+**ข้อห้ามเข้มกว่านับลูกดิ้น** เพราะหน้านี้ถูกใช้ตอนตัดสินใจว่าจะไปโรงพยาบาลไหม
+ห้ามมีข้อความไหนแปลว่า "ยังไม่ต้องไป" หรือ "รอได้" ไม่ว่าตัวเลขจะเป็นยังไง
+เข้าเกณฑ์แล้วบอกว่า "ตรงกับเกณฑ์ที่ตำราใช้" ไม่ใช่ "ถึงเวลาแล้ว" — คนตัดสินคือหมอ
+มีเทสต์ตรวจคำต้องห้ามทั้ง unit และ E2E
+
+**เลือก 5-1-1 เป็นค่าตั้งต้น** เพราะโรงพยาบาลไทยใช้บ่อยที่สุด บางที่ใช้ 4-1-1
+สำหรับคนท้องแรก ทุกหน้าจึงเขียนกำกับว่า **ให้ยึดตามที่หมอสั่ง**
+ยังไม่ทำให้ตั้งค่าได้ — ถ้าจะทำ ต้องคิดเรื่องคนที่ตั้งผิดด้วย
+
+## 6.10 Consent + PDPA ✅ **ทำเสร็จแล้ว**
+
+| ทำอะไร | รายละเอียด |
+|---|---|
+| หน้าสมัคร | แยกความยินยอมสามข้อ ไม่ติ๊กมาให้ล่วงหน้า ปุ่มกดไม่ได้จนกว่าจะยินยอมสองข้อแรก |
+| `/legal/terms` `/legal/privacy` `/legal/data` | เนื้อหาจริง มีเลขเวอร์ชัน เปิดได้โดยไม่ต้องล็อกอิน |
+| หน้ารับคำเชิญ | บอกทั้งสองทาง — คุณจะเห็นของเขา และเขาจะเห็นของคุณ |
+| `/profile/privacy` | ดูความยินยอมที่ให้ไว้ · ปิดข้อที่ไม่บังคับ · ดาวน์โหลดข้อมูล · ลบบัญชี |
+| `/api/export` | ไฟล์ JSON ของจริง ดาวน์โหลดได้เลย |
+| ตาราง `consents` | เก็บ kind + version + เวลา · **ไม่มี FK ไป user** เพื่อให้หลักฐานอยู่ต่อหลังลบบัญชี |
+
+### ห้าข้อที่ค้างอยู่ — ตัดสินไปแล้วแบบไหน
+
+| ข้อ | ที่เลือก | เหตุผล |
+|---|---|---|
+| 1. อายุต่ำกว่า 20 | เขียนในเงื่อนไขว่าต้องได้รับความยินยอมจากผู้ปกครอง **ไม่ตรวจในระบบ** | การบล็อกตัดคนที่ต้องใช้แอปนี้มากที่สุดออกไป ส่วน flow ขอความยินยอมจริงเป็นงานคนละก้อน — **ข้อนี้เป็นนโยบาย ควรให้คุณยืนยัน** |
+| 2. ถอนความยินยอมข้อมูลสุขภาพ | ไม่มีทางกลาง → พาไปลบบัญชี | ทั้งแอปทำงานบนข้อมูลนี้ ปล่อยให้ล็อกอินได้แต่ใช้อะไรไม่ได้แย่กว่า |
+| 3. เจ้าของลบบัญชี | บังคับโอนสิทธิ์หรือลบครอบครัวก่อน | ครอบครัวไม่มีเจ้าของแปลว่าไม่มีใครเชิญหรือถอดสมาชิกได้อีก |
+| 4. soft delete 30 วัน | **ลบทันทีและถาวร** | ไม่มีงานเบื้องหลังคอยลบของที่ครบกำหนด เขียนว่า "ลบใน 30 วัน" ทั้งที่ไม่มีอะไรมาลบให้ = คำสัญญาที่โค้ดทำไม่ได้ ถ้าอยากได้ต้องทำ Cron Trigger เพิ่ม |
+| 5. ส่งออกข้อมูล | **ทำเลย** เป็น JSON | ทำได้จริงเพราะ query มีอยู่แล้ว ไม่รวมตัวรูป/วิดีโอ เพราะยัดหลายร้อย MB ในคำขอเดียวทำให้ worker ล้ม — เขียนกำกับไว้ในไฟล์เอง |
+
+⚠️ **ยังต้องให้คนที่รู้เรื่อง PDPA ตรวจก่อนเปิดให้คนนอกใช้** ข้อความในหน้านโยบาย
+เขียนเพื่ออธิบายการทำงานจริงด้วยภาษาที่อ่านเข้าใจได้ ไม่ได้ผ่านการตรวจทางกฎหมาย
+มีข้อความกำกับไว้ท้ายทุกหน้าแล้ว
+
+## 6.11 คลิปสูงสุด 500 MB ✅
+
+| | |
+|---|---|
+| เพดานต่อคลิป | 40 MB → **500 MB** (ความยาวยัง 30 วินาทีเท่าเดิม) |
+| วิธีส่ง | R2 multipart ทีละ 25 MB — คำขอเดียวส่งไม่ได้ Cloudflare ตัดที่ 100 MB |
+| ระหว่างอัป | มีเปอร์เซ็นต์รวมทุกชิ้น และปุ่มหยุด |
+| หยุด/พัง | เรียก abort ที่ server เสมอ ไม่ปล่อยรอบค้างกินโควตา |
+
+🔴 **โควตารายครอบครัวกลายเป็นงานที่ต้องทำก่อนเปิดให้คนนอกใช้**
+ที่ 500 MB ครอบครัวเดียวกินโควตารวม 5 GB หมดได้ภายใน **10 คลิป**
+(เดิม 40 MB ได้ 128 คลิป) ตอนนี้ยังเป็นก้อนเดียวทั้งแอป
+ครอบครัวหนึ่งอัปเยอะแล้วทุกครอบครัวอัปไม่ได้
+
+🟡 **ยังไม่ได้ตั้ง lifecycle rule ของ R2** สำหรับลบ multipart ที่ค้าง
+โค้ดเรียก abort ทุกเส้นทางที่ล้มแล้ว แต่เน็ตหลุดหรือปิดเบราว์เซอร์ดื้อๆ
+ยังทิ้งรอบค้างได้ ซึ่งกินพื้นที่โดยไม่มีแถวในฐานข้อมูลให้เห็น
+ต้องตั้งที่ฝั่ง Cloudflare ไม่ใช่ที่โค้ด
+
+## 6.12 แนบใบเสร็จกับนัด + อ่านยอดรวมอัตโนมัติ ✅
+
+| | |
+|---|---|
+| ที่อยู่ | หน้าแก้นัด เหนือปุ่มลบนัด |
+| อ่านยอด | Workers AI · Llama 4 Scout · ~1.3 วินาทีต่อใบ |
+| ความแม่น | ทดสอบ 14 ใบ x 2 รอบ = 28/28 (ใบปลอมที่ใส่เอฟเฟกต์ให้ใกล้ภาพถ่าย ไม่ใช่ของจริง) |
+| ตัวจับผิด | รายการย่อยต้องบวกได้เท่ายอดรวม ไม่เท่าเมื่อไหร่เตือนหนักขึ้น |
+| ยอดที่อ่านได้ | เติมลงช่องให้ตรวจ **ไม่บันทึกเอง** · แก้ได้เสมอ |
+| หลายใบต่อนัด | รวมยอดทุกใบที่อ่านได้ และบอกว่ามีกี่ใบที่ยังอ่านไม่ได้ |
+| อ่านไม่ได้ | แนบได้ตามปกติ กรอกเองได้ กดอ่านอีกครั้งได้ |
+| อัลบั้ม | ใบเสร็จไม่ขึ้น · ลบนัดแล้วใบเสร็จถูกลบด้วย |
+
+🟡 **โควตาฟรีของ Workers AI** 10,000 neurons/วัน ยังไม่ได้วัดว่ารูปหนึ่งกินกี่โทเคน
+ประมาณหลักร้อยใบต่อวันถ้ารูปกินราว 1,500 โทเคน พอหมดโควตาจะตกไปทางกรอกเอง ไม่พัง
+
+🟡 **หน้านโยบายขึ้นเวอร์ชันเป็น 2026-09-14** แต่ยังไม่มี flow ขอความยินยอมใหม่
+จากคนที่ยินยอมเวอร์ชันเก่า ต้องทำก่อนเปิดให้คนนอกใช้
+
+## 6.13 🔴 Error 1102 — ต้องตัดสินใจเรื่องแพลน
+
+วัดแล้วด้วย `wrangler tail`: ล้ม 4 จาก 100 คำขอ ทุกครั้งเป็น `exceededCpu`
+ที่ 10 ms เป๊ะ ซึ่งคือเพดาน CPU ของ **Workers แพลนฟรี**
+ค่ากลางของแอปอยู่ที่ 14–16 ms ต่อคำขอ — เกินเพดานอยู่แล้วตลอดเวลา
+
+| ทางเลือก | ผล |
+|---|---|
+| **Workers Paid $5/เดือน** (แนะนำ) | CPU 30 วินาที/คำขอ · อาการหายทันที · ไม่ต้องแก้โค้ด |
+| อยู่ฟรีแล้วลดขนาด bundle | ลดความถี่ตอนคนใช้พร้อมกัน แต่ค่ากลางยังเกิน 10 ms อยู่ดี |
+| ไม่ทำอะไร | ผู้ใช้เจอหน้า error เป็นระยะ ~3-4% ของคำขอตอนมีโหลด |
+
+**ทำไปแล้ว (16 ก.ย.):** ตัด prefetch ออกจากเมนู ปุ่ม แท็บ และการ์ดหน้าแรก
+คำขอต่อการเปิดหนึ่งหน้าลดจาก 17 เหลือ 4 (หน้าแรก) และ 14 เหลือ 1 (นัดหมาย)
+อัตราล้มต่อคำขอเท่าเดิม แต่โอกาสเจอหน้า error ลดลงตามสัดส่วน
+
+**ทำไปแล้ว (24 ก.ย.): แยก worker เสิร์ฟไฟล์ + ตั๋วมีอายุ** (`workers/media/`)
+
+คำขอไฟล์ทุกเส้นไม่วิ่งเข้า worker ของแอปอีกแล้ว ตัวใหม่คือ **2.4 KiB (gzip)**
+เทียบกับแอปที่ 2.2 MiB — ตื่นเร็วกว่ากันคนละชั้น ซึ่งคือทั้งหมดที่ 1102 เป็นปัญหา
+
+| เรื่อง | ทำยังไง |
+|---|---|
+| สิทธิ์ | ตั๋วเซ็น HMAC อายุ 2 ชม. ผูกกับ "ขอบเขต" (`family/<id>/`) ไม่ใช่ผูกทีละไฟล์ |
+| กุญแจ | สร้างเองครั้งแรกที่ใช้ เก็บในตาราง `app_secrets` ที่ทั้งสอง worker ผูก D1 เดียวกัน — ไม่ต้องตั้ง secret เดียวกันสองที่ด้วยมือ |
+| แคช | เวลาออกตั๋วปัดลงเป็นช่วงละ 30 นาที URL จึงซ้ำได้ เบราว์เซอร์แคชได้จริง |
+| ทางถอย | ไม่ตั้ง `MEDIA_ORIGIN` = แอปเสิร์ฟเองที่ `/api/media` เหมือนเดิมทุกอย่าง |
+
+⚠️ **สิ่งที่แลกไป** — ตั๋วคือ "ของที่ถืออยู่แล้วเปิดไฟล์ได้" ใครก๊อป URL ออกไปจาก
+หน้าเว็บก็เปิดไฟล์นั้นได้จนกว่าตั๋วหมดอายุ แม้ไม่ได้ล็อกอิน ผูกกับ session ไม่ได้
+เพราะคุกกี้ไม่ข้าม origin และ `<img>` แนบ header เองไม่ได้ — จึงตั้งอายุไว้แค่ 2 ชม.
+และจำกัดขอบเขตไว้ที่ครอบครัวเดียว
+
+**ยังเหลือ: ตัวแอปเอง** ค่ากลางต่อคำขอยังอยู่ที่ 14-16 ms ซึ่งเกินเพดาน 10 ms
+ของแพลนฟรี การเปิดหน้าเว็บ (ไม่ใช่ไฟล์) จึงยังมีโอกาสเจอ 1102 อยู่
+แก้จริงข้อเดียวคือขึ้น Workers Paid $5/เดือน
+
+เรื่องนี้กระทบ production ด้วยเมื่อเปิดใช้จริง ไม่ใช่แค่ dev
+
+## 6.14 PWA ขั้นที่ 1 — ติดตั้งลงจอโฮมได้ ✅
+
+`src/app/manifest.ts` + ไอคอน 192/512 ทั้งแบบธรรมดาและ maskable
++ meta ของ Apple สำหรับ iOS รุ่นก่อน 16.4
+
+**กับดักที่เจอ:** เบราว์เซอร์ดึง manifest **โดยไม่ส่ง cookie** ถ้าไม่ใส่ใน
+PUBLIC_PREFIXES ของ middleware จะโดนพาไป /login แล้วการติดตั้งพังทั้งที่ล็อกอินอยู่
+เป็นกับดักเดียวกับหน้า /legal — มีเทสต์คุมแล้ว และพิสูจน์แล้วว่าเอาออกจาก
+PUBLIC_PREFIXES เมื่อไหร่เทสต์แดงทันที
+
+## 6.15 PWA ขั้นที่ 3 — Web Push (ส่วนแรก) ✅
+
+| ทำแล้ว | รายละเอียด |
+|---|---|
+| เซ็น VAPID ด้วย WebCrypto | เขียนเอง ไลบรารี `web-push` เป็นของ Node รันบน Workers ไม่ได้ |
+| ตาราง `push_subscriptions` | ผูกกับ user แบบ cascade — ลบบัญชีแล้วหายตาม |
+| `public/sw.js` | รับ push + กดแล้วเปิดหน้านัด · **ไม่ cache อะไรเลย** |
+| `/api/push/next` | service worker มาถามรายละเอียดพร้อม cookie |
+| ปุ่มในหน้าโปรไฟล์ | เปิด / ปิด / **ส่งทดสอบ** |
+
+**ส่ง push แบบไม่มีเนื้อหาโดยตั้งใจ** — ถ้าใส่เนื้อหา ข้อความอย่าง
+"ตรวจครรภ์ 09:30 ที่ รพ.ก" จะวิ่งผ่านเซิร์ฟเวอร์ push ของ Google/Apple
+ซึ่งเป็นข้อมูลสุขภาพ จึงให้ push บอกแค่ "มีอะไรใหม่" แล้ว service worker
+มาถามรายละเอียดจากเราเองด้วย cookie ของผู้ใช้
+
+**เตือนอัตโนมัติแล้ว (24 ก.ย.)** — `workers/cron/` วิ่งทุก 5 นาที
+
+| เรื่อง | ทำยังไง |
+|---|---|
+| ทำไมต้องแยก worker | OpenNext คุม entry point ของ worker หลัก แทรก `scheduled` เข้าไปไม่ได้ |
+| หานัดที่ถึงคิว | `reminder_enabled` และยังไม่มี `reminder_sent_at` และถึงเวลา "ก่อนนัด N นาที" แล้ว |
+| เวลา | เทียบด้วยเวลาไทย ไม่ใช่ UTC — นัดเก็บเป็นเวลาที่โรงพยาบาลแบบไม่มี timezone ถ้าลืมบวก 7 ชม. จะเตือนเช้าเกินไปครึ่งวัน |
+| กันเตือนซ้ำ | `appointments.reminder_sent_at` · แก้เวลานัดเมื่อไหร่ ค่านี้ถูกล้างเป็น null ให้เอง |
+| subscription ที่ตายแล้ว | 404/410 = ลบทิ้ง ไม่งั้นยิงใส่ที่ตายแล้วทุก 5 นาทีตลอดไป |
+
+🟡 **ต้องตั้ง secret สองที่ก่อนใช้ได้** — คนละ worker กัน ตั้งที่เดียวไม่พอ
+
+```
+npx wrangler secret put VAPID_PRIVATE_KEY --env dev
+npx wrangler secret put VAPID_PRIVATE_KEY --config workers/cron/wrangler.jsonc --env dev
+```
+
+ยังไม่ตั้ง = รอบจับเวลาจะออกเงียบๆ และ **ไม่** ทำเครื่องหมายว่าเตือนแล้ว
+นัดจึงไม่หายไปเฉยๆ พอตั้ง secret แล้วรอบถัดไปจะเตือนให้เอง
+
+## 6.16 Backlog — โหมดตั้งครรภ์ / ทารก ผูกกับ child_id (ออกแบบแล้ว 1 ต.ค. 69)
+
+**แนวคิด (มาจากฝั่งผู้ใช้ และดีกว่าที่ร่างไว้ตอนแรก):** ไม่ใช่ "สลับโหมดทั้งแอป"
+แต่เป็น **"ลูกคนนี้อยู่ช่วงไหน"** — ลูกหนึ่งคนมี `child_id` เดียวตั้งแต่อยู่ในท้อง
+จนโต กดปุ่ม "คลอดแล้ว" = ใส่วันเกิด แล้วข้ามจากช่วงตั้งครรภ์ไปช่วงทารก
+ของเก่าไม่กำพร้า เพราะยังผูกกับ id เดิมทั้งหมด
+
+แบบ "สลับโหมดทั้งแอป" พังทันทีเมื่อท้องคนที่สองตอนคนแรกยังเล็ก ซึ่งเกิดขึ้นจริงบ่อย
+ส่วนแบบนี้รองรับได้เองโดยไม่ต้องคิดเพิ่ม — คนโตอยู่ช่วงทารก คนเล็กอยู่ช่วงตั้งครรภ์
+พร้อมกันได้
+
+| ส่วน | สิ่งที่ต้องทำ |
+|---|---|
+| ตาราง `children` | ยก `pregnancy_profiles` (ครอบครัวละชุดเดียว) ขึ้นมาเป็นหลายแถวต่อครอบครัว · เก็บ stage, lmp/due, birth_date, cover_photo_id, archived_at |
+| เติม `child_id` | `weekly_logs`, `tracking_sessions`, `appointments`, `photos` — **ว่างได้** สำหรับของที่ไม่ใช่ของลูกคนใดคนหนึ่ง (รูปครอบครัว นัดของแม่เอง) |
+| ตัวสลับลูก | ไม่โผล่ถ้ามีลูกคนเดียว |
+| ตารางใหม่ของช่วงทารก | `feed_logs`, `diaper_logs`, `growth_logs`, `vaccinations` (เติมตารางตามกำหนด สธ. ตอนสร้างลูก) |
+| เนื้อหา | พัฒนาการรายเดือน (แทนรายสัปดาห์) |
+
+**แบ่งสองรอบ** — รอบแรกทำโครง `children` + ย้ายข้อมูลเดิม + สลับลูก โดยของเดิม
+ทำงานเหมือนเดิมทุกอย่าง (แตะทุกตาราง เสี่ยงสุด) · รอบสองค่อยทำฟีเจอร์ทารก
+ซึ่งเป็นของใหม่ล้วนที่ไม่กระทบใคร
+
+**ยังไม่ตัดสิน:** แฝด (สองแถวที่ LMP ตรงกัน?) · คำพูดบนหน้าจอกรณีแท้ง/เสียชีวิต
+(ต้องเป็น "ซ่อนจากหน้าแรก" ไม่ใช่ "ลบลูก")
+
+## 6.17 นับแคล — บันทึกอาหารต่อมื้อ + กราฟย้อนหลัง ✅ (4 ต.ค. 69)
+
+พิมพ์ชื่อเมนูกับปริมาณ แล้วให้ Workers AI (`@cf/aisingapore/gemma-sea-lion-v4-27b-it`
+— เลือกเพราะสร้างมาเพื่อภาษาเอเชียตะวันออกเฉียงใต้ จึงเข้าใจชื่ออาหารไทย)
+ประมาณพลังงาน/คาร์บ/น้ำตาล/โปรตีน แก้เองได้ทุกช่อง แล้วรวมเป็นยอดต่อวัน
+
+| ส่วน | สถานะ |
+|---|---|
+| ตาราง `food_logs` + migration 0016 | ✅ |
+| `estimateFood` / `addFoodLog` / `updateFoodLog` / `deleteFoodLog` (editorAction) | ✅ |
+| หน้า `/food` — ยอดรวมวันนี้ + รายการแยกมื้อ + ฟอร์มเพิ่ม + ชิป "เคยกิน" | ✅ |
+| หน้า `/food/history` — กราฟรายวัน/รายสัปดาห์/รายเดือน × 4 สารอาหาร | ✅ |
+| การ์ด "อาหารวันนี้" บนหน้าแรก กดเข้าได้ | ✅ |
+| ทางเข้า: แถบล่าง "นับแคล" (แทนโปรไฟล์) + ปุ่มในหน้าสุขภาพ | ✅ |
+| บันทึกย้อนหลัง — เลือกวันได้ที่ `?d=` ล่วงหน้าไม่ได้ · กดแท่งในกราฟรายวันไปที่วันนั้น | ✅ (5 ต.ค. 69) |
+| เป้าหมายที่หมอให้มา (เช่น "น้ำตาลไม่เกิน X ก./วัน") แล้วเทียบกับยอดจริง | ยังไม่ทำ |
+| ปริมาณที่เป็นเศษ/หลายหน่วย — คูณเองในโค้ด ไม่ให้โมเดลคิดเลข | ✅ (5 ต.ค. 69) |
+| วัดความแม่นของ "1 หน่วย" กับอาหารไทย 12 เมนู เทียบตารางอ้างอิง | ✅ (11 ต.ค. 69) ผลใน tech-notes §3.26 |
+| เตือนให้ตรวจตัวเลขเป็นพิเศษเมื่อหน่วยเป็นถ้วย/ชาม (กลุ่มที่โมเดลพลาดมาก) | ยังไม่ทำ |
+| ให้โมเดลตอบค่าต่อ 100 กรัม แล้วโค้ดคูณน้ำหนักเอง — ย้ายงานคูณออกอีกชั้น | ยังไม่ทำ |
+
+ตัดออกตั้งแต่ออกแบบ: **สรุปให้หมอดู** (ผู้ใช้บอกว่าไม่ต้อง) และ**การเตือนว่ากินเกิน**
+— ไม่มีเป้าหมายจากหมอก็ไม่มีสิทธิ์บอกใครว่ากินเกิน ดูเหตุผลทางเทคนิคใน tech-notes §3.23
+
+## 6.18 นับแคล แยกตามคน ✅ (5 ต.ค. 69)
+
+**ปัญหาที่แก้ ไม่ใช่แค่ฟีเจอร์ที่ขาด:** `getFoodDay` เดิมรวมทุกแถวใน `family_id`
+ถ้าในครอบครัวมีสองคนบันทึกวันเดียวกัน **ยอดที่เห็นคือของสองคนบวกกัน**
+ซึ่งไม่มีความหมายสำหรับการนับแคล และหน้าจอไม่มีอะไรบอกว่ามันรวมของใครไว้
+พิสูจน์ด้วยเทสต์ก่อนแก้: สมาชิกเห็น 1,490 kcal ทั้งที่ตัวเองบันทึกไป 900
+
+### ฐานข้อมูล — แยก "มื้อของใคร" จาก "ใครกรอก"
+
+| ส่วน | รายละเอียด |
+|---|---|
+| `food_logs.user_id` | เจ้าของมื้อ (NOT NULL, FK → `user.id`) |
+| `food_logs.created_by` | คงไว้ = คนที่กดบันทึก — คนละความหมายกับ `user_id` |
+| migration 0017 | เพิ่มคอลัมน์ + backfill `user_id = created_by` (ถูกต้อง เพราะที่ผ่านมาทุกคนกรอกของตัวเอง) |
+| index | `(family_id, eaten_on)` → `(family_id, user_id, eaten_on)` |
+
+แยกสองคอลัมน์ตั้งแต่ตอนนี้แม้ยังไม่เปิดให้กรอกแทนกัน เพราะเปิดทีหลังจะได้
+ไม่ต้อง migrate อีกรอบ (ตอนนี้ `user_id` = คนที่ล็อกอินเสมอ)
+
+### หน้าจอ
+
+- **แถบเลือกคนบนหน้า `/food`** — chip แนวนอน: รูป + **ชื่อจริงของสมาชิก** +
+  ยอด kcal ของวันนั้นใต้ชื่อ · ตัวเลขบน chip ทำให้ "เห็นของทุกคน" สำเร็จในหน้าเดียว
+  ไม่ต้องกดไล่ทีละคน ต้นทุนคือคิวรี `group by user_id` หนึ่งอัน ซึ่งแทนคิวรีรวม
+  แบบเดิม ไม่ได้เพิ่มรอบ
+- **ป้ายเป็นชื่อ ไม่ใช่คำว่า "ฉัน"** — ของตัวเองใช้ชื่อตัวเองเหมือนกับคนอื่น
+  แต่เรียงไว้หน้าสุดเสมอ และต่อท้ายด้วยป้าย "ฉัน" ตัวเล็ก เพราะพอทุกอันเป็นชื่อแล้ว
+  ชื่อตัวเองก็ดูเหมือนชื่อคนอื่น ต้องมีอะไรบอกว่าอันไหนที่เพิ่มเมนูได้
+- ชื่อยาวตัดด้วย ellipsis (กว้างสุด ~92px) ไม่ให้ chip เดียวยืดจนดันทั้งแถบ ·
+  เกินสี่คนขึ้นไปแถบเลื่อนแนวนอน พร้อมไล่สีขอบขวาบอกว่ายังมีต่อ
+- **ไม่มีแท็บ "ทั้งครอบครัว"** — ผลรวมแคลของหลายคนไม่มีความหมาย
+  ถ้าใส่ไว้จะมีคนอ่านมันเป็นของตัวเอง
+- ฟอร์มเพิ่มเมนูโผล่เฉพาะแท็บตัวเอง · แท็บคนอื่นแสดงข้อความว่าดูได้อย่างเดียว
+  ไม่ใช่ปุ่มที่กดแล้วเด้ง error
+- กราฟย้อนหลังผูกกับคนที่เลือก ส่งผ่าน `?u=<userId>` เพื่อให้ลิงก์และปุ่มย้อนกลับ
+  ไม่หลุดคน · การ์ดหน้าแรกเป็นของตัวเองเท่านั้น · ชิป "เคยกิน" เป็นเมนูของตัวเอง
+
+### สิทธิ์
+
+**แก้/ลบ/เพิ่มได้แค่แถวที่ `user_id` เป็นตัวเอง** (ผู้ใช้เลือกข้อนี้เอง เทียบกับ
+ทางเลือก "กรอกแทนกันได้" ที่เสี่ยงกรอกเข้าแท็บผิดคนแล้วไม่มีใครรู้)
+ต้องเช็คใน action ด้วย ไม่ใช่เช็คแค่ใน UI — `editorAction` กันแค่ viewer
+ไม่ได้กันสมาชิกคนหนึ่งแก้ของอีกคน
+
+### ขอบที่ตัดสินแล้ว
+
+สมาชิกที่ถูกนำออกจากครอบครัว: แถวยังอยู่ (ผูกกับ `family_id`) จึงโชว์ chip ของ
+สมาชิก active **บวก** ใครก็ตามที่มีบันทึกในวันที่กำลังดู ไม่งั้นข้อมูลหายไปจาก
+สายตาทั้งที่ยังอยู่ในฐาน
+
+### เทสต์ที่มี
+
+- `test/queries.test.ts` — ยอดแต่ละคนไม่ปนกัน · `userId` ของคนนอกครอบครัว
+  ดึงอะไรไม่ได้ · ชิปมีครบทุกสมาชิกแม้คนที่ยังไม่บันทึก · คนที่ถูกนำออกแต่ยังมี
+  บันทึกยังมีชิปและถูกมาร์คว่าไม่ active · ชื่อซ้ำถูกมาร์ค ambiguous ทั้งคู่ ·
+  ชิป "เคยกิน" เป็นของตัวเอง (ชุดนี้แดงจริงถ้าถอด `eq(foodLogs.userId, ...)` ออก)
+- `e2e/food.spec.ts` — สองคนจริงในครอบครัวเดียวกัน: ยอดไม่ปนกัน · เห็นยอดของกัน
+  บนชิป · กดดูของอีกคนได้แต่ไม่มีปุ่มแก้/ลบและไม่มีฟอร์มเพิ่ม · กราฟย้อนหลัง
+  ไม่หลุดกลับไปเป็นของตัวเอง (แดงจริงถ้าถอด `&& isMine` ออกจาก `canWrite`)
+- `scripts/check-authz.mjs` ข้อ 4 — ตารางที่แถวเป็นของคนใดคนหนึ่ง (`foodLogs`)
+  ถ้า update/delete ไม่กรอง `userId, ctx.user.id` หรือ insert ไม่ตั้ง
+  `userId: ctx.user.id` จะ lint ไม่ผ่าน · กันไว้เพราะการซ่อนปุ่มใน UI ไม่ใช่ด่าน
+
+## 6.19 ฟีเจอร์ที่เสนอเพิ่ม — เทียบกับแอปตั้งครรภ์ที่คนใช้เยอะ (12 ต.ค. 69)
+
+สำรวจจากแอปที่มีผู้ใช้มากที่สุด (Flo ~77M, BabyCenter, What to Expect, Ovia,
+Pregnancy+) แล้วเทียบกับสิ่งที่ Pre Care มีอยู่ ดูรายการอ้างอิงท้ายหัวข้อ
+
+**ของที่เรามีแล้วและตรงกับที่แอปใหญ่มี:** นับลูกดิ้น · จับเวลาการบีบตัว ·
+บันทึกน้ำหนัก/ความดัน/อาการ/อารมณ์ · นัดหมาย + เตือน · พัฒนาการรายสัปดาห์ ·
+อัลบั้มรูป · สรุปให้หมอดู · นับแคล
+**ของที่เรามีแต่แอปใหญ่ไม่ค่อยมี:** แชร์ทั้งครอบครัวพร้อมระดับสิทธิ์ ·
+ค่าใช้จ่าย/ใบเสร็จ · เตือนนัดแบบไม่ส่งเนื้อหาผ่านเซิร์ฟเวอร์ push
+
+### เสนอตามลำดับความคุ้ม
+
+| # | ฟีเจอร์ | ทำไมถึงควรทำ | ขนาด |
+|---|---|---|---|
+| 1 | **กราฟน้ำหนักเทียบเกณฑ์ IOM** ตาม BMI ก่อนตั้งครรภ์ | เรามีน้ำหนักอยู่แล้วแต่เป็นแค่ตัวเลขลอยๆ · เกณฑ์ IOM 2009 เป็นมาตรฐานที่ใช้กันทั่วโลก (ต่ำกว่าเกณฑ์ = ทารกน้ำหนักน้อย/คลอดก่อนกำหนด · เพิ่มเร็วเกิน 1 กก./สัปดาห์ = สัญญาณครรภ์เป็นพิษ) | กลาง |
+| 2 | **เตือนกินยา/วิตามิน** (โฟลิก ธาตุเหล็ก แคลเซียม) | เรามีระบบเตือนนัดอยู่แล้ว ต่อยอดได้เลย · เป็นของที่ต้องกินทุกวันและลืมง่าย | กลาง |
+| 3 | **สัญญาณอันตรายต้องไปโรงพยาบาล** เข้าถึงได้ในหนึ่งกด | เลือดออก · น้ำเดิน · ลูกดิ้นน้อยลง · ปวดหัว/ตาพร่า/บวม (ครรภ์เป็นพิษ) · พร้อมปุ่มโทร 1669 — ของที่ต้องหาเจอตอนตกใจ ไม่ใช่ตอนว่าง | เล็ก |
+| 4 | **ตารางฝากครรภ์ + วัคซีน** ตามสมุดสีชมพู | เรามีนัดหมายแต่ผู้ใช้ต้องรู้เองว่าครั้งต่อไปควรเมื่อไร ตรวจอะไร · กรมอนามัยกำลังทำสมุดสีชมพูดิจิทัล | กลาง |
+| 5 | **เป้าหมายโภชนาการจากหมอ** (เช่น น้ำตาลไม่เกิน X ก./วัน) | ต่อยอดนับแคลโดยตรง · ไทยมีความชุกเบาหวานขณะตั้งครรภ์สูงมากในภูมิภาค · **ต้องเป็นค่าที่หมอให้มา ไม่ใช่ค่าที่เราตั้งเอง** | เล็ก |
+| 6 | **ถุงคลอด + แผนการคลอด** | มีในแอปใหญ่เกือบทุกตัว เป็นของที่ใช้ครั้งเดียวแต่ตอนต้องใช้คือตอนเร่งรีบ | เล็ก |
+| 7 | **บันทึกน้ำดื่ม** | ของยอดนิยมแต่ผลต่อสุขภาพอ่อนกว่าข้ออื่น และเพิ่มภาระการจดรายวัน | เล็ก |
+
+**ตั้งใจไม่เสนอ:** ชุมชน/เว็บบอร์ด (เป็นคนละผลิตภัณฑ์ ต้องมีคนดูแลเนื้อหา
+และมีความเสี่ยงเรื่องคำแนะนำทางการแพทย์จากคนแปลกหน้า) · แชตบอท AI ตอบคำถาม
+สุขภาพ (ตอบผิดแบบมั่นใจได้ ดูบทเรียนใบเสร็จ §3.20 และโภชนาการ §3.26) ·
+โมเดล 3 มิติของทารก (สวยแต่ไม่ช่วยตัดสินใจอะไร และไฟล์ใหญ่)
+
+**ข้อจำกัด:** ผมไม่ใช่บุคลากรทางการแพทย์ ทุกข้อที่แตะเกณฑ์สุขภาพ (1, 3, 4, 5)
+ต้องให้คนที่รู้จริงตรวจข้อความและเกณฑ์ก่อนปล่อยใช้
+
+อ้างอิง: เกณฑ์น้ำหนัก IOM 2009 · ฟีเจอร์ของแอปใหญ่จากบทความเปรียบเทียบปี 2026 ·
+สัญญาณอันตราย/ครรภ์เป็นพิษ/เบาหวานขณะตั้งครรภ์ จาก hdmall, กรมอนามัย, Thai PBS
+
+## 6.20 เตือนกินยา/วิตามิน ✅ (12 ต.ค. 69)
+
+ข้อ 2 ของรายการที่เสนอไว้ใน §6.19 — ต่อยอดจากระบบเตือนนัดที่มีอยู่แล้ว
+
+| ส่วน | รายละเอียด |
+|---|---|
+| ตาราง | `medications` (ของคนใดคนหนึ่ง ไม่ใช่ของครอบครัว) · `medication_times` (HH:MM สูงสุด 4 ครั้ง/วัน) · `medication_doses` (กันเตือนซ้ำ + บันทึกว่ากินแล้ว) |
+| migration | 0018 เพิ่มสามตาราง ไม่แตะของเดิม |
+| หน้า `/medications` | รายการของวันนี้ติ๊กทีละครั้ง · จัดการรายการยา (เพิ่ม/แก้/หยุดชั่วคราว/ลบ) |
+| ทางเข้า | ไอคอนเม็ดยาในหัวหน้านัดหมาย — เรื่องเดียวกันในหัวคนใช้ และแถบล่างเต็มห้าช่องแล้ว |
+| ตัวจับเวลา | `workers/cron/medications.ts` รันรอบเดียวกับเตือนนัด (ทุก 5 นาที) |
+| push | ไม่ส่งเนื้อหา — service worker มาถาม `/api/push/next` เหมือนนัดหมาย โดยยามาก่อนนัดเพราะหมดอายุเร็วกว่า |
+
+**ตัดสินใจระหว่างทาง**
+
+- **ไม่สร้างแถว dose ล่วงหน้า** — วิตามินที่ไม่มีวันจบจะกลายเป็นแถวไม่รู้จบ
+  แถวเกิดตอนถูกเตือนหรือตอนติ๊กเท่านั้น
+- **ช่วงผ่อนผัน 60 นาที** — cron รันทุก 5 นาทีและพลาดรอบได้ แต่ถ้าแอปหยุดไป
+  สองวันแล้วกลับมา ไม่ควรยิงเตือนยาของเมื่อวานซึ่งหมดความหมายไปแล้ว
+- **แก้เวลาแล้วไม่ลบเวลาเดิมทิ้งทั้งหมด** — dose ผูกกับ `medication_time_id`
+  ลบทิ้งแล้วใส่ใหม่จะพาประวัติ "กินแล้ว" ของวันก่อนๆ หายไปด้วยทั้งที่เวลาไม่ได้เปลี่ยน
+- **ติ๊กล่วงหน้าไม่ได้** และ **ติ๊กยาของคนอื่นไม่ได้** (ตาราง dose ไม่มี user_id
+  ของตัวเอง จึงต้องเช็คความเป็นเจ้าของผ่าน join ก่อนเขียน)
+- **คนอื่นในครอบครัวไม่เห็นยาของเราเลย ไม่ใช่แค่แก้ไม่ได้** — ต่างจากนัดหมาย
+  และบันทึกอาหารที่แชร์กันทั้งบ้านโดยตั้งใจ ยาที่คนหนึ่งกินบอกถึงโรคประจำตัว
+  ได้ตรงๆ และการตั้งเตือนไม่ใช่การยินยอมให้ทั้งบ้านรู้ · push ก็เข้าเฉพาะเครื่อง
+  ของเจ้าของ ต่างจากเตือนนัดที่ยิงทั้งครอบครัวเพราะนัดเป็นเรื่องที่ไปด้วยกัน
+- **ไม่ตรวจขนาดยา/ตัวยาซ้ำ/ความปลอดภัยในการตั้งครรภ์** — เขียนบอกไว้บนหน้าจอ
+  ตรงๆ ว่าแอปทำแค่เตือนตามเวลาที่ผู้ใช้ตั้งเอง เรื่องยาให้ถามแพทย์หรือเภสัชกร
+
+## 6.21 รหัสผ่าน: เปลี่ยนเอง + ลืมรหัสผ่านทางอีเมล ✅ (15 ต.ค. 69)
+
+| ส่วน | สถานะ |
+|---|---|
+| `/profile/password` เปลี่ยนรหัสผ่าน (ต้องกรอกรหัสเดิม · ถอน session เครื่องอื่นเสมอ) | ✅ |
+| คนที่สมัครด้วย Google ไม่เห็นเมนูนี้ และกันที่หน้าด้วย | ✅ |
+| `/forgot` ขอลิงก์ · `/reset-password` ตั้งรหัสใหม่ · ลิงก์ในหน้า login | ✅ |
+| ส่งอีเมล — Gmail SMTP เป็นหลัก, Brevo เป็นทางสำรอง (`src/lib/email.ts`) | ✅ โค้ดพร้อม |
+| **สร้างบัญชี Gmail ของแอป + App Password แล้วตั้ง secret** | ⛔ รอเจ้าของโปรเจกต์ |
+
+### ที่ต้องทำก่อนใช้จริง (ของเจ้าของโปรเจกต์)
+
+1. สร้าง **บัญชี Gmail ใหม่สำหรับแอปโดยเฉพาะ** (ห้ามใช้บัญชีส่วนตัว — App
+   Password เปิดทางเข้าบัญชีทั้งใบผ่าน SMTP/IMAP) แล้วเปิด 2-Step Verification
+2. สร้าง **App Password** แล้วใส่เป็น secret **ด้วยตัวเอง** ห้ามส่งให้ใครหรือพิมพ์ในแชต
+
+   ```
+   npx wrangler secret put GMAIL_USER --env dev
+   npx wrangler secret put GMAIL_APP_PASSWORD --env dev
+   ```
+
+   (ทางสำรองถ้ามีโดเมนแล้ว: `BREVO_API_KEY` + `BREVO_SENDER`)
+
+3. ทดสอบด้วยการกดลืมรหัสผ่านกับอีเมลตัวเอง แล้วดูว่าได้อีเมลจริง
+
+ก่อนตั้ง secret ระบบจะทำงานได้ตามปกติ แค่ไม่มีอีเมลออกไป (`not_configured`)
+หน้าจอยังตอบข้อความเดิมเสมอ จึงไม่มีใครรู้ว่าอีเมลถูกส่งหรือไม่
+
+### เปลี่ยนมาใช้ Gmail SMTP (15 ต.ค. 69 — แก้การตัดสินใจเดิม)
+
+ตั้ง Brevo เสร็จแล้วส่งไม่ออก Brevo เตือนเองว่า **ใช้อีเมลฟรี (gmail.com)
+เป็นผู้ส่งจะถูก Gmail/Yahoo/Outlook บล็อก** ตามกฎผู้ส่งที่บังคับตั้งแต่ปี 2024
+เพราะ Brevo ส่งแทนเราในนาม @gmail.com แต่ SPF/DKIM ไม่ตรงกับ gmail.com
+ปลายทางจึงมองว่าเป็นการปลอมแปลง
+
+**ที่ผมประเมินพลาดตอนเลือก Brevo:** "ยืนยันแค่อีเมลผู้ส่งได้ ไม่ต้องมีโดเมน"
+จริงในแง่การยืนยัน แต่ไม่ได้แปลว่าส่งถึงปลายทางได้
+
+Gmail SMTP ไม่ติดปัญหานี้เพราะอีเมลออกจากเซิร์ฟเวอร์ของ Gmail จริงและถูกเซ็น
+ด้วย gmail.com เอง — `src/lib/smtp.ts` เขียนเองบน `cloudflare:sockets`
+(ไลบรารีทั่วไปพึ่ง node:net/node:tls ซึ่ง Workers ไม่มี)
+
+**วันที่มีโดเมนของตัวเองแล้ว** กลับไปใช้ Brevo ได้ทันทีโดยไม่ต้องเขียนอะไรใหม่
+— `sendEmail` เลือกช่องทางจาก secret ที่ตั้งไว้ ไม่มี GMAIL_* ก็ตกไปใช้ Brevo
+
+### ทำไมตอนแรกเลือก Brevo ไม่ใช่ Gmail SMTP
+
+**Gmail SMTP ใช้ได้จริงบน Workers** — ทดสอบแล้วทั้งบนเครื่องและบน edge จริง
+(`scripts/smtp-probe/`) handshake ผ่านครบจนเซิร์ฟเวอร์ประกาศ `AUTH LOGIN`
+กุญแจอยู่ที่ต้องเปิด socket ด้วย `secureTransport: "starttls"` ตั้งแต่แรก
+ไม่งั้น `startTls()` จะฟ้องว่าใช้ไม่ได้
+
+ที่ไม่เลือกเพราะ **App Password คือกุญแจเข้าบัญชี Gmail ทั้งใบผ่าน SMTP/IMAP**
+ถ้าหลุดคือหลุดทั้งบัญชี ส่วนคีย์ของ Brevo ทำได้อย่างเดียวคือส่งอีเมล
+และ Brevo ไม่ต้องมีโดเมนของตัวเอง (ยืนยันแค่อีเมลผู้ส่ง) ต่างจาก Resend
+
+ThaiBulkSMS ตัดทิ้งเพราะไม่ฟรี และต้องเริ่มเก็บเบอร์โทรซึ่งเป็นข้อมูลส่วนบุคคล
+เพิ่มอีกชุดในแอปที่เก็บข้อมูลสุขภาพอยู่แล้ว
+
+### การตัดสินใจเรื่องความปลอดภัย
+
+- **ตอบข้อความเดียวกันเสมอ** ไม่ว่าอีเมลจะมีบัญชีหรือไม่ และไม่ว่าส่งสำเร็จหรือไม่
+  — ในแอปที่เก็บข้อมูลการตั้งครรภ์ แค่รู้ว่า "คนนี้มีบัญชี" ก็เป็นข้อมูลที่
+  เจ้าตัวอาจยังไม่อยากให้ใครรู้
+- **ลิงก์ใช้ครั้งเดียว อายุ 1 ชั่วโมง**
+- **รีเซ็ตแล้วถอน session ทุกเครื่อง** (`revokeSessionsOnPasswordReset` ซึ่ง
+  better-auth ปิดไว้เป็นค่าเริ่มต้น) — คนที่กดรีเซ็ตคือคนที่เข้าบัญชีตัวเองไม่ได้
+  ซึ่งบ่อยครั้งแปลว่ามีคนอื่นเข้าไปแล้ว
+- **ไม่ log อีเมลหรือ url ของลิงก์รีเซ็ต** — url คือกุญแจเข้าบัญชี
+
+## 6.22 เกณฑ์น้ำหนักตั้งครรภ์ (IOM) — ข้อมูลและตรรกะ ✅ (16 ต.ค. 69)
+
+ข้อ 1 ของรายการที่เสนอไว้ใน §6.19 แบ่งเป็นสองรอบ รอบนี้คือฐานข้อมูลกับตรรกะ
+ส่วนกราฟบนหน้าสุขภาพทำรอบถัดไป
+
+| ส่วน | สถานะ |
+|---|---|
+| `height_cm` + `pre_pregnancy_weight` ใน `pregnancy_profiles` (migration 0019) | ✅ |
+| กรอกตอนลงทะเบียน (เฉพาะคนที่เลือกว่ากำลังตั้งครรภ์) · เว้นว่างได้ | ✅ |
+| แก้ได้ที่ `/profile/pregnancy` · โชว์ BMI และช่วงเกณฑ์ทันทีที่กรอกครบ | ✅ |
+| ตาราง `pregnancy_profile_changes` + หน้าประวัติ ใครแก้ ตอนไหน จากอะไรเป็นอะไร | ✅ |
+| `src/lib/weight-gain.ts` — BMI, กลุ่ม, ช่วงที่ควรเพิ่ม ณ สัปดาห์หนึ่ง | ✅ |
+| การ์ดกราฟในหน้าสุขภาพ | ยังไม่ทำ |
+| ให้บุคลากรทางการแพทย์ตรวจตัวเลขและถ้อยคำ | ⛔ ก่อนเปิดให้คนนอกใช้ |
+
+### การตัดสินใจ
+
+- **เว้นว่างได้ทั้งสองค่า** บางคนจำน้ำหนักก่อนตั้งครรภ์ไม่ได้ ถ้าบังคับกรอก
+  คนจะติดอยู่ที่หน้าลงทะเบียน — หน้าที่ต้องใช้ค่านี้จะชวนให้กรอกเอง
+- **เก็บที่ `pregnancy_profiles` ไม่ใช่ที่ผู้ใช้** เพราะเป็นข้อมูลของ "ครรภ์นี้"
+  เหมือน LMP (วันที่ผูก child_id ตาม §6.16 ค่อยย้ายไปพร้อมกัน)
+- **บันทึกประวัติการแก้** ค่าพวกนี้เปลี่ยนความหมายของทั้งแอป แก้น้ำหนัก
+  ก่อนตั้งครรภ์ทีเดียวช่วงเกณฑ์ขยับทั้งกราฟ แก้ LMP ทีเดียวอายุครรภ์เปลี่ยนทั้งระบบ
+- **ไตรมาสแรกไม่เฉลี่ยเป็นเส้นตรง** ถ้าลากเส้นตรงจาก 0 ถึงน้ำหนักรวม คนสัปดาห์ 8
+  จะเห็นว่าตัวเอง "ต่ำกว่าเกณฑ์" ทั้งที่ไตรมาสแรกน้ำหนักแทบไม่ขึ้นเป็นเรื่องปกติ
+  — IOM คิดไตรมาสแรกเป็นก้อน 0.5–2 กก. แล้วค่อยบวกอัตราต่อสัปดาห์หลังจากนั้น
+- **เกณฑ์นี้สำหรับครรภ์เดี่ยว** แฝดใช้คนละชุดและเราไม่รู้ว่าแฝดหรือไม่ จึงเขียนบอก
+  บนหน้าจอตรงๆ
+- **ไม่วินิจฉัย** หน้าจอบอกได้แค่ "อยู่ในช่วง/ต่ำกว่า/สูงกว่าช่วงที่คาดไว้"
+  และสัญญาณน้ำหนักขึ้นเร็ว (>1 กก./สัปดาห์) ต้องผูกกับอาการอื่นเสมอ
+  ไม่ขึ้นคำเตือนน่ากลัวจากตัวเลขเดียว
+
+### บั๊กทศนิยมลอยตัวที่เจอตอนเขียนเทสต์
+
+`bmiOf(80, 160)` ควรได้ 31.25 → 31.3 แต่ได้ **31.2** เพราะ `160/100` ปัดเศษ
+ไปแล้วตั้งแต่ก่อนหาร (`1.6² = 2.5600000000000005`) แก้โดยคิดจากเซนติเมตรตรงๆ
+`80 * 10000 / 160²` ซึ่งเป็นจำนวนเต็มทั้งหมด จึงได้ 31.25 พอดี
+— ค่าที่ขอบกลุ่ม (เช่น 24.95) จะตัดสินผิดกลุ่มได้ถ้าไม่แก้
+
+## 6.23 สำรองข้อมูล — D1 ขึ้น R2 วันละครั้ง ✅ (13 พ.ย. 69)
+
+**ที่มา:** ถามว่า "ใน GitHub มี backup อยู่ปะ" คำตอบคือ **ไม่มี** GitHub เก็บโค้ด
+ข้อมูลสุขภาพทั้งหมดอยู่ใน D1 รูปกับวิดีโออยู่ใน R2 ทั้งสองอย่างไม่มีสำเนาที่ไหนเลย
+
+### ตาข่ายรับที่มีอยู่ก่อนหน้านี้ — ไม่พอ
+
+| กลไก | ครอบคลุม | ข้อจำกัด |
+|---|---|---|
+| D1 Time Travel | ทั้งฐาน | **แพลนฟรีย้อนได้ 7 วัน** (30 วันคือ Workers Paid) |
+| `/api/export` | ข้อมูลของผู้ใช้คนเดียว | ไม่มีตัวไฟล์รูป มีแค่รายการ · ต้องกดเอง |
+| R2 | — | หาเอกสารเรื่องกู้ไฟล์ที่ลบแล้วไม่เจอ ให้ถือว่าลบแล้วหายถาวร |
+
+7 วันสั้นเกินไป เพราะสิ่งที่ Time Travel รับมือไม่ได้คือ "รู้ตัวช้า" —
+ข้อมูลเพี้ยนแบบค่อยเป็นค่อยไปกว่าจะมีคนสังเกตเห็นมักเกินสัปดาห์ไปแล้ว
+
+### ที่ทำ
+
+Cron Trigger รอบที่สองใน `workers/cron` (19:20 UTC = 02:20 เวลาไทย) →
+สั่ง D1 export ผ่าน REST API → ถามซ้ำจนได้ `signed_url` → **สตรีม**ลง bucket
+`precare-backup` เป็น `d1/precare-YYYY-MM-DD.sql` → ลบไฟล์ที่เกิน 30 วัน
+
+| เรื่อง | ทำยังไง |
+|---|---|
+| ทำไมไม่ใช้ binding | binding ของ D1 ไม่มีคำสั่ง dump ทั้งฐาน ต้องผ่าน REST API |
+| ทำไมไม่ชน CPU 10 ms | เพดานนับเฉพาะ CPU จริง การรอ fetch/R2/D1 ไม่นับ — งานทั้งหมดคือรอเน็ตเวิร์ก **ห้ามให้โค้ดโตไปทางวนหรือแปลงข้อมูลก้อนใหญ่** |
+| ทำไมสตรีม ไม่ใช่ arrayBuffer | worker มีเพดานหน่วยความจำ 128 MB — อ่านทั้งก้อนคือระเบิดเวลา |
+| ทำไมตีสองกว่า | เอกสาร D1 บอกว่าระหว่าง export ฐานตอบคำขออื่นไม่ได้ |
+| ทำไมมีตาราง `backup_runs` | **backup ที่พังเงียบๆ แย่กว่าไม่มี backup** — Cron ที่ล้มไม่ถูกรันซ้ำให้ และไม่มีใครเปิด log ดูทุกวัน |
+| ทำไม account id เป็น secret | รีโปนี้เป็น public — id ของฐานอยู่ในรีโปอยู่แล้ว แต่ไม่เพิ่มของใหม่เข้าไป |
+
+### ⚠️ สิ่งที่ยังไม่ครอบคลุม
+
+1. **รูปกับวิดีโอยังไม่มีสำเนา** — ทางที่เสนอคือ *soft delete* (ลบแล้วเก็บไฟล์ไว้
+   30 วันก่อนลบจริง) ไม่ใช่ก๊อปทุกไฟล์ไปอีก bucket เพราะ R2 ฟรีมี 10 GB
+   การทำสำเนาทุกไฟล์คือกินโควตาสองเท่าเพื่อกัน "เผลอลบ" ซึ่ง soft delete
+   กันได้ด้วยต้นทุนเกือบศูนย์ — **ยังไม่ได้ทำ ต้องเคาะก่อน**
+2. **สำเนาอยู่บัญชี Cloudflare เดียวกับของจริง** กัน "เผลอลบ" ได้
+   แต่ไม่กัน "บัญชีมีปัญหา" ถ้าอยากได้ต้องมีสำเนาลงเครื่องด้วย
+3. **ยังไม่มีหน้าจอบอกว่าสำรองครั้งสุดท้ายเมื่อไหร่** ตอนนี้ต้องถามจาก
+   `backup_runs` เอง ซึ่งแปลว่ายังต้องมีคนนึกถึงมันอยู่ดี
+
+### ต้องตั้งเองก่อนถึงจะเริ่มทำงาน
+
+```bash
+npx wrangler r2 bucket create precare-backup
+npx wrangler secret put CF_ACCOUNT_ID --config workers/cron/wrangler.jsonc
+npx wrangler secret put CF_API_TOKEN  --config workers/cron/wrangler.jsonc   # สิทธิ์ D1:Edit
+```
+
+ไม่ตั้ง = รอบสำรองจดว่า `not_configured` แล้วจบ ไม่ทำให้รอบเตือนนัดพัง
+
+---
+
+## 6.7 Backlog — ยังไม่ทำ มีดีไซน์แล้ว
+
+ทั้งสองตัวออกแบบเสร็จแล้วในแคนวาส รอเลือกว่าจะทำเมื่อไหร่
+
+| ฟีเจอร์ | ทำไมน่าทำ | ต้นทุน |
+|---|---|---|
+| **Consent + PDPA ตอนลงทะเบียน** | ยังไม่ได้ออกแบบ — จำเป็นก่อนเปิดให้คนนอกครอบครัวใช้ | ดูรายละเอียดข้างล่าง |
+
+### Consent + PDPA — ต้องมีก่อนเปิดให้คนอื่นใช้
+
+ตอนนี้หน้าสมัครมีแค่ติ๊ก "ยอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัว" ที่ลิงก์ไปหน้า
+`/terms` กับ `/privacy` ซึ่ง **ยังไม่มีเนื้อหาจริง** ใช้ได้ตอนทดลองในครอบครัวตัวเอง
+แต่เปิดให้คนอื่นใช้ไม่ได้ เพราะข้อมูลที่เก็บเป็น**ข้อมูลสุขภาพ** ซึ่ง PDPA จัดเป็น
+ข้อมูลอ่อนไหวตามมาตรา 26 ที่ต้องขอความยินยอม **โดยชัดแจ้ง** และแยกจากเงื่อนไขทั่วไป
+
+ประเด็นที่ต้องออกแบบ
+
+| เรื่อง | ทำไมสำคัญกับแอปนี้ |
+|---|---|
+| แยก consent ข้อมูลสุขภาพออกจากเงื่อนไขทั่วไป | ติ๊กรวมช่องเดียวไม่นับเป็นความยินยอมโดยชัดแจ้ง |
+| บอกให้ชัดว่า**คนในครอบครัวเห็นข้อมูลสุขภาพของเรา** | จุดขายของแอปคือแชร์ในครอบครัว แต่คนถูกเชิญต้องรู้ก่อนกดรับ ว่าจะเห็นอะไรและใครเห็นของตัวเองบ้าง |
+| ถอนความยินยอม + ลบบัญชีและข้อมูล | สิทธิ์ตาม PDPA · ตอนนี้ลบครอบครัวได้แต่ลบบัญชีตัวเองไม่ได้ |
+| ขอข้อมูลของตัวเองคืน (data portability) | ต้องมีทางส่งออกข้อมูลสุขภาพ + รูป |
+| เก็บหลักฐานว่ายินยอมเมื่อไหร่ เวอร์ชันไหน | ต้องมีตาราง `consents` และหน้านโยบายต้องมีเลขเวอร์ชัน ไม่งั้นพิสูจน์ย้อนหลังไม่ได้ |
+| ผู้เยาว์ | คนตั้งครรภ์อายุต่ำกว่า 20 มีจริง ต้องตัดสินใจว่าจะรับหรือไม่รับ |
+| รูปในอัลบั้มมีคนอื่นในภาพ | ภาพครอบครัวมีบุคคลที่สามที่ไม่ได้ให้ความยินยอมกับเรา |
+
+**ผมไม่ใช่ที่ปรึกษากฎหมาย** — ตารางนี้เป็นรายการสิ่งที่ต้องคิด ไม่ใช่ความเห็นทางกฎหมาย
+ก่อนเปิดให้คนนอกใช้จริงควรให้คนที่รู้เรื่อง PDPA ตรวจข้อความและ flow อีกรอบ
+
+## 6.5 Phase 2 — อัลบั้มและรูปภาพ ✅ **ทำเสร็จแล้ว (26 ส.ค. 69)**
+
+ดึงมาทำก่อนกำหนดเพราะโครงพร้อมหมดแล้ว (R2 + ตาราง photos + `src/lib/storage.ts`)
 
 | งาน | รายละเอียด | ประเมิน |
 |---|---|---|
@@ -331,6 +1060,14 @@ merge เข้า main
 **รวม ~5.5 วัน** — ลดลงเพราะ R2 กับอัปโหลดรูปโปรไฟล์ย้ายไปทำใน Phase 1 แล้ว
 
 ### 6.6 Phase 2 — เนื้อหารายสัปดาห์ (ขนาดลูกน้อย + พัฒนาการ)
+
+**รูปเทียบขนาดครบ 37 สัปดาห์แล้ว (24 ก.ย.)** — อยู่ใน R2 `precare-assets`
+ที่ `weekly/size/wNN.webp` · ต้นฉบับ SVG อยู่ใน `assets/weekly-size/`
+สร้างใหม่และอัปซ้ำได้ด้วย `node scripts/build-size-images.mjs --upload`
+
+25 ใบดัดแปลงจาก Microsoft Fluent Emoji (MIT) อีก 12 ใบวาดเองเพราะไม่มีอีโมจิ
+ของผลไม้/ผักนั้น — รายละเอียดสัญญาอนุญาตอยู่ใน [third-party-licenses.md](./third-party-licenses.md)
+
 
 ข้อมูล 37 สัปดาห์รวบรวมเสร็จแล้วใน **[pregnancy-weekly-data.md](./pregnancy-weekly-data.md)** — ความยาว น้ำหนัก การเทียบขนาดกับผลไม้ไทย และคำบรรยายพัฒนาการ พร้อมแหล่งอ้างอิง
 
@@ -418,7 +1155,7 @@ merge เข้า main
 | เมื่อไหร่ | ต้องทำอะไร | ใช้เวลา |
 |---|---|---|
 | ก่อน **T0.5** | ยืนยันว่าเข้า Cloudflare dashboard ได้ + รู้ Account ID | 5 นาที |
-| ก่อน **T0.7** | สร้าง Cloudflare API Token (Workers Scripts Edit + D1 Edit) | 10 นาที |
+| ก่อน **T0.7** | สร้าง Cloudflare API Token — **Workers Scripts: Edit + D1: Edit + Workers R2 Storage: Edit** | 10 นาที |
 | ก่อน **T2.3** | สร้าง OAuth client ใน Google Cloud Console → ได้ Client ID + Secret | 20 นาที |
 | ก่อน **T4.1** | ยืนยันว่าจะให้ผมทำ design ต่อ หรือมี designer อยู่แล้ว | — |
 | ก่อน **Phase 1.5** | เปิด 2FA บนบัญชี Gmail ที่จะใช้ส่ง แล้วสร้าง App Password | 10 นาที |

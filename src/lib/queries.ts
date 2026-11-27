@@ -1,0 +1,1068 @@
+/**
+ * ฝั่งอ่าน — เรียกจาก React Server Component ตรงๆ ไม่ต้องมี REST endpoint
+ *
+ * ⚠️ ทุกฟังก์ชันในนี้ต้องรับ familyId ที่ผ่าน requireRole มาแล้วเท่านั้น
+ *    ห้ามรับ familyId ดิบจาก searchParams หรือ props ของ client
+ */
+import {
+  and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql,
+} from "drizzle-orm";
+import type { Db } from "@/db";
+import { getDb } from "@/db";
+import { getSessionUser } from "@/lib/session";
+import { requireRole } from "@/lib/authz";
+import type { AlbumPhotoType } from "@/db/schema";
+import {
+  account,
+  appointmentReminders, appointments, careGroups, families, familyInvites, familyMembers, foodLogs,
+  childMeasurements, childMilestones, children,
+  medicationDoses, medicationTimes, medications,
+  photos, pregnancyProfileChanges, pregnancyProfiles, storageObjects, trackingSessions, user,
+  visitQuestions, weeklyLogs,
+} from "@/db/schema";
+import { STALE_HOURS, toView, type SessionView } from "@/lib/kicks";
+import { toLaborView } from "@/lib/labor";
+import type { CostItem } from "@/lib/costs";
+import { parseSymptoms, type Role, type WeeklyLogView } from "@/types";
+import { calculateGestationalAge, daysUntilDueDate } from "@/lib/pregnancy";
+import { localNowIso } from "@/lib/local-time";
+
+/**
+ * ด่านเดียวที่ RSC ใช้เปิดหน้า — คืน db + user + familyId + role ที่ผ่าน authz แล้ว
+ * ถ้าไม่ผ่านจะโยน AuthzError ไม่ใช่คืน null เพื่อกันเผลอ render ต่อ
+ */
+export async function requireFamilyContext(min: Role = "viewer") {
+  const user = await getSessionUser();
+  if (!user) throw new Error("UNAUTHENTICATED");
+  const db = await getDb();
+  const familyId = user.activeFamilyId;
+  if (!familyId) throw new Error("NO_ACTIVE_FAMILY");
+  const role = await requireRole(db, familyId, user.id, min);
+  return { db, user, familyId, role };
+}
+
+/**
+ * ข้อมูลการตั้งครรภ์
+ *
+ * `ga` คือ "อายุครรภ์ตอนนี้" ซึ่งหลังคลอดแล้วไม่มีอยู่จริง — คืน null
+ * ไม่ใช่ปล่อยให้นับต่อไปเป็นสัปดาห์ที่ 43, 44, 45…
+ *
+ * lmpDate ยังอยู่ใน profile ตามเดิม ใครที่ต้องใช้ย้อนหลัง (เช่น export
+ * หรือสัปดาห์ของรูปเก่า) ยังอ่านได้ เราแค่หยุดคำนวณค่าปัจจุบัน
+ */
+export async function getPregnancy(db: Db, familyId: string) {
+  const p = await db
+    .select()
+    .from(pregnancyProfiles)
+    .where(eq(pregnancyProfiles.familyId, familyId))
+    .get();
+  if (!p?.lmpDate || p.status === "postpartum") {
+    return { profile: p ?? null, ga: null, daysLeft: null };
+  }
+  return {
+    profile: p,
+    ga: calculateGestationalAge(p.lmpDate),
+    daysLeft: p.dueDate ? daysUntilDueDate(p.dueDate) : null,
+  };
+}
+
+export async function listWeeklyLogs(db: Db, familyId: string, limit = 50) {
+  const rows = await db
+    .select({ log: weeklyLogs, recorderName: user.name })
+    .from(weeklyLogs)
+    .innerJoin(user, eq(user.id, weeklyLogs.recordedBy))
+    .where(eq(weeklyLogs.familyId, familyId))
+    .orderBy(desc(weeklyLogs.logDate))
+    .limit(limit);
+  return rows.map((r) => ({
+    ...r.log,
+    symptoms: parseSymptoms(r.log.symptoms),
+    recorderName: r.recorderName,
+  }));
+}
+
+export async function getWeeklyLogById(db: Db, familyId: string, id: string): Promise<WeeklyLogView | null> {
+  const r = await db
+    .select()
+    .from(weeklyLogs)
+    .where(and(eq(weeklyLogs.id, id), eq(weeklyLogs.familyId, familyId)))
+    .get();
+  return r ? { ...r, symptoms: parseSymptoms(r.symptoms) } : null;
+}
+
+/** ค่าเริ่มต้นของฟอร์ม — สัปดาห์ที่คำนวณจาก LMP และน้ำหนักครั้งล่าสุดไว้โชว์ delta */
+export async function getLogFormDefaults(db: Db, familyId: string) {
+  const [profileRows, lastRows] = await db.batch([
+    db.select().from(pregnancyProfiles).where(eq(pregnancyProfiles.familyId, familyId)),
+    db
+      .select({ weight: weeklyLogs.weight })
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, familyId))
+      .orderBy(desc(weeklyLogs.logDate))
+      .limit(1),
+  ]);
+  const lmp = profileRows[0]?.lmpDate ?? null;
+  return {
+    suggestedWeek: lmp ? calculateGestationalAge(lmp).weeks : null,
+    lastWeight: lastRows[0]?.weight ?? null,
+    usedSymptoms: await listUsedSymptoms(db, familyId),
+  };
+}
+
+/**
+ * อาการที่ครอบครัวนี้เคยบันทึกไว้เอง — เอาไปขึ้นเป็นชิปให้กดซ้ำได้
+ *
+ * ไม่ต้องมีตารางเก็บ "อาการที่ผู้ใช้สร้างเอง" แยก เพราะบันทึกเก่าคือรายการนั้น
+ * อยู่แล้ว พิมพ์ครั้งเดียวแล้วครั้งต่อไปกดเลือกได้ ไม่ต้องพิมพ์ใหม่ทุกสัปดาห์
+ *
+ * ดึงมาจากบันทึกล่าสุด 30 รายการก็พอ — ไกลกว่านั้นคืออาการของไตรมาสก่อน
+ * ซึ่งมักไม่ใช่สิ่งที่กำลังจะบันทึกวันนี้
+ */
+export async function listUsedSymptoms(db: Db, familyId: string, limit = 12) {
+  const rows = await db
+    .select({ symptoms: weeklyLogs.symptoms })
+    .from(weeklyLogs)
+    .where(eq(weeklyLogs.familyId, familyId))
+    .orderBy(desc(weeklyLogs.logDate))
+    .limit(30);
+
+  const seen = new Set<string>();
+  for (const r of rows) {
+    for (const s of parseSymptoms(r.symptoms)) {
+      if (seen.size >= limit) break;
+      seen.add(s);
+    }
+  }
+  return [...seen];
+}
+
+/**
+ * เวลาเตือนของนัดหลายนัดในคิวรีเดียว คืนเป็น map id -> นาที (ไกลไปใกล้)
+ *
+ * ดึงทีเดียวทั้งชุดแทนที่จะ join ในคิวรีหลัก เพราะ join แล้วแถวนัดจะซ้ำตาม
+ * จำนวนเวลาเตือน ต้องมายุบกลับใน JS อยู่ดี และทำให้ทุกที่ที่ select * พังตามไปด้วย
+ */
+export async function remindersFor(db: Db, ids: string[]) {
+  const map = new Map<string, number[]>();
+  if (ids.length === 0) return map;
+  const rows = await db
+    .select({
+      appointmentId: appointmentReminders.appointmentId,
+      minutesBefore: appointmentReminders.minutesBefore,
+    })
+    .from(appointmentReminders)
+    .where(inArray(appointmentReminders.appointmentId, ids))
+    .orderBy(desc(appointmentReminders.minutesBefore));
+  for (const r of rows) {
+    const list = map.get(r.appointmentId);
+    if (list) list.push(r.minutesBefore);
+    else map.set(r.appointmentId, [r.minutesBefore]);
+  }
+  return map;
+}
+
+export async function listAppointments(db: Db, familyId: string, when: "upcoming" | "past" = "upcoming") {
+  // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง (react-hooks/purity)
+  const now = Date.now();
+  // เทียบกับเวลาไทย ไม่ใช่ UTC — ดูเหตุผลใน src/lib/local-time.ts
+  const nowIso = localNowIso(now);
+  const items = await db
+    .select()
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.familyId, familyId),
+        when === "upcoming"
+          ? gte(appointments.apptDatetime, nowIso)
+          : lt(appointments.apptDatetime, nowIso),
+      ),
+    )
+    .orderBy(when === "upcoming" ? asc(appointments.apptDatetime) : desc(appointments.apptDatetime));
+  const reminders = await remindersFor(db, items.map((a) => a.id));
+  return { items: items.map((a) => ({ ...a, reminders: reminders.get(a.id) ?? [] })), now };
+}
+
+
+/**
+ * นัดหมายทั้งหมดพร้อมค่าใช้จ่ายและกลุ่ม — ใช้กับหน้าค่าใช้จ่ายทุกมุมมอง
+ *
+ * ดึงทีเดียวทั้งชุดแล้วให้ฝั่ง src/lib/costs.ts จัดกลุ่มเอง แทนที่จะยิง
+ * GROUP BY แยกต่อมุมมอง เพราะจำนวนนัดต่อครอบครัวอยู่ในหลักสิบ ไม่ใช่หลักหมื่น
+ * และการคำนวณในหน่วยความจำทำให้สลับมุมมองได้โดยไม่ต้องแตะ D1 ซ้ำ
+ *
+ * leftJoin เพราะ group_id เป็น null ได้ (นัดที่ยังไม่เลือกกลุ่ม = ทั่วไป)
+ */
+export async function listAppointmentCosts(db: Db, familyId: string): Promise<CostItem[]> {
+  return db
+    .select({
+      id: appointments.id,
+      apptDatetime: appointments.apptDatetime,
+      title: appointments.title,
+      location: appointments.location,
+      groupId: appointments.groupId,
+      groupName: careGroups.name,
+      groupColor: careGroups.color,
+      costSatang: appointments.costSatang,
+      claimStatus: appointments.claimStatus,
+    })
+    .from(appointments)
+    .leftJoin(careGroups, eq(careGroups.id, appointments.groupId))
+    .where(eq(appointments.familyId, familyId))
+    .orderBy(desc(appointments.apptDatetime));
+}
+
+/** กลุ่มที่ยังใช้อยู่ เรียงตามเวลาสร้าง เพื่อให้ลำดับคงที่ทุกหน้า */
+export async function listCareGroups(db: Db, familyId: string) {
+  return db
+    .select({ id: careGroups.id, name: careGroups.name, color: careGroups.color })
+    .from(careGroups)
+    .where(and(eq(careGroups.familyId, familyId), eq(careGroups.archived, false)))
+    .orderBy(asc(careGroups.createdAt));
+}
+
+
+const KICK_COLS = {
+  id: trackingSessions.id,
+  startedAt: trackingSessions.startedAt,
+  endedAt: trackingSessions.endedAt,
+  targetCount: trackingSessions.targetCount,
+  events: trackingSessions.events,
+  note: trackingSessions.note,
+  strength: trackingSessions.strength,
+};
+
+/**
+ * รอบที่ยังนับอยู่ (ถ้ามี)
+ *
+ * รอบที่ค้างเกิน STALE_HOURS ถือว่าลืมปิด ไม่ใช่รอบที่ยังใช้งานอยู่
+ * ถ้าไม่กรองทิ้ง ผู้ใช้จะเปิดแอปมาเจอรอบเมื่อวานที่นับมา 14 ชั่วโมงแล้วสับสน
+ * (ไม่ลบทิ้ง ยังอยู่ในประวัติ แค่ไม่เอามาแสดงเป็นรอบที่กำลังนับ)
+ */
+export async function getActiveKickSession(
+  db: Db,
+  familyId: string,
+): Promise<SessionView | null> {
+  const row = await db
+    .select(KICK_COLS)
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "kick"),
+        isNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .get();
+  if (!row) return null;
+
+  const cutoff = Date.now() - STALE_HOURS * 3600_000;
+  if (new Date(row.startedAt).getTime() < cutoff) return null;
+  return toView(row);
+}
+
+/** ประวัติรอบที่จบแล้ว ใหม่ไปเก่า */
+export async function listKickSessions(db: Db, familyId: string, limit = 30) {
+  const rows = await db
+    .select(KICK_COLS)
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "kick"),
+        isNotNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .limit(limit);
+  return rows.map(toView);
+}
+
+export async function getAppointmentById(db: Db, familyId: string, id: string) {
+  const row = await db
+    .select()
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.familyId, familyId)))
+    .get();
+  if (!row) return row;
+  return { ...row, reminders: (await remindersFor(db, [id])).get(id) ?? [] };
+}
+
+export async function listMembers(db: Db, familyId: string, meId: string) {
+  const rows = await db
+    .select({
+      id: familyMembers.id,
+      userId: familyMembers.userId,
+      role: familyMembers.role,
+      status: familyMembers.status,
+      joinedAt: familyMembers.joinedAt,
+      name: user.name,
+      email: user.email,
+      image: user.image,
+    })
+    .from(familyMembers)
+    .innerJoin(user, eq(user.id, familyMembers.userId))
+    .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active")))
+    .orderBy(asc(familyMembers.joinedAt));
+  return rows.map((r) => ({ ...r, isMe: r.userId === meId }));
+}
+
+/** คำเชิญที่ยังรอตอบรับ — owner เท่านั้นที่ควรเห็น เช็คสิทธิ์ที่หน้าเรียกใช้ */
+export async function listPendingInvites(db: Db, familyId: string) {
+  const rows = await db
+    .select()
+    .from(familyInvites)
+    .where(and(eq(familyInvites.familyId, familyId), eq(familyInvites.status, "pending")))
+    .orderBy(desc(familyInvites.createdAt));
+
+  /**
+   * คิด "หมดอายุหรือยัง" ตรงนี้ ไม่ใช่ในหน้าจอ
+   *
+   * react-hooks/purity ห้ามเรียก Date.now() ระหว่าง render แม้จะเป็น server
+   * component — และของเดิมเลี่ยงกฎนั้นด้วยการเทียบ expires_at กับ created_at
+   * ซึ่งอยู่ก่อนเสมอ ป้าย "หมดอายุแล้ว" จึงไม่เคยขึ้นเลยสักครั้ง
+   */
+  const now = Date.now();
+  return rows.map((r) => ({ ...r, expired: new Date(r.expiresAt).getTime() < now }));
+}
+
+/**
+ * T3.7 — ข้อมูลหน้า Dashboard ในรอบเดียว
+ *
+ * ใช้ batch() ยิงพร้อมกันแทนการ await ทีละอัน — บนมือถือที่ latency สูง
+ * การรอ 4 รอบต่อกันเห็นผลชัดกว่าที่คิด
+ */
+export async function getDashboard(db: Db, familyId: string, meId: string) {
+  // คืน now ออกไปด้วย เพื่อให้ component ไม่ต้องเรียก Date.now() เอง
+  // (react-hooks/purity ห้ามเรียกฟังก์ชัน impure ใน render แม้จะเป็น server component)
+  const now = Date.now();
+  const nowIso = localNowIso(now);
+
+  const [pregnancyRows, apptRows, logRows, memberCount, foodToday] = await db.batch([
+    // join รูปหน้าปกมาด้วยในคิวรีเดียว — ถ้ารูปถูกลบไปแล้ว join ไม่เจอ การ์ดก็กลับไปเป็นแบบไม่มีรูปเอง
+    db
+      .select({
+        ...getTableColumns(pregnancyProfiles),
+        coverR2Key: photos.r2Key,
+        coverThumbKey: photos.thumbKey,
+        coverMediaKind: photos.mediaKind,
+        coverWeek: photos.week,
+      })
+      .from(pregnancyProfiles)
+      .leftJoin(photos, eq(photos.id, pregnancyProfiles.coverPhotoId))
+      .where(eq(pregnancyProfiles.familyId, familyId)),
+    db
+      .select()
+      .from(appointments)
+      .where(and(eq(appointments.familyId, familyId), gte(appointments.apptDatetime, nowIso)))
+      .orderBy(asc(appointments.apptDatetime))
+      .limit(1),
+    db
+      .select()
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, familyId))
+      .orderBy(desc(weeklyLogs.logDate))
+      .limit(3),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(familyMembers)
+      .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active"))),
+    /**
+     * ยอดอาหารของวันนี้ **ของคนที่เปิดหน้าอยู่** — รวมใน batch เดิม ไม่ใช่คิวรีแยก
+     *
+     * ต้องกรองด้วย user_id ไม่ใช่ family_id อย่างเดียว ไม่งั้นการ์ดหน้าแรกจะโชว์
+     * ยอดของทุกคนในบ้านบวกกัน แล้วคนอ่านจะเข้าใจว่าเป็นของตัวเอง
+     */
+    db
+      .select({
+        kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+        sugarG: sql<number>`coalesce(sum(${foodLogs.sugarG}), 0)`,
+        proteinG: sql<number>`coalesce(sum(${foodLogs.proteinG}), 0)`,
+        items: sql<number>`count(*)`,
+      })
+      .from(foodLogs)
+      .where(
+        and(
+          eq(foodLogs.familyId, familyId),
+          eq(foodLogs.userId, meId),
+          eq(foodLogs.eatenOn, nowIso.slice(0, 10)),
+        ),
+      ),
+  ]);
+
+  const profile = pregnancyRows[0] ?? null;
+  const postpartum = profile?.status === "postpartum";
+  // วิดีโอใช้เฟรมหน้าปกเป็นรูป ไม่ใช่ตัวไฟล์ — <img src> ชี้ไปที่ .mp4 ไม่ได้
+  const coverKey =
+    profile?.coverMediaKind === "video" ? profile.coverThumbKey : (profile?.coverR2Key ?? null);
+  return {
+    now,
+    profile,
+    cover: coverKey ? { key: coverKey, week: profile?.coverWeek ?? null } : null,
+    // หลังคลอดแล้วหยุดนับ — การ์ดอายุครรภ์ / นับลูกดิ้น / จับเวลาเจ็บท้อง
+    // อ่าน ga ตัวนี้ตัวเดียว พอเป็น null ทั้งสามใบเงียบพร้อมกัน
+    ga: profile?.lmpDate && !postpartum ? calculateGestationalAge(profile.lmpDate) : null,
+    daysLeft: profile?.dueDate && !postpartum ? daysUntilDueDate(profile.dueDate) : null,
+    postpartum,
+    nextAppointment: apptRows[0] ?? null,
+    recentLogs: logRows.map((r) => ({ ...r, symptoms: parseSymptoms(r.symptoms) })),
+    memberCount: memberCount[0]?.n ?? 0,
+    food: foodToday[0] ?? { kcal: 0, sugarG: 0, proteinG: 0, items: 0 },
+  };
+}
+
+/**
+ * ข้อมูลที่ layout ต้องใช้ทุกหน้า — ยิงใน batch เดียวเพื่อไม่ให้ทุกการเปลี่ยนหน้า
+ * ต้องรอ query หลายรอบต่อกัน
+ */
+export async function getLayoutData(db: Db, familyId: string) {
+  const now = Date.now();
+  const horizonIso = localNowIso(now + 24 * 3600_000);
+
+  const [familyRows, apptRows] = await db.batch([
+    db.select().from(families).where(eq(families.id, familyId)),
+    db
+      .select({
+        id: appointments.id,
+        apptDatetime: appointments.apptDatetime,
+        title: appointments.title,
+        doctorName: appointments.doctorName,
+        location: appointments.location,
+        reminderEnabled: appointments.reminderEnabled,
+      })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.familyId, familyId),
+          gte(appointments.apptDatetime, localNowIso(now)),
+          lt(appointments.apptDatetime, horizonIso),
+        ),
+      )
+      .orderBy(asc(appointments.apptDatetime)),
+  ]);
+
+  const reminders = await remindersFor(db, apptRows.map((a) => a.id));
+
+  return {
+    family: familyRows[0] ?? null,
+    // มีนัดใน 24 ชม. -> จุดสีบนกระดิ่ง
+    hasSoonAppointment: apptRows.length > 0,
+    upcoming: apptRows.map((a) => ({ ...a, reminders: reminders.get(a.id) ?? [] })),
+    now,
+  };
+}
+
+/** รูปในอัลบั้ม เรียงจากใหม่ไปเก่าตาม "วันที่ถ่าย" ไม่ใช่วันที่อัปโหลด */
+/**
+ * รูปในอัลบั้ม
+ *
+ * `childId` คือขอบเขตของอัลบั้ม ไม่ใช่ตัวกรองเสริม
+ *   null (ค่าเริ่มต้น) = อัลบั้มของครรภ์ · ต้องไม่ติดรูปลูกมาด้วย
+ *   "<id>"             = อัลบั้มของลูกคนนั้น
+ *
+ * ⚠️ ถ้าไม่ใส่ isNull ตรงนี้ รูปลูกทั้งหมดจะไปกองอยู่ใต้ "ไม่ระบุสัปดาห์"
+ *    ในอัลบั้มครรภ์ เพราะรูปลูกไม่มีค่า week
+ */
+export async function listPhotos(
+  db: Db,
+  familyId: string,
+  type?: AlbumPhotoType,
+  onlyVideo = false,
+  childId: string | null = null,
+) {
+  const rows = await db
+    .select({
+      id: photos.id,
+      week: photos.week,
+      takenAt: photos.takenAt,
+      type: photos.type,
+      pinned: photos.pinned,
+      caption: photos.caption,
+      r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
+      createdAt: photos.createdAt,
+      uploaderName: user.name,
+    })
+    .from(photos)
+    .innerJoin(user, eq(user.id, photos.uploadedBy))
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        // ใบเสร็จเป็นเอกสารของนัด ไม่ใช่ความทรงจำ — ไม่ขึ้นในอัลบั้ม
+        ne(photos.type, "receipt"),
+        ...(type ? [eq(photos.type, type)] : []),
+        // "เฉพาะวิดีโอ" เป็นสวิตช์คนละแกนกับประเภทเนื้อหา ใช้ร่วมกันได้
+        ...(onlyVideo ? [eq(photos.mediaKind, "video")] : []),
+        childId === null ? isNull(photos.childId) : eq(photos.childId, childId),
+      ),
+    )
+    .orderBy(desc(photos.takenAt), desc(photos.createdAt));
+  return rows;
+}
+
+/* ───────────────────────── ลูก ───────────────────────── */
+
+/** ลูกทุกคนของครอบครัว พร้อมจำนวนรูป — เรียงตามวันเกิด แฝดจะอยู่ติดกัน */
+export async function listChildren(db: Db, familyId: string) {
+  return db
+    .select({
+      id: children.id,
+      name: children.name,
+      birthDate: children.birthDate,
+      photoCount: sql<number>`(select count(*) from photos where photos.child_id = ${children.id})`,
+    })
+    .from(children)
+    .where(eq(children.familyId, familyId))
+    .orderBy(asc(children.birthDate), asc(children.createdAt));
+}
+
+/**
+ * ลูกหนึ่งคน
+ *
+ * ⚠️ กรอง familyId ด้วยเสมอ ไม่ใช่แค่ id — id เป็น UUID ที่มาจาก URL
+ *    ถ้าเช็คแค่ id คนที่เดา/เห็น URL ได้จะอ่านข้อมูลลูกของครอบครัวอื่นได้
+ */
+export async function getChild(db: Db, familyId: string, childId: string) {
+  const [row] = await db
+    .select()
+    .from(children)
+    .where(and(eq(children.id, childId), eq(children.familyId, familyId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** รูปของลูกคนหนึ่ง เท่าที่ timeline ต้องใช้ */
+export async function listChildPhotos(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      id: photos.id,
+      takenAt: photos.takenAt,
+      thumbKey: photos.thumbKey,
+      r2Key: photos.r2Key,
+      mediaKind: photos.mediaKind,
+      pinned: photos.pinned,
+      caption: photos.caption,
+    })
+    .from(photos)
+    .where(and(eq(photos.familyId, familyId), eq(photos.childId, childId)))
+    .orderBy(desc(photos.takenAt));
+}
+
+/** น้ำหนัก/ส่วนสูงที่เคยบันทึก — join children เพื่อกันข้ามครอบครัว */
+export async function listMeasurements(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      id: childMeasurements.id,
+      measuredOn: childMeasurements.measuredOn,
+      weightKg: childMeasurements.weightKg,
+      heightCm: childMeasurements.heightCm,
+      headCm: childMeasurements.headCm,
+    })
+    .from(childMeasurements)
+    .innerJoin(children, eq(children.id, childMeasurements.childId))
+    .where(and(eq(childMeasurements.childId, childId), eq(children.familyId, familyId)))
+    .orderBy(desc(childMeasurements.measuredOn));
+}
+
+/** หมุดพัฒนาการที่ถึงแล้ว */
+export async function listMilestones(db: Db, familyId: string, childId: string) {
+  return db
+    .select({
+      kind: childMilestones.kind,
+      achievedOn: childMilestones.achievedOn,
+    })
+    .from(childMilestones)
+    .innerJoin(children, eq(children.id, childMilestones.childId))
+    .where(and(eq(childMilestones.childId, childId), eq(children.familyId, familyId)))
+    .orderBy(asc(childMilestones.achievedOn));
+}
+
+/** ไฟล์ที่แนบกับนัดหมายรายการหนึ่ง */
+export async function listAppointmentMedia(db: Db, familyId: string, appointmentId: string) {
+  return db
+    .select({
+      id: photos.id,
+      r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
+      type: photos.type,
+      caption: photos.caption,
+    })
+    .from(photos)
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        eq(photos.appointmentId, appointmentId),
+        ne(photos.type, "receipt"),
+      ),
+    )
+    .orderBy(desc(photos.createdAt));
+}
+
+/** ใบเสร็จของนัด พร้อมยอดที่อ่านได้ (ถ้าอ่านได้) */
+export async function listAppointmentReceipts(db: Db, familyId: string, appointmentId: string) {
+  return db
+    .select({
+      id: photos.id,
+      r2Key: photos.r2Key,
+      receiptTotalSatang: photos.receiptTotalSatang,
+      createdAt: photos.createdAt,
+    })
+    .from(photos)
+    .where(
+      and(
+        eq(photos.familyId, familyId),
+        eq(photos.appointmentId, appointmentId),
+        eq(photos.type, "receipt"),
+      ),
+    )
+    .orderBy(asc(photos.createdAt));
+}
+
+/**
+ * อาหารของวันหนึ่ง พร้อมยอดรวม
+ *
+ * รวมยอดใน JS ไม่ใช่ SQL เพราะต้องแยกตามมื้อในหน้าจออยู่แล้ว การ SUM ใน SQL
+ * จะได้คิวรีเพิ่มมาอีกชุดเพื่อเลขที่บวกเองได้จากข้อมูลชุดเดิม
+ *
+ * ค่าที่เป็น null (AI อ่านไม่ได้ / ผู้ใช้ยังไม่กรอก) ไม่นับเข้ายอดรวม และนับ
+ * จำนวนรายการที่ยังไม่มีตัวเลขไว้บอกผู้ใช้ ไม่งั้นยอดรวมจะดูน้อยกว่าความจริง
+ * โดยไม่มีใครรู้ว่าทำไม
+ */
+export async function getFoodDay(db: Db, familyId: string, userId: string, eatenOn: string) {
+  const items = await db
+    .select()
+    .from(foodLogs)
+    .where(
+      and(
+        eq(foodLogs.familyId, familyId),
+        // ขาด user_id ที่นี่คือบั๊กเดิม — ยอดของทุกคนในบ้านจะบวกกันเงียบๆ
+        eq(foodLogs.userId, userId),
+        eq(foodLogs.eatenOn, eatenOn),
+      ),
+    )
+    .orderBy(asc(foodLogs.createdAt));
+
+  const totals = { kcal: 0, carbG: 0, sugarG: 0, proteinG: 0 };
+  let missing = 0;
+  for (const i of items) {
+    if (i.kcal == null && i.carbG == null && i.proteinG == null) missing++;
+    totals.kcal += i.kcal ?? 0;
+    totals.carbG += i.carbG ?? 0;
+    totals.sugarG += i.sugarG ?? 0;
+    totals.proteinG += i.proteinG ?? 0;
+  }
+  return { items, totals, missing };
+}
+
+/**
+ * ยอดรวมรายวันย้อนหลัง — เอาไปวาดกราฟ
+ *
+ * รวมในฐานข้อมูลไม่ใช่ใน JS เพราะคนที่บันทึกทุกมื้อทุกวันจะมีหลายพันแถว
+ * ดึงมาทั้งหมดแล้ววนรวมเองกิน CPU เกิน 10ms ที่ worker มีให้ (Error 1102)
+ *
+ * คืนเฉพาะวันที่มีบันทึก — วันที่ขาดไปคือวันที่ไม่ได้บันทึก ซึ่งต่างจาก
+ * "วันที่กิน 0 แคล" คนละเรื่องกัน ฝั่งกราฟเป็นคนเติมช่องว่างเอง
+ */
+export async function getFoodDailyTotals(
+  db: Db,
+  familyId: string,
+  userId: string,
+  from: string,
+  to: string,
+) {
+  return db
+    .select({
+      eatenOn: foodLogs.eatenOn,
+      kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+      carbG: sql<number>`coalesce(sum(${foodLogs.carbG}), 0)`,
+      sugarG: sql<number>`coalesce(sum(${foodLogs.sugarG}), 0)`,
+      proteinG: sql<number>`coalesce(sum(${foodLogs.proteinG}), 0)`,
+      /**
+       * นับแยกต่อสารอาหาร ไม่ใช่ count(*) รวม
+       *
+       * เมนูที่ไม่มีตัวเลขบันทึกได้ (ตั้งใจ) ถ้านับวันนั้นเป็น "วันที่บันทึก"
+       * ทั้งที่ sum ได้ 0 กราฟจะโชว์วันที่กินศูนย์แคล ซึ่งผิดและไม่มีอะไรฟ้อง
+       * count(col) ของ SQL ไม่นับ NULL จึงได้จำนวนเมนูที่มีค่านั้นจริงๆ
+       */
+      nKcal: sql<number>`count(${foodLogs.kcal})`,
+      nCarbG: sql<number>`count(${foodLogs.carbG})`,
+      nSugarG: sql<number>`count(${foodLogs.sugarG})`,
+      nProteinG: sql<number>`count(${foodLogs.proteinG})`,
+    })
+    .from(foodLogs)
+    .where(
+      and(
+        eq(foodLogs.familyId, familyId),
+        eq(foodLogs.userId, userId),
+        gte(foodLogs.eatenOn, from),
+        lt(foodLogs.eatenOn, to),
+      ),
+    )
+    .groupBy(foodLogs.eatenOn)
+    .orderBy(asc(foodLogs.eatenOn));
+}
+
+/**
+ * วันนี้แต่ละคนในครอบครัวกินไปเท่าไร — ข้อมูลของแถบเลือกคน
+ *
+ * ตัวเลขอยู่บนชิปของแต่ละคน ทำให้ "เห็นของทุกคน" จบในหน้าเดียว ไม่ต้องกดไล่
+ *
+ * รวมคนที่ถูกนำออกจากครอบครัวไปแล้วแต่ยังมีบันทึกของวันนั้นด้วย ไม่งั้นข้อมูล
+ * จะหายไปจากสายตาทั้งที่ยังอยู่ในฐาน (แถวผูกกับ family_id ไม่ได้ถูกลบตามคน)
+ */
+export async function getFoodDayByMember(db: Db, familyId: string, eatenOn: string, meId: string) {
+  const [memberRows, totalRows] = await db.batch([
+    db
+      .select({
+        userId: familyMembers.userId,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+      })
+      .from(familyMembers)
+      .innerJoin(user, eq(user.id, familyMembers.userId))
+      .where(and(eq(familyMembers.familyId, familyId), eq(familyMembers.status, "active")))
+      .orderBy(asc(familyMembers.joinedAt)),
+    db
+      .select({
+        userId: foodLogs.userId,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        kcal: sql<number>`coalesce(sum(${foodLogs.kcal}), 0)`,
+        items: sql<number>`count(*)`,
+      })
+      .from(foodLogs)
+      .innerJoin(user, eq(user.id, foodLogs.userId))
+      .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.eatenOn, eatenOn)))
+      .groupBy(foodLogs.userId),
+  ]);
+
+  const totals = new Map(totalRows.map((r) => [r.userId, r]));
+  const rows = memberRows.map((m) => ({
+    userId: m.userId,
+    name: m.name,
+    email: m.email,
+    image: m.image,
+    kcal: totals.get(m.userId)?.kcal ?? 0,
+    items: totals.get(m.userId)?.items ?? 0,
+    isMe: m.userId === meId,
+    active: true,
+  }));
+
+  const known = new Set(memberRows.map((m) => m.userId));
+  for (const t of totalRows) {
+    if (known.has(t.userId)) continue;
+    rows.push({ ...t, isMe: t.userId === meId, active: false });
+  }
+
+  // ตัวเองหน้าสุดเสมอ — ป้ายเป็นชื่อทุกอัน ลำดับจึงเป็นตัวช่วยหาของตัวเอง
+  rows.sort((a, b) => Number(b.isMe) - Number(a.isMe));
+
+  /**
+   * ชื่อซ้ำกันได้จริงในครอบครัวเดียว และป้ายเป็นชื่อล้วนจะแยกไม่ออกด้วยตา
+   * เติมอักษรแรกของอีเมลต่อท้ายเฉพาะชื่อที่ซ้ำ ไม่ใช่ทุกคน
+   */
+  const seen = new Map<string, number>();
+  for (const r of rows) seen.set(r.name, (seen.get(r.name) ?? 0) + 1);
+  return rows.map((r) => ({ ...r, ambiguous: (seen.get(r.name) ?? 0) > 1 }));
+}
+
+/**
+ * เมนูที่เคยบันทึก — เอาไปทำชิป "เคยกิน" ให้กดซ้ำได้โดยไม่ต้องเรียก AI ใหม่
+ *
+ * วิธีเดียวกับอาการในบันทึกสุขภาพ: ไม่ต้องมีตารางเก็บ "เมนูของฉัน" แยก
+ * เพราะบันทึกเก่าคือรายการนั้นอยู่แล้ว และค่าที่ได้คือค่าที่ผู้ใช้ยืนยันแล้ว
+ * ซึ่งคงที่กว่าการให้ AI เดาใหม่ทุกครั้ง
+ */
+export async function listRecentFoods(db: Db, familyId: string, userId: string, limit = 8) {
+  const rows = await db
+    .select()
+    .from(foodLogs)
+    // เมนูของคนอื่นไม่ใช่ "สิ่งที่เราเคยกิน" จึงไม่เอามาเป็นชิปของเรา
+    .where(and(eq(foodLogs.familyId, familyId), eq(foodLogs.userId, userId)))
+    .orderBy(desc(foodLogs.createdAt))
+    .limit(60);
+
+  const seen = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const key = `${r.name}|${r.portion ?? ""}`;
+    if (!seen.has(key)) seen.set(key, r);
+    if (seen.size >= limit) break;
+  }
+  return [...seen.values()];
+}
+
+/**
+ * ยาที่ต้องกินในวันหนึ่ง — หนึ่งแถวต่อ "ยา × เวลา" ไม่ใช่ต่อยา
+ *
+ * ยาเม็ดเดียวที่กินสามเวลา คือสามรายการในหน้าจอ เพราะแต่ละครั้งติ๊กแยกกัน
+ *
+ * กรองช่วงวันที่ในคิวรี ไม่ใช่กรองใน JS — ยาที่จบไปแล้วหรือยังไม่เริ่มไม่ควร
+ * โผล่มาให้ติ๊ก และคนที่กินวิตามินหลายตัวจะมีแถวเยอะกว่าที่คิด
+ */
+export async function getMedicationsDay(
+  db: Db,
+  familyId: string,
+  userId: string,
+  day: string,
+) {
+  return db
+    .select({
+      medId: medications.id,
+      name: medications.name,
+      dose: medications.dose,
+      note: medications.note,
+      timeId: medicationTimes.id,
+      at: medicationTimes.at,
+      takenAt: medicationDoses.takenAt,
+    })
+    .from(medicationTimes)
+    .innerJoin(medications, eq(medications.id, medicationTimes.medicationId))
+    .leftJoin(
+      medicationDoses,
+      and(
+        eq(medicationDoses.medicationTimeId, medicationTimes.id),
+        eq(medicationDoses.dueOn, day),
+      ),
+    )
+    .where(
+      and(
+        eq(medications.familyId, familyId),
+        eq(medications.userId, userId),
+        eq(medications.active, true),
+        lte(medications.startOn, day),
+        or(isNull(medications.endOn), gte(medications.endOn, day)),
+      ),
+    )
+    .orderBy(asc(medicationTimes.at), asc(medications.name));
+}
+
+/** รายการยาทั้งหมดของคนนั้น รวมที่หยุดไว้ — สำหรับหน้าจัดการ */
+export async function listMedications(db: Db, familyId: string, userId: string) {
+  const rows = await db
+    .select({
+      id: medications.id,
+      name: medications.name,
+      dose: medications.dose,
+      note: medications.note,
+      startOn: medications.startOn,
+      endOn: medications.endOn,
+      active: medications.active,
+      at: medicationTimes.at,
+    })
+    .from(medications)
+    .leftJoin(medicationTimes, eq(medicationTimes.medicationId, medications.id))
+    .where(and(eq(medications.familyId, familyId), eq(medications.userId, userId)))
+    .orderBy(desc(medications.active), asc(medications.name), asc(medicationTimes.at));
+
+  // รวมเวลาหลายแถวของยาตัวเดียวกันเข้าด้วยกัน — join คืนมาแถวละเวลา
+  const byId = new Map<string, Omit<(typeof rows)[number], "at"> & { times: string[] }>();
+  for (const r of rows) {
+    const { at, ...rest } = r;
+    const cur = byId.get(r.id) ?? { ...rest, times: [] };
+    if (at) cur.times.push(at);
+    byId.set(r.id, cur);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * บัญชีนี้ตั้งรหัสผ่านไว้หรือเปล่า
+ *
+ * คนที่สมัครด้วย Google ไม่มีรหัสผ่านเลย — เมนู "เปลี่ยนรหัสผ่าน" จึงไม่ควร
+ * โผล่ให้เห็นด้วยซ้ำ ไม่ใช่โผล่แล้วกดไปเจอหน้าที่กรอกยังไงก็ไม่ผ่าน
+ * (better-auth เก็บแถว provider_id = 'credential' เฉพาะบัญชีที่มีรหัสผ่าน)
+ */
+export async function hasPassword(db: Db, userId: string) {
+  const row = await db
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
+    .get();
+  return Boolean(row);
+}
+
+/**
+ * ประวัติการแก้ข้อมูลตั้งครรภ์ — ใครแก้ ตอนไหน จากอะไรเป็นอะไร
+ *
+ * จำกัดจำนวนเพราะหน้าจอแสดงได้ไม่กี่รายการอยู่แล้ว และตารางนี้โตได้เรื่อยๆ
+ * ตามจำนวนครั้งที่แก้ ไม่ควรดึงมาทั้งหมดทุกครั้งที่เปิดหน้า
+ */
+export async function listPregnancyChanges(db: Db, familyId: string, limit = 20) {
+  return db
+    .select({
+      id: pregnancyProfileChanges.id,
+      field: pregnancyProfileChanges.field,
+      oldValue: pregnancyProfileChanges.oldValue,
+      newValue: pregnancyProfileChanges.newValue,
+      changedAt: pregnancyProfileChanges.changedAt,
+      byName: user.name,
+    })
+    .from(pregnancyProfileChanges)
+    .innerJoin(user, eq(user.id, pregnancyProfileChanges.changedBy))
+    .where(eq(pregnancyProfileChanges.familyId, familyId))
+    .orderBy(desc(pregnancyProfileChanges.changedAt))
+    .limit(limit);
+}
+
+/** id ของรูปหน้าปกปัจจุบัน — ใช้ตอน render หน้ารูปเพื่อรู้ว่าจะโชว์ "ตั้ง" หรือ "เอาออก" */
+export async function getCoverPhotoId(db: Db, familyId: string) {
+  const row = await db
+    .select({ id: pregnancyProfiles.coverPhotoId })
+    .from(pregnancyProfiles)
+    .where(eq(pregnancyProfiles.familyId, familyId))
+    .get();
+  return row?.id ?? null;
+}
+
+export async function getPhotoById(db: Db, familyId: string, id: string) {
+  return db
+    .select({
+      id: photos.id,
+      week: photos.week,
+      takenAt: photos.takenAt,
+      type: photos.type,
+      pinned: photos.pinned,
+      caption: photos.caption,
+      r2Key: photos.r2Key,
+      thumbKey: photos.thumbKey,
+      mediaKind: photos.mediaKind,
+      durationMs: photos.durationMs,
+      createdAt: photos.createdAt,
+      uploaderName: user.name,
+      /** ขนาดไฟล์ — หน้าดูรูปใช้ตัดสินว่าจะ "แชร์" (อ่านเข้าหน่วยความจำก่อน)
+       *  หรือ "บันทึกลงเครื่อง" (ให้เบราว์เซอร์สตรีมลงดิสก์เอง) */
+      sizeBytes: storageObjects.sizeBytes,
+    })
+    .from(photos)
+    .innerJoin(user, eq(user.id, photos.uploadedBy))
+    // left เพราะไฟล์เก่าบางไฟล์อาจไม่มีแถวในบัญชี — ไม่ควรทำให้เปิดรูปไม่ได้
+    .leftJoin(storageObjects, eq(storageObjects.key, photos.r2Key))
+    .where(and(eq(photos.id, id), eq(photos.familyId, familyId)))
+    .get();
+}
+
+/** จำนวนรูปที่แนบกับบันทึกสุขภาพแต่ละรายการ — ใช้โชว์ thumbnail ในการ์ด */
+export async function countPhotosByLog(db: Db, familyId: string) {
+  const rows = await db
+    .select({ logId: photos.logId, n: sql<number>`count(*)` })
+    .from(photos)
+    .where(eq(photos.familyId, familyId))
+    .groupBy(photos.logId);
+  return new Map(rows.filter((r) => r.logId).map((r) => [r.logId as string, Number(r.n)]));
+}
+
+export async function getFamily(db: Db, familyId: string) {
+  return db.select().from(families).where(eq(families.id, familyId)).get();
+}
+
+/**
+ * ข้อมูลดิบทั้งหมดที่หน้าสรุปก่อนพบแพทย์ต้องใช้ — ยิงพร้อมกันครั้งเดียว
+ *
+ * "ตั้งแต่ครั้งที่แล้ว" นับจาก **นัดที่ผ่านมาแล้วล่าสุด** ไม่ใช่จำนวนวันตายตัว
+ * เพราะรอบการฝากครรภ์ไม่เท่ากันตลอด (เดือนละครั้ง แล้วถี่ขึ้นช่วงท้าย)
+ * ถ้ายังไม่เคยมีนัดที่ผ่านมา คืน null แล้วให้หน้าจอสรุปทั้งหมดที่มี
+ *
+ * ดึง log ทั้งหมดไม่ใช่เฉพาะช่วง เพราะยอด "รวมทั้งครรภ์" ต้องใช้ค่าแรกสุด
+ * และการกรองช่วงทำในหน่วยความจำถูกกว่ายิง D1 สองรอบ
+ */
+export async function getVisitData(db: Db, familyId: string) {
+  const [lastAppt, logs, sessions] = await Promise.all([
+    db
+      .select({ apptDatetime: appointments.apptDatetime })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.familyId, familyId),
+          lt(appointments.apptDatetime, localNowIso()),
+        ),
+      )
+      .orderBy(desc(appointments.apptDatetime))
+      .limit(1)
+      .get(),
+    db
+      .select({
+        logDate: weeklyLogs.logDate,
+        weight: weeklyLogs.weight,
+        bpSystolic: weeklyLogs.bpSystolic,
+        bpDiastolic: weeklyLogs.bpDiastolic,
+        symptoms: weeklyLogs.symptoms,
+      })
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.familyId, familyId))
+      .orderBy(asc(weeklyLogs.logDate)),
+    listKickSessions(db, familyId, 60),
+  ]);
+
+  return { since: lastAppt?.apptDatetime ?? null, logs, sessions };
+}
+
+export async function listVisitQuestions(db: Db, familyId: string) {
+  return db
+    .select({
+      id: visitQuestions.id,
+      text: visitQuestions.text,
+      askedAt: visitQuestions.askedAt,
+    })
+    .from(visitQuestions)
+    .where(eq(visitQuestions.familyId, familyId))
+    .orderBy(asc(visitQuestions.askedAt), desc(visitQuestions.createdAt));
+}
+
+/** จำนวนคำถามที่ยังไม่ได้ถาม — ใช้บนการ์ดทางเข้า ไม่ต้องดึงทั้งรายการมานับ */
+export async function countOpenQuestions(db: Db, familyId: string) {
+  const row = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(visitQuestions)
+    .where(and(eq(visitQuestions.familyId, familyId), isNull(visitQuestions.askedAt)))
+    .get();
+  return Number(row?.n ?? 0);
+}
+
+/** รอบจับเวลาการบีบตัวที่ยังไม่ปิด — ทุกครั้งที่เปิดหน้าต้องรู้ว่ามีรอบค้างไหม */
+export async function getActiveLaborSession(db: Db, familyId: string) {
+  const row = await db
+    .select({
+      id: trackingSessions.id,
+      startedAt: trackingSessions.startedAt,
+      endedAt: trackingSessions.endedAt,
+      events: trackingSessions.events,
+    })
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "contraction"),
+        isNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .get();
+  return row ? toLaborView(row) : null;
+}
+
+export async function listLaborSessions(db: Db, familyId: string, limit = 20) {
+  const rows = await db
+    .select({
+      id: trackingSessions.id,
+      startedAt: trackingSessions.startedAt,
+      endedAt: trackingSessions.endedAt,
+      events: trackingSessions.events,
+    })
+    .from(trackingSessions)
+    .where(
+      and(
+        eq(trackingSessions.familyId, familyId),
+        eq(trackingSessions.kind, "contraction"),
+        isNotNull(trackingSessions.endedAt),
+      ),
+    )
+    .orderBy(desc(trackingSessions.startedAt))
+    .limit(limit);
+  return rows.map(toLaborView);
+}

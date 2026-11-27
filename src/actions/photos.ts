@@ -1,0 +1,412 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import type { Db } from "@/db";
+import { revalidatePath } from "next/cache";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { z } from "zod";
+import { appointments, photos, pregnancyProfiles, storageObjects, ALBUM_PHOTO_TYPES, children } from "@/db/schema";
+import { editorAction, AppError } from "@/lib/safe-action";
+import {
+  MAX_FILE_BYTES,
+  MAX_VIDEO_MS,
+  StorageQuotaError,
+  deleteObject,
+  putObject,
+  sweepOrphanMedia,
+} from "@/lib/storage";
+import { calculateGestationalAge } from "@/lib/pregnancy";
+
+const ALLOWED = ["image/webp", "image/jpeg", "image/png"];
+const MAX_PER_BATCH = 10;
+
+/** สัปดาห์คำนวณจาก "วันที่ถ่าย" ไม่ใช่วันนี้ — ของเก่าจึงไปอยู่สัปดาห์ที่ถูกต้อง */
+async function weekOfTakenAt(db: Db, familyId: string, takenAt: string) {
+  const profile = await db
+    .select({ lmpDate: pregnancyProfiles.lmpDate })
+    .from(pregnancyProfiles)
+    .where(eq(pregnancyProfiles.familyId, familyId))
+    .get();
+  return profile?.lmpDate
+    ? calculateGestationalAge(profile.lmpDate, new Date(takenAt)).weeks
+    : null;
+}
+
+/**
+ * นัดหมายที่อ้างถึงต้องเป็นของครอบครัวนี้จริง
+ *
+ * client ส่ง id อะไรมาก็ได้ ถ้าไม่ตรวจ ไฟล์ของเราจะไปโผล่ใต้นัดของครอบครัวอื่น
+ * (อ่านไม่ได้เพราะ listAppointmentMedia กรอง familyId อยู่แล้ว แต่ข้อมูลจะเพี้ยน)
+ */
+async function assertAppointment(db: Db, familyId: string, id: string | null) {
+  if (!id) return null;
+  const row = await db
+    .select({ id: appointments.id })
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.familyId, familyId)))
+    .get();
+  if (!row) throw new AppError("ไม่พบนัดหมายนี้");
+  return id;
+}
+
+/**
+ * ยืนยันว่าลูกคนนี้เป็นของครอบครัวนี้ — childId มาจาก form ของ client
+ *
+ * ถ้าไม่เช็ค คนที่เดา id ได้จะแปะรูปเข้า timeline ของลูกครอบครัวอื่นได้
+ * (เขียนได้ ทั้งที่อ่านไม่ได้) เป็นช่องเดียวกับที่ assertAppointment ปิดอยู่
+ */
+async function assertChild(db: Db, familyId: string, id: string | null) {
+  if (!id) return null;
+  const row = await db
+    .select({ id: children.id })
+    .from(children)
+    .where(and(eq(children.id, id), eq(children.familyId, familyId)))
+    .get();
+  if (!row) throw new AppError("ไม่พบข้อมูลลูกคนนี้");
+  return id;
+}
+
+/**
+ * เพิ่มรูปเข้าอัลบั้ม — รับได้หลายรูปต่อครั้ง
+ *
+ * client ย่อรูปเป็น webp ให้แล้ว แต่ฝั่งนี้ยังตรวจซ้ำทั้งชนิดและขนาด
+ * เพราะ client แก้ได้ และโควตาเป็นเรื่องที่พลาดไม่ได้
+ */
+/** นามสกุลจากชนิดไฟล์ — รายการเดียวกับ ALLOWED */
+const extOf = (type: string) =>
+  type === "image/jpeg" ? "jpg" : type === "image/png" ? "png" : "webp";
+
+export const addPhotos = editorAction
+  .metadata({ name: "addPhotos" })
+  .inputSchema(z.instanceof(FormData))
+  .action(async ({ parsedInput: fd, ctx }) => {
+    const files = fd.getAll("files").filter((f): f is File => f instanceof File);
+    if (files.length === 0) throw new AppError("ยังไม่ได้เลือกรูป");
+    if (files.length > MAX_PER_BATCH) throw new AppError(`เพิ่มได้ครั้งละไม่เกิน ${MAX_PER_BATCH} รูป`);
+
+    const takenAt = String(fd.get("takenAt") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(takenAt)) throw new AppError("วันที่ถ่ายไม่ถูกต้อง");
+
+    const type = String(fd.get("type") ?? "other");
+    // ใบเสร็จห้ามเข้าทางนี้ — ถ้าเข้าได้จะเป็นไฟล์ที่ไม่ขึ้นในอัลบั้มและไม่ผูกกับนัด
+    // คือหายไปจากทุกหน้าแต่ยังกินโควตา
+    if (!ALBUM_PHOTO_TYPES.includes(type as (typeof ALBUM_PHOTO_TYPES)[number])) {
+      throw new AppError("ประเภทรูปไม่ถูกต้อง");
+    }
+    const caption = String(fd.get("caption") ?? "").trim().slice(0, 500) || null;
+    const pinned = fd.get("pinned") === "true";
+    const logId = (fd.get("logId") as string) || null;
+    const appointmentId = await assertAppointment(
+      ctx.db,
+      ctx.familyId,
+      (fd.get("appointmentId") as string) || null,
+    );
+
+    const childId = await assertChild(ctx.db, ctx.familyId, (fd.get("childId") as string) || null);
+    /** รูปของลูกไม่มี "สัปดาห์ที่" — ช่องอายุคำนวณจากวันเกิดตอนแสดงผล
+     *  ถ้าปล่อยให้มี week ติดมาด้วย รูปจะไปโผล่ในอัลบั้มครรภ์พร้อมกัน */
+    const week = childId ? null : await weekOfTakenAt(ctx.db, ctx.familyId, takenAt);
+
+    const { env } = await getCloudflareContext({ async: true });
+    await sweepOrphanMedia(ctx.db, env.PHOTOS_BUCKET, ctx.familyId);
+    const created: string[] = [];
+
+    for (const [i, file] of files.entries()) {
+      if (!ALLOWED.includes(file.type)) throw new AppError("รองรับเฉพาะไฟล์ภาพ (webp / jpeg / png)");
+      if (file.size > MAX_FILE_BYTES) throw new AppError(`มีไฟล์ที่ใหญ่เกินกำหนด`);
+
+      const id = crypto.randomUUID();
+      /**
+       * นามสกุลตามชนิดไฟล์จริง ไม่ fix เป็น .webp
+       *
+       * Safari เข้ารหัส webp ไม่ได้ ฝั่ง client จึงส่ง jpeg มาแทน การตั้งชื่อ
+       * เป็น .webp ทั้งที่เนื้อในเป็น jpeg ทำให้ key โกหกเนื้อหา ซึ่งจะกลับมา
+       * กัดตอนมีอะไรอ่าน key เพื่อเดาชนิดไฟล์
+       */
+      const key = `family/${ctx.familyId}/photos/${id}.${extOf(file.type)}`;
+      try {
+        await putObject(ctx.db, env.PHOTOS_BUCKET, {
+          bucketName: "photos",
+          key,
+          body: await file.arrayBuffer(),
+          contentType: file.type,
+          kind: "photo",
+          familyId: ctx.familyId,
+          uploadedBy: ctx.user.id,
+        });
+      } catch (e) {
+        if (e instanceof StorageQuotaError) {
+          // บอกให้ชัดว่าอัปโหลดสำเร็จไปกี่รูปก่อนเต็ม จะได้ไม่ต้องเดา
+          throw new AppError(
+            created.length
+              ? `${e.message} (เพิ่มสำเร็จ ${created.length} รูปก่อนหน้า)`
+              : e.message,
+          );
+        }
+        throw e;
+      }
+
+      await ctx.db.insert(photos).values({
+        id,
+        familyId: ctx.familyId,
+        logId,
+        week,
+        takenAt,
+        // ปักหมุดเฉพาะรูปแรกของชุด ไม่งั้นทั้งชุดจะเป็นรูปเด่นหมด
+        pinned: pinned && i === 0,
+        type: type as (typeof ALBUM_PHOTO_TYPES)[number],
+        r2Key: key,
+        caption,
+        appointmentId,
+        childId,
+        uploadedBy: ctx.user.id,
+      });
+      created.push(id);
+    }
+
+    revalidatePath("/album");
+    revalidatePath("/health");
+    revalidatePath("/appointments");
+    return { count: created.length };
+  });
+
+/**
+ * บันทึกวิดีโอที่สตรีมขึ้น R2 ไปแล้วเข้าอัลบั้ม — ขาที่สองของ /api/media/video
+ *
+ * ไฟล์ขึ้นไปก่อนแล้ว ตรงนี้ทำสองอย่าง: ตรวจว่า key นั้นเป็นของครอบครัวนี้จริง
+ * และแนบหน้าปกที่เบราว์เซอร์ดึงเฟรมมาให้ (server สร้างเองไม่ได้)
+ *
+ * ที่ต้องแยกสองขาเพราะ metadata เป็นข้อมูลสุขภาพ ส่งไปกับไฟล์ใน query string
+ * ไม่ได้ (จะไปโผล่ใน access log) และ Server Action ก็รับไฟล์ 40 MB ไม่ไหว
+ */
+export const addVideo = editorAction
+  .metadata({ name: "addVideo" })
+  .inputSchema(z.instanceof(FormData))
+  .action(async ({ parsedInput: fd, ctx }) => {
+    const key = String(fd.get("key") ?? "");
+    const takenAt = String(fd.get("takenAt") ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(takenAt)) throw new AppError("วันที่ถ่ายไม่ถูกต้อง");
+
+    const type = String(fd.get("type") ?? "other");
+    // ใบเสร็จห้ามเข้าทางนี้ — ถ้าเข้าได้จะเป็นไฟล์ที่ไม่ขึ้นในอัลบั้มและไม่ผูกกับนัด
+    // คือหายไปจากทุกหน้าแต่ยังกินโควตา
+    if (!ALBUM_PHOTO_TYPES.includes(type as (typeof ALBUM_PHOTO_TYPES)[number])) {
+      throw new AppError("ประเภทไฟล์ไม่ถูกต้อง");
+    }
+    // null = เบราว์เซอร์ของคนอัปอ่านความยาวไม่ได้ (มักเป็น .mov ที่เข้ารหัส HEVC)
+    // ไม่ใช่ข้อผิดพลาด แค่ไม่รู้ — เพดานที่ยังบังคับได้จริงคือขนาดไฟล์
+    const rawDuration = Number(fd.get("durationMs") ?? 0);
+    const durationMs = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : null;
+    const caption = String(fd.get("caption") ?? "").trim().slice(0, 500) || null;
+    const videoChildId = await assertChild(ctx.db, ctx.familyId, (fd.get("childId") as string) || null);
+    const logId = (fd.get("logId") as string) || null;
+    const appointmentId = await assertAppointment(
+      ctx.db,
+      ctx.familyId,
+      (fd.get("appointmentId") as string) || null,
+    );
+
+    const { env } = await getCloudflareContext({ async: true });
+
+    // key ต้องเป็นของครอบครัวนี้และยังไม่ถูกผูกกับแถวไหน
+    // ไม่ตรวจ = ส่ง key ของครอบครัวอื่นมาแล้วดึงคลิปเขาเข้าอัลบั้มเราได้
+    const obj = await ctx.db
+      .select({ key: storageObjects.key })
+      .from(storageObjects)
+      .where(
+        and(
+          eq(storageObjects.key, key),
+          eq(storageObjects.familyId, ctx.familyId),
+          eq(storageObjects.kind, "video"),
+        ),
+      )
+      .get();
+    if (!obj) throw new AppError("ไม่พบไฟล์ที่อัปโหลดไว้ ลองอัปโหลดใหม่อีกครั้ง");
+
+    const already = await ctx.db
+      .select({ id: photos.id })
+      .from(photos)
+      .where(and(eq(photos.r2Key, key), eq(photos.familyId, ctx.familyId)))
+      .get();
+    if (already) throw new AppError("คลิปนี้ถูกบันทึกไปแล้ว");
+
+    // เพดานความยาวต้องบังคับฝั่งนี้ด้วย ฝั่ง client แก้ได้
+    // ถ้าไม่ผ่าน ลบไฟล์ทิ้งเลย ไม่ปล่อยให้ค้างกินโควตาของทุกครอบครัว
+    if (durationMs != null && durationMs > MAX_VIDEO_MS) {
+      await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
+      throw new AppError(`คลิปยาวเกิน ${MAX_VIDEO_MS / 1000} วินาที`);
+    }
+
+    const id = crypto.randomUUID();
+
+    /**
+     * หน้าปกมีก็ต่อเมื่อเบราว์เซอร์ของคนอัปถอดรหัสไฟล์ได้
+     *
+     * เดิมบังคับว่าต้องมี แล้วปฏิเสธถ้าไม่มี ซึ่งแปลว่า .mov ที่เครื่องอ่านไม่ได้
+     * จะอัปไม่ได้เลย — ขัดกับที่ตกลงว่าต้องอัป .mov ได้
+     * ไม่มีหน้าปกก็ยังเป็นไทล์สีเข้มที่บอกได้ว่าเป็นคลิป (photo-tile รองรับแล้ว)
+     */
+    let thumbKey: string | null = null;
+    const poster = fd.get("poster");
+    // รับทุกชนิดที่อนุญาต ไม่ใช่เฉพาะ webp — Safari ส่ง jpeg มาเพราะเข้ารหัส
+    // webp ไม่ได้ ถ้าเช็คแคบไว้ หน้าปกของคนใช้ iPhone จะถูกทิ้งเงียบๆ
+    if (poster instanceof File && ALLOWED.includes(poster.type) && poster.size > 0) {
+      thumbKey = `family/${ctx.familyId}/posters/${id}.${extOf(poster.type)}`;
+      try {
+        await putObject(ctx.db, env.PHOTOS_BUCKET, {
+          bucketName: "photos",
+          key: thumbKey,
+          body: await poster.arrayBuffer(),
+          contentType: poster.type,
+          kind: "photo",
+          familyId: ctx.familyId,
+          uploadedBy: ctx.user.id,
+        });
+      } catch (e) {
+        await deleteObject(ctx.db, env.PHOTOS_BUCKET, key);
+        if (e instanceof StorageQuotaError) throw new AppError(e.message);
+        throw e;
+      }
+    }
+
+    await ctx.db.insert(photos).values({
+      id,
+      familyId: ctx.familyId,
+      logId,
+      week: videoChildId ? null : await weekOfTakenAt(ctx.db, ctx.familyId, takenAt),
+      childId: videoChildId,
+      takenAt,
+      type: type as (typeof ALBUM_PHOTO_TYPES)[number],
+      mediaKind: "video",
+      durationMs,
+      r2Key: key,
+      thumbKey,
+      caption,
+      appointmentId,
+      uploadedBy: ctx.user.id,
+    });
+
+    revalidatePath("/album");
+    revalidatePath("/appointments");
+    return { id };
+  });
+
+export const deletePhoto = editorAction
+  .metadata({ name: "deletePhoto" })
+  .inputSchema(z.object({ id: z.string().min(1) }))
+  .action(async ({ parsedInput, ctx }) => {
+    const row = await ctx.db
+      .select({ r2Key: photos.r2Key, thumbKey: photos.thumbKey })
+      .from(photos)
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)))
+      .get();
+    if (!row) throw new AppError("ไม่พบรูปนี้");
+
+    const { env } = await getCloudflareContext({ async: true });
+    // ลบไฟล์ก่อน แล้วค่อยลบแถว — ถ้าสลับกันแล้วพังกลางทางจะเหลือไฟล์กำพร้ากินโควตา
+    await deleteObject(ctx.db, env.PHOTOS_BUCKET, row.r2Key);
+    // วิดีโอมีหน้าปกเป็นอีกไฟล์ ลืมลบแล้วมันจะค้างอยู่ตลอดไปโดยไม่มีอะไรอ้างถึง
+    if (row.thumbKey) await deleteObject(ctx.db, env.PHOTOS_BUCKET, row.thumbKey);
+    await ctx.db
+      .delete(photos)
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)));
+
+    revalidatePath("/album");
+    // ถ้ารูปที่ลบเป็นหน้าปกอยู่ FK จะ set null ให้เอง แต่หน้าแรกที่ cache ไว้ยังโชว์รูปเดิม
+    revalidatePath("/dashboard");
+    return { ok: true };
+  });
+
+/**
+ * ตั้ง/เอาออก รูปหน้าปกของการ์ดอายุครรภ์ — เลือกจากรูปที่อยู่ในอัลบั้มแล้วเท่านั้น
+ *
+ * ไม่มีทางอัปโหลดรูปหน้าปกโดยตรง ตั้งใจให้มีทางเดียว: อัปเข้าอัลบั้มก่อน แล้วค่อยเลือก
+ * ไม่งั้นจะมีไฟล์ที่กินโควตาแต่ไม่โผล่ในอัลบั้มให้ลบ
+ */
+export const setCoverPhoto = editorAction
+  .metadata({ name: "setCoverPhoto" })
+  .inputSchema(z.object({ id: z.string().min(1).nullable() }))
+  .action(async ({ parsedInput, ctx }) => {
+    let coverPhotoId: string | null = null;
+
+    if (parsedInput.id) {
+      const row = await ctx.db
+        .select({
+          id: photos.id,
+          mediaKind: photos.mediaKind,
+          thumbKey: photos.thumbKey,
+          type: photos.type,
+        })
+        .from(photos)
+        .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)))
+        .get();
+      if (!row) throw new AppError("ไม่พบรูปนี้");
+      // ใบเสร็จมีชื่อคนไข้กับรายการรักษาอยู่บนรูป ขึ้นหน้าแรกไม่ได้
+      if (row.type === "receipt") throw new AppError("ใบเสร็จตั้งเป็นรูปหน้าปกไม่ได้");
+      // คลิปที่ถอดเฟรมหน้าปกไม่ได้ตอนอัป จะไม่มีรูปให้เอามาแสดง
+      if (row.mediaKind === "video" && !row.thumbKey) {
+        throw new AppError("คลิปนี้ไม่มีภาพหน้าปก ตั้งเป็นรูปหน้าปกไม่ได้");
+      }
+      coverPhotoId = row.id;
+    }
+
+    // แถว profile อาจยังไม่มีถ้ายังไม่ได้ตั้งวันตั้งครรภ์ — upsert ไม่งั้น update จะเงียบไปเฉยๆ
+    await ctx.db
+      .insert(pregnancyProfiles)
+      .values({ familyId: ctx.familyId, coverPhotoId })
+      .onConflictDoUpdate({
+        target: pregnancyProfiles.familyId,
+        set: { coverPhotoId, updatedAt: new Date().toISOString() },
+      });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/album");
+    return { coverPhotoId };
+  });
+
+/**
+ * แก้ประเภทของไฟล์ในอัลบั้ม
+ *
+ * ใบเสร็จเปลี่ยนไม่ได้ และเปลี่ยนเป็นใบเสร็จก็ไม่ได้ — ใบเสร็จผูกกับนัดหมาย
+ * และถูกกันออกจากอัลบั้มโดยตั้งใจ (ดูคอมเมนต์ของ PHOTO_TYPES) ถ้าเปิดให้สลับ
+ * ไฟล์จะหายจากหน้านัดไปโผล่ในอัลบั้ม หรือหายจากอัลบั้มไปโผล่ใต้นัดที่ไม่เกี่ยวกัน
+ */
+export const setPhotoType = editorAction
+  .metadata({ name: "setPhotoType" })
+  .inputSchema(
+    z.object({
+      id: z.string().min(1),
+      type: z.enum(ALBUM_PHOTO_TYPES),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    const row = await ctx.db
+      .select({ type: photos.type })
+      .from(photos)
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)))
+      .get();
+    if (!row) throw new AppError("ไม่พบไฟล์นี้");
+    if (row.type === "receipt") throw new AppError("ใบเสร็จเปลี่ยนประเภทไม่ได้");
+
+    await ctx.db
+      .update(photos)
+      .set({ type: parsedInput.type })
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)));
+
+    revalidatePath("/album");
+    revalidatePath(`/album/${parsedInput.id}`);
+    return { type: parsedInput.type };
+  });
+
+export const togglePin = editorAction
+  .metadata({ name: "togglePin" })
+  .inputSchema(z.object({ id: z.string().min(1), pinned: z.boolean() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const res = await ctx.db
+      .update(photos)
+      .set({ pinned: parsedInput.pinned })
+      .where(and(eq(photos.id, parsedInput.id), eq(photos.familyId, ctx.familyId)));
+    if (!res.meta.changes) throw new AppError("ไม่พบรูปนี้");
+    revalidatePath("/album");
+    return { ok: true };
+  });

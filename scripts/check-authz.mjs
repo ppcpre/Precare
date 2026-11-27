@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+/**
+ * ตรวจว่าโค้ดยังตรงกับ permission matrix ใน docs/architecture.md
+ *
+ * D1 ไม่มี row-level security ความปลอดภัยทั้งหมดอยู่ที่โค้ด
+ * ไฟล์นี้จึงกันการเพี้ยนเชิงโครงสร้าง 3 อย่าง:
+ *   1) ทุกหน้าในโซนแอปต้องมีด่านตรวจสิทธิ์
+ *   2) หน้า/action ที่กำหนดไว้ว่าต้อง owner หรือ editor ต้องใช้ระดับนั้นจริง
+ *   3) ห้ามมี action ที่แตะข้อมูล family แต่ใช้แค่ authAction (ล็อกอินก็พอ)
+ *   4) ตารางที่แถวเป็นของคนใดคนหนึ่งในครอบครัว ต้องกรองด้วย user.id ด้วย
+ *      ไม่ใช่ familyId อย่างเดียว — ไม่งั้นสมาชิกคนหนึ่งแก้ของอีกคนได้
+ *
+ * รันอัตโนมัติผ่าน `npm run lint`
+ */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ใช้ fileURLToPath ไม่ใช่ .pathname — ไม่งั้น path ที่มีวงเล็บหรือช่องว่างจะถูก percent-encode
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const fail = [];
+
+/** ระดับสิทธิ์ขั้นต่ำที่แต่ละหน้าต้องบังคับ — ที่มา: architecture.md §2 */
+const PAGE_RULES = {
+  "family/invite": "owner",
+  "profile/pregnancy": "owner",
+  "health/new": "editor",
+  "health/[id]/edit": "editor",
+  "appointments/new": "editor",
+  "appointments/[id]/edit": "editor",
+  "album/upload": "editor",
+  "baby/pump": "editor",
+  "baby/[id]/meds/new": "editor",
+  "baby/[id]/meds/[mid]": "editor",
+};
+/** หน้าที่แก้ข้อมูลของตัวเอง ไม่ผูกกับ family จึงใช้แค่ session */
+// หน้าที่ผูกกับ "ผู้ใช้" ไม่ใช่ "ครอบครัว" — ใช้ getSessionUser พอ
+// profile/privacy ต้องอยู่ในลิสต์นี้ เพราะคนที่ยังไม่มีครอบครัวก็ต้องลบบัญชี
+// และดาวน์โหลดข้อมูลของตัวเองได้ ถ้าใช้ requireFamilyContext จะถูกเด้งไป onboarding
+const SESSION_ONLY_PAGES = new Set(["profile/edit", "profile/privacy", "profile/password"]);
+
+/**
+ * หน้าที่ไม่ต้องมีด่านตรวจสิทธิ์เลย — มีได้เฉพาะหน้าที่ **ไม่อ่านข้อมูลของใครเลย**
+ *
+ * /danger เป็นหน้าเลือกว่าใครมีอาการ เนื้อหาเป็น static ทั้งหมด ไม่แตะ D1
+ * และต้องไม่เด้งไป onboarding เด็ดขาด — คนที่ยังตั้งค่าครอบครัวไม่เสร็จแล้วกด
+ * ปุ่มฉุกเฉิน ต้องได้เบอร์ 1669 ไม่ใช่หน้าตั้งค่า
+ *
+ * ⚠️ ห้ามใส่หน้าที่อ่านข้อมูลผู้ใช้ลงในลิสต์นี้ — /danger/[group] อ่านเบอร์
+ *    โรงพยาบาลของครอบครัว จึงยังต้องผ่าน requireFamilyContext ตามปกติ
+ */
+const PUBLIC_IN_APP_PAGES = new Set(["danger"]);
+
+/** action ที่ต้องใช้ client ระดับไหน */
+const ACTION_RULES = {
+  "family.ts": ["ownerAction", "memberAction", "authAction"],
+  "invites.ts": ["ownerAction", "authAction"],
+  "pregnancy.ts": ["ownerAction"],
+  "weekly-logs.ts": ["editorAction", "memberAction"],
+  "appointments.ts": ["editorAction"],
+  "onboarding.ts": ["authAction"],
+  "profile.ts": ["authAction"],
+  "photos.ts": ["editorAction"],
+  "costs.ts": ["editorAction"],
+  "kicks.ts": ["editorAction"],
+  // อาหารเป็นบันทึกของครอบครัว แก้ได้เฉพาะคนที่มีสิทธิ์เขียน
+  "food.ts": ["editorAction"],
+  // ยา/วิตามินเป็นของคนคนเดียว — คนอื่นในครอบครัวไม่เห็นด้วยซ้ำ ไม่ใช่แค่แก้ไม่ได้
+  "medications.ts": ["editorAction"],
+  // ลูกเป็นข้อมูลของครอบครัว ทุกคนที่เขียนได้แก้ได้ แต่ viewer ต้องแก้ไม่ได้
+  "children.ts": ["editorAction"],
+  // บันทึกประจำวันลูก (กิน ผ้าอ้อม นอน ปั๊ม) — ของครอบครัว viewer ดูได้อย่างเดียว
+  "baby-log.ts": ["editorAction"],
+  // เตือนบันทึกลูกเป็นของคนตั้งคนเดียว viewer ตั้งให้ตัวเองได้ (ไม่แก้ข้อมูลครอบครัว)
+  "baby-reminder.ts": ["memberAction"],
+  // ยาและไข้ของลูก — ของครอบครัว ทุกคนเห็น viewer บันทึกไม่ได้
+  "child-care.ts": ["editorAction"],
+  "visit.ts": ["editorAction"],
+  "labor.ts": ["editorAction"],
+  "receipts.ts": ["editorAction"],
+  // push ผูกกับ "ผู้ใช้" ไม่ใช่ family — endpoint เป็นของเครื่องแต่ละคน
+  "push.ts": ["authAction"],
+  // consent.ts แตะข้อมูลของ "ผู้ใช้" ไม่ใช่ของ family จึงเป็น authAction ถูกแล้ว
+  // การลบบัญชีตรวจสิทธิ์ครอบครัวเองภายใน (ห้ามลบถ้าเป็นเจ้าของที่ยังมีสมาชิกอื่น)
+  "consent.ts": ["authAction"],
+};
+
+function walk(dir) {
+  const out = [];
+  for (const e of readdirSync(dir)) {
+    const p = join(dir, e);
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else out.push(p);
+  }
+  return out;
+}
+
+// 1) ทุกหน้าในโซนแอปต้องมีด่าน
+const appDir = join(ROOT, "src/app/(app)");
+for (const f of walk(appDir).filter((p) => p.endsWith("page.tsx"))) {
+  const rel = f.slice(appDir.length + 1).replace("/page.tsx", "");
+  const src = readFileSync(f, "utf8");
+  const m = src.match(/requireFamilyContext\("(\w+)"\)/);
+
+  if (!m) {
+    if (PUBLIC_IN_APP_PAGES.has(rel)) continue;
+    if (!SESSION_ONLY_PAGES.has(rel)) {
+      fail.push(`หน้า /${rel} ไม่มีด่านตรวจสิทธิ์ (requireFamilyContext)`);
+    } else if (!src.includes("getSessionUser")) {
+      fail.push(`หน้า /${rel} ไม่ได้เช็ค session เลย`);
+    }
+    continue;
+  }
+  const expected = PAGE_RULES[rel] ?? "viewer";
+  if (m[1] !== expected) {
+    fail.push(`หน้า /${rel} ใช้ requireFamilyContext("${m[1]}") แต่ควรเป็น "${expected}"`);
+  }
+}
+
+// 2) action ต้องใช้ client ตามที่กำหนด
+const actionsDir = join(ROOT, "src/actions");
+for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
+  const src = readFileSync(join(actionsDir, f), "utf8");
+  const allowed = ACTION_RULES[f];
+  if (!allowed) {
+    fail.push(`มีไฟล์ action ใหม่ ${f} ที่ยังไม่ได้ประกาศกฎใน scripts/check-authz.mjs`);
+    continue;
+  }
+  for (const used of src.matchAll(/^export const \w+ = (\w+Action)/gm)) {
+    if (!allowed.includes(used[1])) {
+      fail.push(`${f} ใช้ ${used[1]} ซึ่งไม่อยู่ในกฎ [${allowed.join(", ")}]`);
+    }
+  }
+}
+
+// 3) ทุก action ที่แตะข้อมูล family ต้องกรอง familyId ด้วยเสมอ
+for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
+  const src = readFileSync(join(actionsDir, f), "utf8");
+  for (const stmt of src.matchAll(/ctx\.db\s*\n?\s*\.(update|delete)\(([^)]+)\)/g)) {
+    const after = src.slice(stmt.index, stmt.index + 700);
+    if (!after.includes("familyId") && !after.includes("user.id")) {
+      fail.push(`${f}: ${stmt[1]}(${stmt[2].trim()}) ไม่ได้กรองด้วย familyId หรือ user.id`);
+    }
+  }
+}
+
+/**
+ * 4) ตารางที่แถวเป็น "ของคนใดคนหนึ่ง" ไม่ใช่ของครอบครัวร่วมกัน
+ *
+ * editorAction กันได้แค่ viewer ไม่ได้กันสมาชิกคนหนึ่งไปแก้ของอีกคน
+ * ซึ่งเจ้าตัวจะไม่รู้เลยว่าเลขเปลี่ยน และยอดของเขาก็ผิดไปตลอด
+ * การซ่อนปุ่มใน UI ไม่นับเป็นด่าน เพราะยิง action ตรงๆ ได้
+ */
+const PER_USER_TABLES = ["foodLogs", "medications"];
+for (const f of readdirSync(actionsDir).filter((n) => n.endsWith(".ts"))) {
+  const src = readFileSync(join(actionsDir, f), "utf8");
+  for (const t of PER_USER_TABLES) {
+    for (const stmt of src.matchAll(
+      new RegExp(`ctx\\.db\\s*\\n?\\s*\\.(update|delete)\\(${t}\\)`, "g"),
+    )) {
+      const after = src.slice(stmt.index, stmt.index + 700);
+      if (!after.includes(`${t}.userId, ctx.user.id`)) {
+        fail.push(`${f}: ${stmt[1]}(${t}) ไม่ได้กรองด้วย ${t}.userId, ctx.user.id`);
+      }
+    }
+    // เจ้าของแถวต้องมาจาก session ไม่ใช่จาก input ที่ client ส่งมาได้
+    for (const stmt of src.matchAll(
+      new RegExp(`ctx\\.db\\.insert\\(${t}\\)`, "g"),
+    )) {
+      const after = src.slice(stmt.index, stmt.index + 900);
+      if (!after.includes("userId: ctx.user.id")) {
+        fail.push(`${f}: insert(${t}) ไม่ได้ตั้ง userId: ctx.user.id`);
+      }
+    }
+  }
+}
+
+if (fail.length) {
+  console.error("❌ ตรวจสิทธิ์ไม่ผ่าน:\n" + fail.map((f) => "   - " + f).join("\n"));
+  process.exit(1);
+}
+console.log("✅ authz check ผ่าน — โค้ดตรงกับ permission matrix");

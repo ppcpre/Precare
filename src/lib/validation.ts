@@ -1,0 +1,153 @@
+/** Zod schema — derive จาก Drizzle ตรงไหนได้ derive ตรงนั้น จะได้ไม่ต้อง sync มือ */
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+import { weeklyLogs, appointments } from "@/db/schema";
+import { MOODS, MAX_REMINDERS } from "@/db/schema";
+import { isValidDay, localToday } from "@/lib/local-time";
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ไม่ถูกต้อง");
+
+/**
+ * ส่วนสูงและน้ำหนักก่อนตั้งครรภ์ — ว่างได้ แต่ถ้ากรอกต้องอยู่ในช่วงที่เป็นไปได้
+ *
+ * ช่วงกว้างไว้โดยตั้งใจ หน้าที่ของมันคือกันพิมพ์ผิดแบบคนละหลัก (เช่น 1600 ซม.
+ * หรือ 5 กก.) ไม่ใช่ตัดสินว่าร่างกายแบบไหน "ปกติ" ซึ่งไม่ใช่เรื่องของแอป
+ */
+export const heightCmInput = z
+  .number()
+  .min(120, "ส่วนสูงต้องอยู่ระหว่าง 120–230 ซม.")
+  .max(230, "ส่วนสูงต้องอยู่ระหว่าง 120–230 ซม.")
+  .nullable()
+  .optional();
+
+export const weightKgInput = z
+  .number()
+  .min(25, "น้ำหนักต้องอยู่ระหว่าง 25–300 กก.")
+  .max(300, "น้ำหนักต้องอยู่ระหว่าง 25–300 กก.")
+  .nullable()
+  .optional();
+
+
+export const weeklyLogInput = createInsertSchema(weeklyLogs)
+  // 4 ฟิลด์นี้ server เป็นคนใส่ ไม่รับจาก client เด็ดขาด
+  .omit({ id: true, familyId: true, recordedBy: true, createdAt: true })
+  .extend({
+    week: z.number().int().min(1).max(45),
+    weight: z.number().min(20).max(200).nullable().optional(),
+    bpSystolic: z.number().int().min(50).max(260).nullable().optional(),
+    bpDiastolic: z.number().int().min(30).max(180).nullable().optional(),
+    mood: z.enum(MOODS).nullable().optional(),
+    note: z.string().max(2000).nullable().optional(),
+    logDate: isoDate,
+    // รับเป็น array แล้วค่อย stringify ตอนเขียนลง D1
+    /**
+     * อาการ — มีทั้งชุดสำเร็จและที่ผู้ใช้พิมพ์เอง
+     *
+     * ตัดช่องว่างหัวท้าย ทิ้งตัวว่าง และตัดตัวซ้ำตั้งแต่ชั้นนี้ ไม่ใช่ฝั่ง UI
+     * อย่างเดียว เพราะ Server Action ยิงตรงได้ และ "  ปวดหลัง  " กับ "ปวดหลัง"
+     * ที่กลายเป็นคนละอาการจะทำให้ชิปในครั้งถัดไปซ้ำกันสองอัน
+     */
+    symptoms: z
+      .array(z.string().max(50))
+      .max(20)
+      .default([])
+      .transform((list) => [...new Set(list.map((s) => s.trim()).filter(Boolean))]),
+  });
+
+export const appointmentInput = createInsertSchema(appointments)
+  // ตัดฟิลด์ค่าใช้จ่ายออกจากฟอร์มนัดหมาย แก้ได้ที่หน้าค่าใช้จ่ายที่เดียว
+  // ไม่งั้นมีสองทางเขียนค่าเดียวกัน แล้วต้องคอยกันไม่ให้ทับกันเอง
+  .omit({
+    id: true,
+    familyId: true,
+    createdBy: true,
+    costSatang: true,
+    claimStatus: true,
+    costNote: true,
+  })
+  .extend({
+    apptDatetime: z.string().min(10, "ต้องระบุวันและเวลา"),
+    title: z.string().max(120).nullable().optional(),
+    doctorName: z.string().max(120).nullable().optional(),
+    location: z.string().max(200).nullable().optional(),
+    note: z.string().max(2000).nullable().optional(),
+    reminderEnabled: z.boolean().default(true),
+    /**
+     * เวลาเตือน หน่วยเป็นนาทีก่อนถึงเวลานัด เลือกได้มากสุด MAX_REMINDERS ครั้ง
+     *
+     * บังคับเพดานที่นี่ด้วย ไม่ใช่แค่ใน UI — client แก้ได้ และแต่ละครั้ง
+     * เท่ากับ push หนึ่งใบต่อสมาชิกทุกคนในครอบครัว
+     *
+     * เรียงและตัดตัวซ้ำให้เลย ไม่งั้นเลือก 60 สองครั้งจะกลายเป็นเตือนซ้อนกัน
+     * (ตารางมี unique index กันไว้อีกชั้น แต่ที่นั่นจะกลายเป็น error แทนที่จะเงียบ)
+     */
+    reminderOffsets: z
+      .array(z.number().int().min(0).max(10080))
+      .max(MAX_REMINDERS, `เลือกเวลาเตือนได้มากสุด ${MAX_REMINDERS} ครั้ง`)
+      .default([60])
+      .transform((v) => [...new Set(v)].sort((a, b) => b - a)),
+    /** null = ไม่เลือกกลุ่ม แสดงเป็น "ทั่วไป" — ตรวจว่าเป็นกลุ่มของครอบครัวนี้ใน action */
+    groupId: z.string().min(1).nullable().optional(),
+  });
+
+export const onboardingInput = z
+  .object({
+    familyName: z.string().min(1, "กรุณาตั้งชื่อครอบครัว").max(80),
+    lmpDate: isoDate.nullable().optional(),
+    dueDate: isoDate.nullable().optional(),
+    heightCm: heightCmInput,
+    prePregnancyWeight: weightKgInput,
+  })
+  .refine((v) => !(v.lmpDate && v.dueDate), {
+    message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",
+  });
+
+/**
+ * เบอร์โรงพยาบาล — **ไม่ validate รูปแบบโดยตั้งใจ**
+ *
+ * ต้องรับได้ทั้ง "02-201-1000", "1415", "081 234 5678", "02-201-1000 ต่อ 2345"
+ * การบังคับรูปแบบจะทำให้คนกรอกไม่ผ่านแล้วเลิกกรอก ซึ่งแย่กว่าเบอร์ที่กดแล้วไม่ติด
+ * ตัดแค่ช่องว่างหัวท้ายและจำกัดความยาวกันข้อมูลขยะ
+ */
+const hospitalText = z
+  .string()
+  .trim()
+  .max(120)
+  .transform((v) => v || null)
+  .nullable()
+  .optional();
+
+export const pregnancyInput = z
+  .object({
+    lmpDate: isoDate.nullable(),
+    dueDate: isoDate.nullable(),
+    heightCm: heightCmInput,
+    prePregnancyWeight: weightKgInput,
+    hospitalName: hospitalText,
+    hospitalPhone: hospitalText,
+  })
+  .refine((v) => Boolean(v.lmpDate) !== Boolean(v.dueDate), {
+    message: "ระบุ LMP หรือวันคาดคลอดอย่างใดอย่างหนึ่ง",
+  });
+
+export const inviteInput = z.object({
+  email: z.string().email("รูปแบบอีเมลไม่ถูกต้อง").max(200),
+  role: z.enum(["editor", "viewer"]),
+});
+
+export const idInput = z.object({ id: z.string().min(1) });
+
+/**
+ * วันที่ของบันทึกอาหาร — ย้อนหลังได้ ล่วงหน้าไม่ได้
+ *
+ * อยู่ที่ schema ไม่ใช่แค่ `max=` ของช่องวันที่ เพราะ attribute นั้นกันได้แค่คนที่
+ * กรอกผ่านหน้าจอ Server Action คือ endpoint จริงที่ยิงตรงได้ และบันทึกวันอนาคต
+ * จะทำให้กราฟมีแท่งโผล่ไปข้างหน้า แล้วค่าเฉลี่ยของวันที่ยังไม่มาถึงถูกคิดด้วย
+ *
+ * `isValidDay` ไม่ใช่แค่ regex เพราะ 2026-02-30 ผ่าน regex แต่ไม่ใช่วันจริง
+ * (Date เลื่อนให้เป็น 2026-03-02 เงียบๆ)
+ */
+export const eatenOnInput = z
+  .string()
+  .refine(isValidDay, "วันที่ไม่ถูกต้อง")
+  .refine((d) => d <= localToday(), "บันทึกล่วงหน้าไม่ได้");

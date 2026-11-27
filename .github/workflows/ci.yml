@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    # main -> deploy.yml, dev -> deploy-dev.yml (สองตัวนั้นตรวจชุดเดียวกันอยู่แล้ว)
+    branches-ignore: [main, dev]
 
 # ยกเลิก run เก่าเมื่อ push ทับ — ประหยัด CI minutes
 concurrency:
@@ -27,6 +28,14 @@ jobs:
           else
             echo "app=false" >> "$GITHUB_OUTPUT"
             echo "::notice::ยังไม่มี package.json — ข้ามขั้น build/test (repo อยู่ในเฟสออกแบบ)"
+            exit 0
+          fi
+          # ยังไม่ได้ตั้ง vitest (T6.x) — ข้าม step test ไปก่อน อย่าให้ pipeline แดงเพราะ script หาย
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            echo "test=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "test=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::package.json ยังไม่มี script \"test\" — ข้ามขั้นเทสต์"
           fi
 
       - uses: actions/setup-node@v7
@@ -49,30 +58,103 @@ jobs:
 
       # รันใน workerd จริง ต่อ binding D1 จริง (@cloudflare/vitest-pool-workers)
       - name: Test
-        if: steps.probe.outputs.app == 'true'
+        if: steps.probe.outputs.test == 'true'
         run: npm test -- --run
 
       - name: Build
         if: steps.probe.outputs.app == 'true'
         run: npx opennextjs-cloudflare build
 
+      # E2E รันกับ worker ที่ build ออกมาจริง ไม่ใช่ `next dev`
+      # จับบั๊กชั้น DOM กับชั้น runtime ที่ unit test ใน workerd แตะไม่ถึง
+      # (เคยหลุดขึ้น production มาแล้ว — ดู docs/tech-notes.md §3.6)
+      # webkit ด้วย — คนใช้จริงอยู่บน iPhone และเอนจินนี้ต่างจาก Chromium จริง
+      # (Safari เข้ารหัส webp ไม่ได้ ซึ่งทำให้อัปรูปจาก iPhone พังมาแล้ว)
+      - name: Install Playwright browsers
+        if: steps.probe.outputs.app == 'true'
+        run: npx playwright install --with-deps chromium webkit
+
+      # ลองใหม่หนึ่งรอบด้วย "เซิร์ฟเวอร์ใหม่" ก่อนตัดสินว่าแดง
+      #
+      # playwright retry ระดับเทสต์ (retries: 1) ช่วยไม่ได้ตอน wrangler dev
+      # ป่วยทั้งตัว เพราะ retry ใช้เซิร์ฟเวอร์เดิมที่กำลังพัง — เห็นมาแล้วใน run 64
+      # ที่เทสต์แดงทั้งรอบแรกและ retry พร้อม log ครบชุดของอาการใน §3.10
+      # (Unable to enqueue / Network connection lost / code had hung)
+      # ส่วนรอบใหม่ทั้งรอบจะปิดเซิร์ฟเวอร์เดิมแล้วเปิดใหม่ทั้งหมด
+      #
+      # ของที่พังจริงจะแดงทั้งสองรอบ จึงไม่ได้กลบบั๊ก — แต่ขึ้น warning ไว้ทุกครั้ง
+      # ที่รอบแรกล้ม เพื่อให้เห็นว่าอาการนี้ถี่แค่ไหน ไม่ใช่เงียบหายไป
+      - name: E2E
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          for attempt in 1 2; do
+            if npx playwright test; then
+              if [ "$attempt" = 2 ]; then
+                echo "::warning title=E2E ผ่านในรอบที่สอง::รอบแรกล้ม แล้วผ่านตอนเปิดเซิร์ฟเวอร์ใหม่ — อาการไม่เสถียรของ wrangler dev (docs/tech-notes.md §3.10)"
+              fi
+              exit 0
+            fi
+            echo "::warning title=E2E รอบที่ $attempt ล้ม::กำลังลองใหม่ด้วยเซิร์ฟเวอร์ใหม่"
+          done
+          exit 1
+
+      # log ของ job อ่านผ่าน API ไม่ได้ถ้าไม่มี token แต่ annotation อ่านได้
+      # จึงยิงบรรทัดที่มีร่องรอย crash ออกมาเป็น annotation ด้วย
+      # ไม่งั้นเวลา worker ตายบน CI จะเห็นแต่ ERR_CONNECTION_REFUSED ยี่สิบอัน
+      # โดยไม่รู้ว่ามันตายเพราะอะไร แล้วต้องไปเดา — เคยเดาผิดมาสามรอบแล้ว
+      - name: log ของ wrangler ตอน E2E ล้ม
+        if: failure() && steps.probe.outputs.app == 'true'
+        run: |
+          mkdir -p wrangler-logs
+          cp ~/.config/.wrangler/logs/*.log wrangler-logs/ 2>/dev/null || true
+          for f in wrangler-logs/*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            tail -200 "$f"
+            grep -hoE '(Error|error).{0,200}' "$f" | sort -u | head -6 | while read -r line; do
+              echo "::error title=wrangler::$line"
+            done
+          done
+          free -m || true
+          dmesg 2>/dev/null | grep -i -m5 "killed process\|out of memory" || true
+
+      - name: เก็บ report ตอน E2E ล้ม
+        if: failure() && steps.probe.outputs.app == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+            wrangler-logs/
+          retention-days: 7
+
       # Workers free plan จำกัด worker script ที่ 3 MiB (gzip) — ให้ PR แดงก่อนชน
+      #
+      # ต้องอ่านจาก `wrangler deploy --dry-run` เท่านั้น
+      # อย่าไป gzip .open-next/worker.js ตรงๆ — ไฟล์นั้นเป็นแค่ entry ~2 KB
+      # ตัวจริงอยู่ใน .open-next/server-functions/ ที่ wrangler รวมให้ตอน bundle
       - name: Bundle size gate
         if: steps.probe.outputs.app == 'true'
         run: |
-          WORKER=.open-next/worker.js
-          [ -f "$WORKER" ] || { echo "::error::ไม่พบ $WORKER"; exit 1; }
-          SIZE=$(gzip -c "$WORKER" | wc -c | tr -d ' ')
-          LIMIT=3145728      # 3 MiB — เพดานจริงของ free plan
-          WARN=2621440       # 2.5 MiB — เตือนล่วงหน้า
-          printf 'worker gzip: %s bytes (%.2f MiB)\n' "$SIZE" "$(echo "scale=2; $SIZE/1048576" | bc)"
+          OUT=$(npx wrangler deploy --dry-run 2>&1) || { echo "$OUT"; echo "::error::dry-run ล้มเหลว"; exit 1; }
+          echo "$OUT" | grep -i "Total Upload" || { echo "$OUT"; echo "::error::อ่านขนาด bundle ไม่ได้"; exit 1; }
+
+          GZIP_KIB=$(echo "$OUT" | grep -oE 'gzip: [0-9.]+ KiB' | grep -oE '[0-9.]+' | head -1)
+          LIMIT_KIB=3072   # 3 MiB — เพดานจริงของ free plan
+          WARN_KIB=2560    # 2.5 MiB — เตือนล่วงหน้า
+
+          PCT=$(awk -v a="$GZIP_KIB" -v b="$LIMIT_KIB" 'BEGIN{printf "%.1f", a/b*100}')
           echo "### Bundle size" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`$SIZE\` bytes gzip — เพดาน free plan \`$LIMIT\`" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$SIZE" -ge "$LIMIT" ]; then
-            echo "::error::เกิน 3 MiB — deploy ขึ้น free plan ไม่ได้"; exit 1
-          elif [ "$SIZE" -ge "$WARN" ]; then
-            echo "::warning::เกิน 2.5 MiB แล้ว ใกล้ชนเพดาน 3 MiB"
+          echo "gzip **${GZIP_KIB} KiB** / เพดาน ${LIMIT_KIB} KiB — ใช้ไป **${PCT}%**" >> "$GITHUB_STEP_SUMMARY"
+
+          if awk -v a="$GZIP_KIB" -v b="$LIMIT_KIB" 'BEGIN{exit !(a>=b)}'; then
+            echo "::error::bundle gzip ${GZIP_KIB} KiB เกินเพดาน 3 MiB — deploy ขึ้น free plan ไม่ได้"
+            exit 1
+          elif awk -v a="$GZIP_KIB" -v b="$WARN_KIB" 'BEGIN{exit !(a>=b)}'; then
+            echo "::warning::bundle gzip ${GZIP_KIB} KiB เกิน 2.5 MiB แล้ว ใกล้ชนเพดาน"
           fi
+          echo "bundle gzip: ${GZIP_KIB} KiB (${PCT}% ของเพดาน)"
 
   preview:
     needs: check
@@ -97,14 +179,14 @@ jobs:
       - if: steps.probe.outputs.app == 'true'
         run: npm ci && npx opennextjs-cloudflare build
 
-      # อัปโหลดเป็น version ใหม่ ได้ preview URL โดยไม่แตะ production
+      # อัปโหลดเป็น version ใหม่ของ worker `precare-dev` — ผูก D1 ของ dev ไม่แตะ production
       - id: upload
         if: steps.probe.outputs.app == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: versions upload
+          command: versions upload --env dev
 
       - name: Comment preview URL
         if: steps.probe.outputs.app == 'true'
@@ -116,7 +198,7 @@ jobs:
             const out = process.env.WRANGLER_OUTPUT || '';
             const url = (out.match(/https:\/\/[^\s]*\.workers\.dev/) || [])[0];
             const body = url
-              ? `🚀 **Preview พร้อมแล้ว**\n\n${url}\n\n_version นี้ยังไม่ได้ขึ้น production — merge เข้า \`main\` ถึงจะ deploy จริง_`
+              ? `🚀 **Preview พร้อมแล้ว**\n\n${url}\n\n_version นี้ผูกกับ \`precare-dev\` (D1 ของ dev) — merge เข้า \`dev\` ถึงจะขึ้น dev จริง, merge \`dev\` → \`main\` ถึงจะขึ้น production_`
               : `⚠️ อัปโหลด version แล้วแต่หา preview URL ในผลลัพธ์ไม่เจอ — ดูใน log ของ job`;
             const { data: comments } = await github.rest.issues.listComments({
               ...context.repo, issue_number: context.issue.number,

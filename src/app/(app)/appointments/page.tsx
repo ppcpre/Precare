@@ -1,0 +1,141 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { CalendarDays, Plus } from "lucide-react";
+import { ButtonLink } from "@/components/ui/button";
+import { Fab } from "@/components/ui/fab";
+import { Capsule } from "@/components/ui/capsule";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AppointmentCard } from "@/components/appointments/card";
+import { NotifyBanner } from "@/components/appointments/notify-banner";
+import { bucketOf, daysFromNow, isPastAppt } from "@/lib/appt-days";
+import { listAppointmentCosts, listAppointments, listChildren, requireFamilyContext } from "@/lib/queries";
+import { CostEntryButton } from "@/components/costs/entry-button";
+import { can } from "@/lib/authz";
+import { cn } from "@/lib/cn";
+import type { Appointment } from "@/types";
+
+export const metadata = { title: "นัดหมายแพทย์ · Pre Care" };
+
+export default async function AppointmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const past = tab === "past";
+
+  let ctx;
+  try {
+    ctx = await requireFamilyContext("viewer");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "UNAUTHENTICATED") redirect("/login");
+    if (msg === "NO_ACTIVE_FAMILY") redirect("/onboarding");
+    throw e;
+  }
+
+  // now มาจาก query ไม่ใช่เรียก Date.now() ใน render
+  // ดึงคู่กันไปเลย แถบค่าใช้จ่ายต้องนับทุกนัดไม่ใช่แค่แท็บที่เปิดอยู่
+  const [{ items, now }, costItems, kids] = await Promise.all([
+    listAppointments(ctx.db, ctx.familyId, past ? "past" : "upcoming"),
+    listAppointmentCosts(ctx.db, ctx.familyId),
+    listChildren(ctx.db, ctx.familyId),
+  ]);
+  const kidName = new Map(kids.map((k) => [k.id, k.name]));
+  const canWrite = can.writeRecords(ctx.role);
+
+  const groups = new Map<string, { appt: Appointment; days: number; isPast: boolean }[]>();
+  for (const a of items) {
+    const days = daysFromNow(a.apptDatetime, now);
+    const arr = groups.get(bucketOf(days)) ?? [];
+    arr.push({ appt: a, days, isPast: isPastAppt(a.apptDatetime, now) });
+    groups.set(bucketOf(days), arr);
+  }
+
+  const tabCls = (on: boolean) =>
+    cn(
+      "flex h-11 flex-1 items-center justify-center rounded-sm px-2 text-sm transition-colors",
+      on ? "bg-white font-medium text-brown-900 shadow-[var(--shadow-card)]" : "text-ink-600",
+    );
+
+  return (
+    <div className="flex flex-col gap-3 pb-20">
+      <header className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold text-ink-900">นัดหมายแพทย์</h1>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* ทางเข้ายา/วิตามิน — อยู่ที่หน้านัดหมายเพราะเป็นเรื่องเดียวกันในหัวคนใช้
+              (สิ่งที่หมอสั่งให้ทำต่อที่บ้าน) และแถบเมนูล่างเต็มห้าช่องแล้ว
+              เป็นไอคอนล้วนเพราะหัวข้อนี้มีปุ่มสามอันแล้ว ข้อความอีกอันจะล้นบนมือถือ */}
+          <Link
+            href="/medications"
+            prefetch={false}
+            aria-label="ยาและวิตามิน"
+            className="flex size-11 items-center justify-center rounded-full text-ink-600 hover:bg-cream-100"
+          >
+            <Capsule size={20} />
+          </Link>
+          <CostEntryButton items={costItems} />
+        {/* ครอบด้วย span แทนการใส่ hidden ลงบนปุ่มตรงๆ — cn() เป็นแค่ join
+            ไม่ได้ merge class ที่ชนกัน ตัวปุ่มมี inline-flex เป็น base อยู่แล้ว
+            พอเติม hidden เข้าไปทั้งคู่จะอยู่ใน class list แล้วลำดับใน CSS
+            เป็นตัวตัดสิน ซึ่ง inline-flex ชนะ ปุ่มเลยโผล่บนมือถือคู่กับ FAB */}
+        {canWrite && (
+          <span className="hidden md:block">
+            <ButtonLink href="/appointments/new" variant="secondary">
+              <Plus size={18} strokeWidth={2} />
+              เพิ่มนัดหมาย
+            </ButtonLink>
+          </span>
+        )}
+        </div>
+      </header>
+
+      <div className="flex gap-1 rounded-[10px] bg-cream-100 p-1">
+        {/* แท็บสองอันนี้อยู่ในจอเสมอ จึงถูก prefetch ทุกครั้งที่เปิดหน้า */}
+        <Link href="/appointments" prefetch={false} className={tabCls(!past)}>
+          กำลังจะถึง
+        </Link>
+        <Link href="/appointments?tab=past" prefetch={false} className={tabCls(past)}>
+          ผ่านมาแล้ว
+        </Link>
+      </div>
+
+      {!past && <NotifyBanner />}
+
+      {items.length === 0 ? (
+        <EmptyState
+          icon={CalendarDays}
+          title={past ? "ยังไม่มีนัดหมายที่ผ่านมา" : "ยังไม่มีนัดหมาย"}
+          description={
+            past
+              ? "นัดหมายที่เลยเวลาแล้วจะมาแสดงที่นี่"
+              : "เพิ่มนัดตรวจครรภ์ครั้งถัดไป แล้วเราจะเตือนคุณล่วงหน้า"
+          }
+          action={
+            canWrite && !past ? <ButtonLink href="/appointments/new">เพิ่มนัดหมาย</ButtonLink> : undefined
+          }
+        />
+      ) : (
+        [...groups].map(([bucket, list]) => (
+          <section key={bucket} className="flex flex-col gap-3">
+            <h2 className="sticky top-0 z-10 bg-cream-50 py-1 text-sm text-ink-600">{bucket}</h2>
+            {list.map(({ appt, days, isPast }) => (
+              <AppointmentCard
+                key={appt.id}
+                appt={appt}
+                days={days}
+                past={isPast}
+                canEdit={canWrite}
+                childName={appt.childId ? kidName.get(appt.childId) : undefined}
+              />
+            ))}
+          </section>
+        ))
+      )}
+
+      {canWrite && (
+        <Fab href="/appointments/new" label="เพิ่มนัดหมาย" />
+      )}
+    </div>
+  );
+}

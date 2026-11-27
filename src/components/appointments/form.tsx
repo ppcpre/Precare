@@ -1,0 +1,330 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAction } from "next-safe-action/hooks";
+import { X, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Field, Textarea } from "@/components/ui/field";
+import { Chip } from "@/components/ui/chip";
+import { MAX_REMINDERS } from "@/db/schema";
+import { GroupPicker, type CareGroupOption } from "@/components/costs/group-picker";
+import { createAppointment, updateAppointment, deleteAppointment } from "@/actions/appointments";
+import type { Appointment } from "@/types";
+
+const TITLE_SUGGESTIONS = ["ตรวจครรภ์ตามนัด", "อัลตราซาวด์", "ตรวจเลือด", "ฉีดวัคซีน"] as const;
+/** นัดของลูกส่วนใหญ่คือวัคซีนกับตรวจพัฒนาการตามสมุดสีชมพู */
+const CHILD_TITLE_SUGGESTIONS = ["ฉีดวัคซีน", "ตรวจสุขภาพเด็กดี", "ตรวจตามนัด"] as const;
+
+export type ChildOption = { id: string; name: string };
+const REMINDERS = [
+  { m: 30, label: "30 นาที" },
+  { m: 60, label: "1 ชม." },
+  { m: 180, label: "3 ชม." },
+  { m: 1440, label: "1 วัน" },
+  { m: 2880, label: "2 วัน" },
+] as const;
+
+/** แยก ISO datetime เป็นวันที่กับเวลาสำหรับ input — เก็บกลับเป็น ISO ตอน submit */
+const splitIso = (iso?: string) => {
+  if (!iso) return { d: "", t: "" };
+  const dt = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    d: `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`,
+    t: `${p(dt.getHours())}:${p(dt.getMinutes())}`,
+  };
+};
+
+export function AppointmentForm({
+  appt,
+  groups = [],
+  kids = [],
+  initialChildId = null,
+  media,
+  receipts,
+}: {
+  appt?: Appointment;
+  groups?: CareGroupOption[];
+  /** ลูกของครอบครัว — ไม่มีลูก = ไม่ขึ้นช่อง "นัดของใคร" เลย */
+  kids?: ChildOption[];
+  /** เปิดมาจากหน้าลูก (?child=) เลือกลูกคนนั้นไว้ให้ก่อน */
+  initialChildId?: string | null;
+  /** ไฟล์แนบ — เป็น server component จึงรับมาเป็น slot ไม่ได้ import เข้ามาตรงนี้ */
+  media?: React.ReactNode;
+  /**
+   * ใบเสร็จและค่าใช้จ่าย — แยก slot จาก media เพื่อวางไว้ **เหนือปุ่มลบนัด**
+   * ค่าใช้จ่ายสำคัญกว่าและไม่ควรต้องเลื่อนผ่านปุ่มลบก่อนจะเจอ
+   */
+  receipts?: React.ReactNode;
+}) {
+  const router = useRouter();
+  const init = splitIso(appt?.apptDatetime);
+
+  const [date, setDate] = useState(init.d);
+  const [time, setTime] = useState(init.t);
+  const [title, setTitle] = useState(appt?.title ?? "");
+  const [doctor, setDoctor] = useState(appt?.doctorName ?? "");
+  const [groupId, setGroupId] = useState<string | null>(appt?.groupId ?? null);
+  const [childId, setChildId] = useState<string | null>(
+    appt ? (appt.childId ?? null) : kids.some((k) => k.id === initialChildId) ? initialChildId : null,
+  );
+  const suggestions = childId ? CHILD_TITLE_SUGGESTIONS : TITLE_SUGGESTIONS;
+  const [location, setLocation] = useState(appt?.location ?? "");
+  const [remind, setRemind] = useState(appt?.reminderEnabled ?? true);
+  /** เวลาเตือน เลือกได้หลายครั้ง สูงสุด MAX_REMINDERS */
+  const [offsets, setOffsets] = useState<number[]>(appt?.reminders?.length ? appt.reminders : [60]);
+  const full = offsets.length >= MAX_REMINDERS;
+
+  const toggleOffset = (m: number) =>
+    setOffsets((prev) =>
+      prev.includes(m)
+        ? prev.filter((x) => x !== m)
+        : prev.length >= MAX_REMINDERS
+          ? prev
+          : [...prev, m].sort((a, b) => b - a),
+    );
+  const [note, setNote] = useState(appt?.note ?? "");
+
+  /**
+   * เทียบเป็นเวลาท้องถิ่นทั้งคู่ ไม่แปลงเป็น ISO/UTC
+   * apptDatetime เก็บเป็นเวลาที่โรงพยาบาลแบบไม่มี timezone อยู่แล้ว
+   * ถ้าเอาไปเทียบกับ toISOString() จะเพี้ยนไป 7 ชั่วโมงในไทย
+   */
+  const isPast = Boolean(date) && new Date(`${date}T${time || "23:59"}:00`) < new Date();
+
+  const done = () => {
+    // บันทึกนัดย้อนหลังแล้วพากลับไปแท็บ "กำลังจะถึง" ผู้ใช้จะไม่เห็นสิ่งที่เพิ่งบันทึก
+    // แล้วนึกว่าหาย ต้องพาไปแท็บที่นัดนั้นอยู่จริง
+    router.push(isPast ? "/appointments?tab=past" : "/appointments");
+    router.refresh();
+  };
+  const create = useAction(createAppointment, { onSuccess: done });
+  const update = useAction(updateAppointment, { onSuccess: done });
+  const remove = useAction(deleteAppointment, { onSuccess: done });
+
+  const pending = create.isPending || update.isPending || remove.isPending;
+  const error = create.result.serverError ?? update.result.serverError ?? remove.result.serverError;
+
+  const submit = () => {
+    const payload = {
+      // เก็บเป็นเวลาท้องถิ่นแบบไม่มี timezone — นัดหมายผูกกับเวลาที่โรงพยาบาล
+      apptDatetime: `${date}T${time}:00`,
+      title: title.trim() || null,
+      doctorName: doctor.trim() || null,
+      location: location.trim() || null,
+      note: note.trim() || null,
+      // ปิดสวิตช์ = ไม่เตือน แต่ยังเก็บเวลาที่เลือกไว้ กดเปิดใหม่แล้วได้ของเดิมคืน
+      reminderEnabled: isPast ? false : remind,
+      reminderOffsets: offsets,
+      groupId,
+      childId,
+    };
+    if (appt) update.execute({ ...payload, id: appt.id });
+    else create.execute(payload);
+  };
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-cream-50">
+      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-cream-200 bg-white px-2">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="ปิด"
+          className="flex size-11 items-center justify-center rounded-sm text-ink-600 hover:bg-cream-100"
+        >
+          <X size={22} strokeWidth={1.8} />
+        </button>
+        <h1 className="font-semibold text-ink-900">{appt ? "แก้ไขนัดหมาย" : "เพิ่มนัดหมาย"}</h1>
+      </header>
+
+      <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-5 p-4">
+        {error && (
+          <p role="alert" className="rounded-sm border border-danger bg-cream-100 px-3.5 py-3 text-sm">
+            {error}
+          </p>
+        )}
+
+        {kids.length > 0 && (
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 text-sm text-ink-600">นัดของใคร</legend>
+            <div className="flex flex-wrap gap-2">
+              {[{ id: null, name: "แม่" }, ...kids].map((k) => {
+                const on = childId === k.id;
+                return (
+                  <button
+                    key={k.id ?? "mom"}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setChildId(k.id)}
+                    className={`flex min-h-11 flex-1 items-center justify-center rounded-md px-3 text-sm ${
+                      on
+                        ? "border-[1.5px] border-brown-700 bg-brown-100 font-semibold text-ink-900"
+                        : "border border-cream-200 bg-white text-ink-900"
+                    }`}
+                  >
+                    {k.name}
+                  </button>
+                );
+              })}
+            </div>
+            {childId && (
+              <p className="text-xs text-ink-400">นัดของลูก ทุกคนในบ้านเห็นและได้รับเตือน</p>
+            )}
+          </fieldset>
+        )}
+
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <Field
+              label="วันที่"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              hint={isPast ? "นัดที่ผ่านมาแล้ว — บันทึกไว้เก็บค่าใช้จ่ายย้อนหลังได้" : undefined}
+            />
+          </div>
+          <div className="flex-1">
+            <Field
+              label="เวลา"
+              type="time"
+              step={900}
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Field
+            label="หัวข้อนัด"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={120}
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((t) => (
+              <Chip key={t} active={title === t} onClick={() => setTitle(t)}>
+                {t}
+              </Chip>
+            ))}
+          </div>
+        </div>
+
+        <GroupPicker groups={groups} value={groupId} onChange={setGroupId} />
+        {childId && !groupId && (
+          <p className="-mt-3 rounded-sm border border-cream-200 bg-cream-100 px-3 py-2.5 text-xs leading-relaxed text-ink-600">
+            ไม่ได้เลือกกลุ่ม จะใส่ไว้ในกลุ่มการรักษา &quot;ลูก&quot; ให้เอง ค่าใช้จ่ายของนัดลูกจะได้แยกยอดได้
+          </p>
+        )}
+
+        <Field
+          label="แพทย์"
+          placeholder="นพ./พญ. ..."
+          value={doctor}
+          onChange={(e) => setDoctor(e.target.value)}
+          maxLength={120}
+        />
+        <Field
+          label="สถานที่"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          maxLength={200}
+        />
+
+        {/* นัดที่ผ่านมาแล้วไม่ต้องมีแจ้งเตือน ตั้งไว้ก็ไม่มีวันทำงาน
+            ซ่อนทั้งการ์ดดีกว่าโชว์สวิตช์ที่กดแล้วไม่เกิดอะไรขึ้น */}
+        {!isPast && (
+        <div className="flex flex-col gap-3.5 rounded-md border border-cream-200 bg-white p-4 shadow-[var(--shadow-card)]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex flex-col">
+              <span className="font-medium text-ink-900">การแจ้งเตือน</span>
+              <span className="text-[13px] text-ink-600">เตือนก่อนถึงเวลานัด</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={remind}
+              aria-label="เปิดการแจ้งเตือน"
+              onClick={() => setRemind((v) => !v)}
+              className={`flex h-7 w-12 min-h-0 shrink-0 items-center rounded-full p-[3px] transition-colors ${
+                remind ? "justify-end bg-brown-700" : "justify-start bg-cream-200"
+              }`}
+            >
+              <span className="size-[22px] rounded-full bg-white" />
+            </button>
+          </div>
+
+          {remind && (
+            <>
+              <span className="h-px bg-cream-200" />
+              <div className="flex flex-col gap-2">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm text-ink-600">เตือนล่วงหน้า</span>
+                  {/* บอกเพดานตลอดเวลา ไม่ใช่รอให้กดเกินแล้วค่อยบอก */}
+                  <span className="text-xs text-ink-400">
+                    เลือกได้ {offsets.length}/{MAX_REMINDERS}
+                  </span>
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {REMINDERS.map((r) => {
+                    const on = offsets.includes(r.m);
+                    return (
+                      <Chip
+                        key={r.m}
+                        active={on}
+                        // ครบสามแล้วชิปที่เหลือกดไม่ได้ แต่ชิปที่เลือกอยู่ยังกดเอาออกได้
+                        disabled={!on && full}
+                        onClick={() => toggleOffset(r.m)}
+                      >
+                        {r.label}
+                      </Chip>
+                    );
+                  })}
+                </div>
+                {offsets.length === 0 && (
+                  <p className="text-xs text-ink-400">ยังไม่ได้เลือกเวลา จะไม่มีการเตือน</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        )}
+
+        <Textarea
+          label="บันทึก"
+          rows={3}
+          placeholder="สิ่งที่ต้องเตรียม หรือคำถามที่อยากถามคุณหมอ"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={2000}
+        />
+
+        {receipts}
+
+        {appt && (
+          <Button
+            variant="ghost"
+            className="text-danger hover:bg-cream-100"
+            loading={remove.isPending}
+            onClick={() => {
+              if (confirm("ลบนัดหมายนี้? การลบย้อนกลับไม่ได้")) remove.execute({ id: appt.id });
+            }}
+          >
+            <Trash2 size={18} strokeWidth={1.8} />
+            ลบนัดหมายนี้
+          </Button>
+        )}
+        {media}
+      </div>
+
+      <div className="sticky bottom-0 border-t border-cream-200 bg-white p-4">
+        <div className="mx-auto max-w-[560px]">
+          <Button full loading={pending} disabled={!date || !time} onClick={submit}>
+            บันทึกนัดหมาย
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

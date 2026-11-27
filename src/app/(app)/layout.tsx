@@ -1,0 +1,71 @@
+import { BottomNav, Sidebar } from "@/components/app-nav";
+import { AppHeader } from "@/components/app-topbar";
+import { AppointmentReminders, type Reminder } from "@/components/appointment-reminders";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { getSessionUser, readToken } from "@/lib/session";
+import { getDb } from "@/db";
+import { getLayoutData } from "@/lib/queries";
+import { getStorageUsage } from "@/lib/storage";
+import { StorageNotice } from "@/components/storage-notice";
+import { PullToRefresh } from "@/components/pull-to-refresh";
+import { BuildWatch } from "@/components/build-watch";
+import { timeOf } from "@/lib/format";
+
+/** shell ของโซนที่ล็อกอินแล้ว — header + sidebar (จอกว้าง) / bottom nav (มือถือ) */
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await getSessionUser();
+  /**
+   * มีคุกกี้แต่ session ใช้ไม่ได้แล้ว — ล้างคุกกี้ก่อนพาไปหน้าเข้าสู่ระบบ
+   *
+   * เช็คที่ layout ที่เดียว เพราะทุกหน้าในโซนนี้ผ่านตรงนี้หมด และถ้าปล่อยให้
+   * แต่ละหน้า redirect ไป /login เอง จะติดลูปกับ middleware ที่เห็นคุกกี้ค้าง
+   * แล้วส่งกลับเข้ามาใหม่ (ดู src/app/signed-out/route.ts)
+   */
+  if (!user && readToken((await headers()).get("cookie"))) redirect("/signed-out");
+  // ไม่มี session ปล่อยให้หน้าลูก redirect เอง — layout แค่ไม่แสดง header
+  const db = user ? await getDb() : null;
+  const [data, usage] = await Promise.all([
+    db && user?.activeFamilyId ? getLayoutData(db, user.activeFamilyId) : null,
+    db && user?.activeFamilyId ? getStorageUsage(db, user.activeFamilyId) : null,
+  ]);
+
+  // หนึ่งนัดมีได้หลายเวลาเตือน จึงแตกเป็นหลายรายการ ไม่ใช่รายการเดียวต่อนัด
+  const reminders: Reminder[] =
+    data?.upcoming
+      .filter((a) => a.reminderEnabled)
+      .flatMap((a) =>
+        a.reminders.map((minutes) => ({
+          id: `${a.id}:${minutes}`,
+          at: new Date(a.apptDatetime).getTime() - minutes * 60_000,
+          title: a.title ? `นัดหมาย: ${a.title}` : "ใกล้ถึงเวลานัดหมาย",
+          body: [timeOf(a.apptDatetime), a.doctorName, a.location].filter(Boolean).join(" · "),
+        })),
+      ) ?? [];
+
+  return (
+    <div className="flex min-h-dvh">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {user && (
+          <AppHeader
+            userName={user.name}
+            userImage={user.image}
+            familyName={data?.family?.name}
+            hasSoonAppointment={data?.hasSoonAppointment}
+          />
+        )}
+        {usage && <StorageNotice usage={usage} />}
+        {/* เว้นท้ายหน้าให้เท่ากับความสูงจริงของแถบเมนู (รวมขอบจอ)
+            ไม่งั้นเนื้อหาบรรทัดสุดท้ายจะถูกแถบบังบนเครื่องที่มีแถบลาก */}
+        <main className="flex-1 pb-[calc(4rem+var(--safe-b))] md:pb-0">
+          <div className="mx-auto w-full max-w-[1120px] px-4 py-4 md:px-12 md:py-8">{children}</div>
+        </main>
+      </div>
+      <BottomNav />
+      <PullToRefresh />
+      <BuildWatch />
+      {reminders.length > 0 && <AppointmentReminders reminders={reminders} />}
+    </div>
+  );
+}

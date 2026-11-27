@@ -1,0 +1,76 @@
+import Link from "next/link";
+import { cn } from "@/lib/cn";
+
+type Variant = "primary" | "secondary" | "ghost" | "danger";
+
+/** สเปกจาก design-system.md §4 — สูง 44px, padding-x 20px, radius 12px */
+const VARIANTS: Record<Variant, string> = {
+  primary: "bg-brown-700 text-white hover:bg-brown-900 disabled:bg-cream-200 disabled:text-ink-400",
+  secondary:
+    "bg-white text-brown-700 border border-brown-300 hover:bg-cream-50 disabled:text-ink-400 disabled:border-cream-200",
+  ghost: "bg-transparent text-brown-700 hover:bg-cream-100 disabled:text-ink-400",
+  danger: "bg-danger text-white hover:brightness-95 disabled:bg-cream-200 disabled:text-ink-400",
+};
+
+/** แยกออกมาเพื่อให้ ButtonLink ใช้สไตล์ชุดเดียวกันได้ ไม่ต้องทำ asChild/Slot */
+export function buttonClass(variant: Variant = "primary", full?: boolean, className?: string) {
+  return cn(
+    "inline-flex h-11 items-center justify-center gap-2 rounded-md px-5 text-base font-medium",
+    "transition-colors disabled:cursor-not-allowed",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown-500",
+    VARIANTS[variant],
+    full && "w-full",
+    className,
+  );
+}
+
+export function Button({
+  variant = "primary",
+  full,
+  loading,
+  className,
+  children,
+  disabled,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+  full?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      {...props}
+      disabled={disabled ?? loading}
+      className={buttonClass(variant, full, className)}
+    >
+      {loading && (
+        <span
+          aria-hidden
+          className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
+      )}
+      {children}
+    </button>
+  );
+}
+
+/**
+ * ปุ่มที่เป็นลิงก์ — ปิด prefetch เป็นค่าตั้งต้น
+ *
+ * ปุ่มพวกนี้คือ "ไปทำอะไรสักอย่าง" (เพิ่มนัด บันทึกสุขภาพ ดูค่าใช้จ่าย)
+ * ซึ่งปลายทางเป็นฟอร์มที่ต้อง render ใหม่อยู่ดี การ prefetch จึงได้ประโยชน์น้อย
+ * แต่ราคาแพง: บนแพลนฟรี CPU จำกัด 10 ms ต่อคำขอ ทุกคำขอคือโอกาสเจอ Error 1102
+ * และปุ่มหลายอันถูกเรนเดอร์สองชุด (มือถือ + เดสก์ท็อป ซ่อนอีกอันด้วย CSS)
+ * จึง prefetch ซ้ำสองรอบโดยที่ผู้ใช้เห็นปุ่มเดียว
+ *
+ * ส่งค่า prefetch มาเองได้ถ้าหน้าไหนอยากได้จริงๆ
+ */
+export function ButtonLink({
+  variant = "primary",
+  full,
+  className,
+  prefetch = false,
+  ...props
+}: React.ComponentProps<typeof Link> & { variant?: Variant; full?: boolean }) {
+  return <Link {...props} prefetch={prefetch} className={buttonClass(variant, full, className)} />;
+}

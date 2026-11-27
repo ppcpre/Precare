@@ -1,0 +1,1056 @@
+/**
+ * ตารางฝั่งแอป — อ้างอิง docs/architecture.md หัวข้อ 1.2
+ *
+ * timestamp ของตารางกลุ่มนี้เก็บเป็น TEXT ISO 8601 (ต่างจากตาราง auth ที่เป็น
+ * integer timestamp เพราะ adapter ของ Better Auth กำหนดมาแบบนั้น)
+ * เก็บเป็น text เพื่อให้อ่านออกตอนเปิดดูใน D1 console และใช้ฟังก์ชันวันที่ของ SQLite ได้ตรงๆ
+ */
+import { sqliteTable, text, integer, real, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { user } from "./auth";
+
+const nowIso = sql`(datetime('now'))`;
+
+export const families = sqliteTable("families", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  ownerId: text("owner_id").notNull().references(() => user.id),
+  createdAt: text("created_at").notNull().default(nowIso),
+});
+
+/**
+ * ความลับที่ระบบสร้างเอง ไม่ใช่ของที่คนตั้ง
+ *
+ * ตอนนี้มีรายการเดียว: กุญแจเซ็นลิงก์ไฟล์ที่ worker เสิร์ฟไฟล์ใช้ตรวจ
+ * เก็บใน D1 เพราะทั้งแอปและ worker ตัวนั้นผูก D1 ตัวเดียวกันอยู่แล้ว
+ * ถ้าใช้ `wrangler secret put` แทน จะต้องตั้งค่าเดียวกันสองที่ด้วยมือ
+ * และตอนหมุนกุญแจต้องทำพร้อมกันเป๊ะ ไม่งั้นลิงก์ที่ค้างอยู่พังทั้งหมด
+ *
+ * ไม่ได้ลดชั้นความปลอดภัยลง — ใครที่อ่าน D1 ได้ก็อ่านข้อมูลผู้ใช้ทั้งหมดได้อยู่แล้ว
+ */
+export const appSecrets = sqliteTable("app_secrets", {
+  name: text("name").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(nowIso),
+});
+
+export const ROLES = ["owner", "editor", "viewer"] as const;
+export const MEMBER_STATUS = ["active", "invited", "removed"] as const;
+
+export const familyMembers = sqliteTable(
+  "family_members",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => user.id),
+    role: text("role", { enum: ROLES }).notNull(),
+    status: text("status", { enum: MEMBER_STATUS }).notNull().default("active"),
+    joinedAt: text("joined_at").notNull().default(nowIso),
+  },
+  (t) => [
+    uniqueIndex("uq_member_family_user").on(t.familyId, t.userId),
+    // ใช้บ่อยสุด: หา family ที่ user คนนี้อยู่ ตอนเช็ค authz ทุก request
+    index("idx_members_user").on(t.userId, t.status),
+  ],
+);
+
+export const INVITE_STATUS = ["pending", "accepted", "declined", "expired"] as const;
+
+export const familyInvites = sqliteTable(
+  "family_invites",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    invitedEmail: text("invited_email").notNull(),
+    /** เชิญเป็น owner ไม่ได้ — owner มีได้คนเดียวคือคนสร้าง family */
+    invitedRole: text("invited_role", { enum: ["editor", "viewer"] }).notNull(),
+    invitedBy: text("invited_by").notNull().references(() => user.id),
+    status: text("status", { enum: INVITE_STATUS }).notNull().default("pending"),
+    createdAt: text("created_at").notNull().default(nowIso),
+    /** ลิงก์เชิญอายุ 7 วัน และใช้ได้ครั้งเดียว */
+    expiresAt: text("expires_at").notNull(),
+  },
+  (t) => [index("idx_invites_family").on(t.familyId, t.status)],
+);
+
+export const pregnancyProfiles = sqliteTable("pregnancy_profiles", {
+  familyId: text("family_id").primaryKey().references(() => families.id, { onDelete: "cascade" }),
+  /** วันประจำเดือนครั้งสุดท้าย — ต้นทางของการคำนวณทุกอย่าง */
+  lmpDate: text("lmp_date"),
+  /** คำนวณจาก lmpDate + 280 วัน (ดู src/lib/pregnancy.ts) */
+  dueDate: text("due_date"),
+  status: text("status", { enum: ["pregnant", "postpartum"] }).notNull().default("pregnant"),
+  /**
+   * รูปหน้าปกของการ์ดอายุครรภ์บนหน้าแรก — เลือกจากรูปที่อยู่ในอัลบั้มแล้วเท่านั้น
+   *
+   * อยู่ที่ครอบครัว ไม่ใช่ที่ผู้ใช้ เพราะมันคือหน้าปกของ "ครรภ์นี้" ทุกคนเห็นรูปเดียวกัน
+   * set null ตอนลบรูป — ไม่งั้นการ์ดจะชี้ไปยังไฟล์ที่ไม่มีแล้วและพังเงียบๆ
+   */
+  coverPhotoId: text("cover_photo_id").references(() => photos.id, { onDelete: "set null" }),
+
+  /**
+   * ส่วนสูง (ซม.) และน้ำหนักก่อนตั้งครรภ์ (กก.)
+   *
+   * สองค่านี้เป็นต้นทางของเกณฑ์น้ำหนักทั้งหมด — เกณฑ์ IOM อิงกับ BMI
+   * ก่อนตั้งครรภ์ล้วนๆ ถ้าไม่มี ก็บอกไม่ได้เลยว่าควรเพิ่มเท่าไร
+   *
+   * ว่างได้ เพราะบางคนจำน้ำหนักก่อนตั้งครรภ์ไม่ได้ และการบังคับกรอกจะทำให้
+   * คนติดอยู่ที่หน้าลงทะเบียน — หน้าจอที่ต้องใช้ค่านี้จะชวนให้กรอกเอาเอง
+   */
+  heightCm: real("height_cm"),
+  prePregnancyWeight: real("pre_pregnancy_weight"),
+
+  /**
+   * โรงพยาบาลที่ฝากครรภ์ — ใช้บนหน้าสัญญาณอันตราย
+   *
+   * อยู่ที่ครอบครัว ไม่ใช่ที่ผู้ใช้ เพราะตอนฉุกเฉินคนโทรอาจไม่ใช่คนท้อง
+   * สามีหรือย่าต้องกดโทรได้จากเครื่องตัวเอง
+   *
+   * ⚠️ เก็บเบอร์เป็นข้อความดิบ ไม่ normalize และไม่ validate รูปแบบ
+   *    ต้องรับได้ทั้ง "02-201-1000", "1415", "081 234 5678" และ
+   *    "02-201-1000 ต่อ 2345" — การบังคับรูปแบบจะทำให้คนกรอกไม่ผ่านแล้วเลิกกรอก
+   *    ซึ่งแย่กว่าเบอร์ที่กดแล้วไม่ติด
+   */
+  hospitalName: text("hospital_name"),
+  hospitalPhone: text("hospital_phone"),
+
+  updatedAt: text("updated_at").notNull().default(nowIso),
+});
+
+/** ฟิลด์ของ pregnancy_profiles ที่เก็บประวัติการแก้ไว้ */
+export const TRACKED_PROFILE_FIELDS = [
+  "lmpDate",
+  "dueDate",
+  "heightCm",
+  "prePregnancyWeight",
+  /**
+   * สถานะเป็นฟิลด์ที่ต้องบันทึกประวัติที่สุดในบรรดาทั้งหมด
+   *
+   * คนหนึ่งกดเปลี่ยน แล้วหน้าแรกของทุกคนในครอบครัวเปลี่ยนตามทันที
+   * (การ์ดอายุครรภ์ นับลูกดิ้น จับเวลาเจ็บท้อง หายไปพร้อมกันหมด)
+   * ถ้าตอบไม่ได้ว่าใครกดตอนไหน คนที่เหลือจะงงว่าแอปพังหรือเปล่า
+   */
+  "status",
+] as const;
+export type TrackedProfileField = (typeof TRACKED_PROFILE_FIELDS)[number];
+
+/**
+ * ประวัติการแก้ข้อมูลตั้งครรภ์
+ *
+ * มีเพราะค่าพวกนี้เปลี่ยนความหมายของทั้งแอป — แก้น้ำหนักก่อนตั้งครรภ์ทีเดียว
+ * ช่วงเกณฑ์ขยับทั้งกราฟ และแก้ LMP ทีเดียวอายุครรภ์เปลี่ยนทั้งระบบ
+ * ในแอปที่คนทั้งครอบครัวแก้ได้ ต้องตอบได้ว่าใครแก้ ตอนไหน จากอะไรเป็นอะไร
+ *
+ * เก็บค่าเป็นข้อความทั้งคู่ เพราะฟิลด์ที่ติดตามมีทั้งวันที่และตัวเลข
+ * ตารางนี้ไม่ได้เอาไว้คำนวณ เอาไว้อ่านอย่างเดียว
+ */
+export const pregnancyProfileChanges = sqliteTable(
+  "pregnancy_profile_changes",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    field: text("field", { enum: TRACKED_PROFILE_FIELDS }).notNull(),
+    /** null = เดิมยังไม่ได้กรอก */
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    changedBy: text("changed_by")
+      .notNull()
+      .references(() => user.id),
+    changedAt: text("changed_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_profile_changes_family").on(t.familyId, t.changedAt)],
+);
+
+export const MOODS = ["great", "good", "okay", "tired", "bad"] as const;
+
+export const weeklyLogs = sqliteTable(
+  "weekly_logs",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    recordedBy: text("recorded_by").notNull().references(() => user.id),
+    week: integer("week").notNull(),
+    weight: real("weight"),
+    bpSystolic: integer("bp_systolic"),
+    bpDiastolic: integer("bp_diastolic"),
+    /** JSON array string — SQLite ไม่มี array จริง parse/stringify ที่ชั้น data access */
+    symptoms: text("symptoms"),
+    mood: text("mood", { enum: MOODS }),
+    note: text("note"),
+    logDate: text("log_date").notNull(),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_logs_family").on(t.familyId, t.logDate)],
+);
+
+
+/** สีของกลุ่ม — จำกัดชุดไว้เพื่อให้ทุกกลุ่มยังอยู่ในพาเลตต์เดียวกับแอป */
+export const CARE_GROUP_COLORS = ["peach", "sky", "sage", "plum", "clay"] as const;
+
+/** สถานะการเบิก — ค่าฝากครรภ์เบิกประกันสังคมได้ ค่าทำฟันส่วนใหญ่เบิกไม่ได้ */
+export const CLAIM_STATUSES = ["none", "done", "no"] as const;
+export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+
+/**
+ * กลุ่มการรักษา — ใช้แยกยอดค่าใช้จ่ายตามเรื่องที่รักษา
+ *
+ * ทำเป็นตารางแทนที่จะเก็บชื่อเป็น text ในนัดหมายตรงๆ เพราะถ้าเก็บเป็น text
+ * จะเปลี่ยนชื่อกลุ่มทีหลังไม่ได้ ต้องไล่แก้ทุกแถว และสะกดต่างนิดเดียว
+ * ก็กลายเป็นคนละกลุ่มทันที
+ */
+export const careGroups = sqliteTable(
+  "care_groups",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color", { enum: CARE_GROUP_COLORS }).notNull().default("peach"),
+    /** ซ่อนกลุ่มที่เลิกใช้ โดยไม่ลบเพื่อไม่ให้นัดหมายเก่าเสียกลุ่มไป */
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_care_groups_family").on(t.familyId)],
+);
+
+export const appointments = sqliteTable(
+  "appointments",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    apptDatetime: text("appt_datetime").notNull(),
+    title: text("title"),
+    doctorName: text("doctor_name"),
+    /** เพิ่มใน T1.1 — สเปกเดิมไม่มี แต่ฟอร์มที่ออกแบบไว้มีช่องนี้ */
+    location: text("location"),
+    note: text("note"),
+    reminderEnabled: integer("reminder_enabled", { mode: "boolean" }).notNull().default(true),
+    reminderMinutesBefore: integer("reminder_minutes_before").notNull().default(60),
+    /**
+     * ยิง push เตือนนัดนี้ไปแล้วเมื่อไหร่ (UTC) — null = ยังไม่ได้ยิง
+     *
+     * ตัวจับเวลา (workers/cron) วิ่งทุก 5 นาที ถ้าไม่มีช่องนี้ นัดหนึ่งนัด
+     * จะถูกเตือนซ้ำทุกรอบจนกว่าจะถึงเวลานัด
+     * ต้องล้างเป็น null ทุกครั้งที่แก้เวลานัด ไม่งั้นเลื่อนนัดแล้วจะไม่มีเตือน
+     */
+    reminderSentAt: text("reminder_sent_at"),
+
+    /** null = ยังไม่ได้เลือกกลุ่ม แสดงเป็น "ทั่วไป" ไม่บังคับให้เลือก */
+    groupId: text("group_id").references(() => careGroups.id, { onDelete: "set null" }),
+
+    /**
+     * นัดของลูกคนไหน — null = นัดของแม่/ครอบครัว (แบบเดิมทั้งหมด)
+     *
+     * นัดเป็นของครอบครัวอยู่แล้ว ทุกคนเห็นและได้เตือนเหมือนกัน ช่องนี้แค่บอกว่า
+     * "ของใคร" ไม่ได้เปลี่ยนว่าใครเห็น · ลบลูกแล้วนัดยังอยู่ กลับเป็นของครอบครัว
+     */
+    childId: text("child_id").references((): AnySQLiteColumn => children.id, { onDelete: "set null" }),
+
+    /**
+     * ค่าใช้จ่ายเก็บเป็นจำนวนเต็ม "สตางค์" ห้ามใช้ REAL เด็ดขาด
+     * 120000 = 1,200 บาท — D1 เป็น SQLite ไม่มี DECIMAL ให้ใช้
+     * ถ้าเก็บเป็น float ยอดรวมจะเพี้ยนในบางเคสแบบไล่ไม่เจอ
+     *
+     * null = ยังไม่ได้ระบุ · 0 = ไปมาแล้วแต่ไม่เสียเงิน
+     * สองอย่างนี้คนละความหมาย ยอดรวมต้องนับเฉพาะที่ไม่ใช่ null
+     */
+    costSatang: integer("cost_satang"),
+    claimStatus: text("claim_status", { enum: CLAIM_STATUSES }).notNull().default("none"),
+    costNote: text("cost_note"),
+  },
+  (t) => [
+    index("idx_appts_family").on(t.familyId, t.apptDatetime),
+    index("idx_appts_group").on(t.groupId),
+    /**
+     * index บางส่วน สำหรับตัวจับเวลาเตือนนัด (workers/cron)
+     *
+     * มันถามคำถามเดียวทุก 5 นาที = 288 ครั้งต่อวัน ถ้าไม่มี index นี้
+     * ทุกครั้งคือการไล่อ่านตารางนัดทั้งตาราง ซึ่ง D1 นับเป็น "row read"
+     * ทุกแถว — มีนัดค้างอยู่ 1,000 รายการก็เท่ากับ 288,000 row read ต่อวัน
+     * โดยไม่ได้อะไรเลย
+     *
+     * เป็น partial index เพราะเงื่อนไขคงที่ (ยังไม่เตือน + เปิดเตือนไว้)
+     * ตัว index จึงมีแค่แถวที่ "ยังรอเตือน" ซึ่งปกติมีไม่กี่แถว
+     * พอเตือนไปแล้ว แถวนั้นหลุดออกจาก index เอง
+     */
+    index("idx_appts_pending_reminder")
+      .on(t.apptDatetime)
+      .where(sql`reminder_enabled = 1 AND reminder_sent_at IS NULL`),
+  ],
+);
+
+/**
+ * receipt = ใบเสร็จของนัดหมาย **ไม่ขึ้นในอัลบั้ม** และมีได้เฉพาะตอนผูกกับนัด
+ *
+ * ใบเสร็จอยู่ตารางเดียวกับรูปเพราะเก็บ เสิร์ฟ และคิดโควตาเหมือนรูปทุกอย่าง
+ * แต่ในสายตาผู้ใช้มันเป็นเอกสารของนัด ไม่ใช่ความทรงจำ ใบเสร็จค่ายา
+ * ไปโผล่ข้างรูปอัลตราซาวด์ในอัลบั้มลูกคือสิ่งที่ไม่มีใครอยากเห็น
+ */
+/**
+ * เวลาเตือนของนัดหนึ่งนัด — นัดเดียวมีได้หลายครั้ง
+ *
+ * เดิมเก็บเป็น appointments.reminder_minutes_before ช่องเดียว = เตือนได้ครั้งเดียว
+ * แยกออกมาเป็นตารางลูกเพราะแต่ละครั้งต้องจำแยกกันว่า "ยิงไปหรือยัง"
+ * ถ้ายัดเป็น JSON ในแถวนัด ตัวจับเวลาจะหาว่า "ครั้งไหนถึงคิว" ด้วย index ไม่ได้
+ * ต้องอ่านทุกแถวมาไล่เองใน JS ซึ่งกิน row read ของ D1 ฟรีไปเรื่อยๆ
+ *
+ * ลบนัด = ลบเวลาเตือนตาม (cascade) · แก้เวลานัด = ลบทิ้งแล้วใส่ใหม่
+ * ซึ่งล้างสถานะ "เตือนแล้ว" ไปในตัว
+ */
+export const appointmentReminders = sqliteTable(
+  "appointment_reminders",
+  {
+    id: text("id").primaryKey(),
+    appointmentId: text("appointment_id")
+      .notNull()
+      .references(() => appointments.id, { onDelete: "cascade" }),
+    /** กี่นาทีก่อนถึงเวลานัด */
+    minutesBefore: integer("minutes_before").notNull(),
+    /** ยิงไปแล้วเมื่อไหร่ (UTC) — null = ยังไม่ได้ยิง */
+    sentAt: text("sent_at"),
+  },
+  (t) => [
+    // กันเลือกเวลาเดียวกันซ้ำสองครั้งในนัดเดียว ซึ่งจะกลายเป็น push สองใบติดกัน
+    uniqueIndex("uq_reminder_appt_minutes").on(t.appointmentId, t.minutesBefore),
+    /** index บางส่วนสำหรับตัวจับเวลา — เหลือเฉพาะครั้งที่ยังไม่ได้ยิง */
+    index("idx_reminders_pending")
+      .on(t.appointmentId)
+      .where(sql`sent_at IS NULL`),
+  ],
+);
+
+/** เลือกเวลาเตือนได้มากสุดกี่ครั้งต่อนัด — บังคับทั้งใน UI, zod และ action */
+export const MAX_REMINDERS = 3;
+
+/**
+ * ยา/วิตามินที่ต้องกินประจำ — ของ "คนใดคนหนึ่ง" ไม่ใช่ของครอบครัวร่วมกัน
+ *
+ * ต่างจากนัดหมายและบันทึกอาหารตรงที่ **ไม่เปิดให้คนอื่นในครอบครัวดูด้วยซ้ำ**
+ * ยาที่คนหนึ่งกินเป็นข้อมูลสุขภาพที่บอกถึงโรคประจำตัวได้ตรงๆ และเจ้าของ
+ * ไม่ได้เลือกจะบอกใครตอนตั้งค่า การตั้งค่าเตือนกินยาไม่ใช่การยินยอมให้ทั้งบ้านรู้
+ *
+ * ทุกทางเข้าจึงกรองด้วย user_id ของคนที่ล็อกอิน: หน้าจอ · การแก้/ลบ/ติ๊ก ·
+ * และตัวจับเวลาที่ยิง push เข้าเฉพาะเครื่องของเจ้าของ (ต่างจากเตือนนัด
+ * ที่ยิงทั้งครอบครัวเพราะนัดเป็นเรื่องที่นัดกันไปด้วยกัน)
+ */
+export const medications = sqliteTable(
+  "medications",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    name: text("name").notNull(),
+    /** "1 เม็ด" "2 ช้อนชา" — ข้อความอิสระ เพราะหน่วยของยาไม่เป็นมาตรฐาน */
+    dose: text("dose"),
+    note: text("note"),
+    /**
+     * ช่วงที่ต้องกิน — end_on ว่างได้ แปลว่ากินต่อเนื่องไม่มีกำหนด
+     * (วิตามินบำรุงครรภ์ส่วนใหญ่เป็นแบบนั้น ส่วนยาที่หมอสั่งมักมีวันจบ)
+     */
+    startOn: text("start_on").notNull(),
+    endOn: text("end_on"),
+    /** หยุดเตือนชั่วคราวโดยไม่ต้องลบประวัติทิ้ง */
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_meds_family_user").on(t.familyId, t.userId)],
+);
+
+/** เวลาที่ต้องกินในแต่ละวัน — แยกตารางเหมือน appointment_reminders */
+export const medicationTimes = sqliteTable(
+  "medication_times",
+  {
+    id: text("id").primaryKey(),
+    medicationId: text("medication_id")
+      .notNull()
+      .references(() => medications.id, { onDelete: "cascade" }),
+    /** HH:MM เวลาไทย — เก็บเป็นข้อความเพื่อให้เทียบสตริงกับเวลาท้องถิ่นได้ตรงๆ */
+    at: text("at").notNull(),
+  },
+  (t) => [uniqueIndex("uq_med_time").on(t.medicationId, t.at)],
+);
+
+/** เลือกเวลาได้มากสุดกี่ครั้งต่อหนึ่งรายการยา */
+export const MAX_MED_TIMES = 4;
+
+/**
+ * หนึ่งครั้งที่ถึงกำหนดกิน — สร้างเมื่อถูกเตือนหรือเมื่อผู้ใช้กดว่ากินแล้ว
+ *
+ * ไม่สร้างล่วงหน้าทั้งปี เพราะยาที่ไม่มีวันจบจะกลายเป็นแถวไม่รู้จบ
+ * แถวนี้ทำสองหน้าที่: กันเตือนซ้ำ (sent_at) และบันทึกว่ากินแล้ว (taken_at)
+ */
+export const medicationDoses = sqliteTable(
+  "medication_doses",
+  {
+    id: text("id").primaryKey(),
+    medicationTimeId: text("medication_time_id")
+      .notNull()
+      .references(() => medicationTimes.id, { onDelete: "cascade" }),
+    /** วันที่ของครั้งนี้ (YYYY-MM-DD ตามปฏิทินไทย) */
+    dueOn: text("due_on").notNull(),
+    sentAt: text("sent_at"),
+    takenAt: text("taken_at"),
+  },
+  (t) => [uniqueIndex("uq_dose_time_day").on(t.medicationTimeId, t.dueOn)],
+);
+
+/** มื้ออาหารที่บันทึกได้ — เรียงตามลำดับเวลาของวัน */
+export const MEAL_SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
+export type MealSlot = (typeof MEAL_SLOTS)[number];
+
+/**
+ * อาหารที่กินในแต่ละวัน — หนึ่งแถวต่อหนึ่งเมนู ไม่ใช่หนึ่งแถวต่อหนึ่งมื้อ
+ *
+ * ไม่แยกเป็นตาราง "มื้อ" กับ "รายการในมื้อ" เพราะมื้อไม่มีข้อมูลของตัวเองเลย
+ * นอกจากชื่อมื้อ ซึ่งเก็บเป็นคอลัมน์ในแถวนี้ได้ การแยกสองตารางจะได้ join
+ * เพิ่มมาโดยไม่ได้อะไรกลับมา
+ *
+ * ค่าทางโภชนาการเป็น null ได้ทุกตัว — AI อ่านไม่ได้ หรือผู้ใช้ยังไม่อยากกรอก
+ * ก็ต้องบันทึกว่า "กินอะไรไป" ได้อยู่ดี ซึ่งมีค่ากว่าการบังคับให้กรอกเลขมั่วๆ
+ */
+export const foodLogs = sqliteTable(
+  "food_logs",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    /** วันที่กิน (YYYY-MM-DD) ตามเวลาไทย — ไม่ใช่เวลาที่กดบันทึก */
+    eatenOn: text("eaten_on").notNull(),
+    slot: text("slot", { enum: MEAL_SLOTS }).notNull(),
+    name: text("name").notNull(),
+    /** "1 จาน" "1 แก้ว" — เก็บเป็นข้อความเพราะหน่วยของอาหารไทยไม่เป็นมาตรฐาน */
+    portion: text("portion"),
+
+    kcal: integer("kcal"),
+    carbG: integer("carb_g"),
+    sugarG: integer("sugar_g"),
+    proteinG: integer("protein_g"),
+
+    /**
+     * ตัวเลขมาจากไหน และผู้ใช้ยืนยันหรือยัง
+     *
+     * แยกสองอย่างเพราะ "AI เดาให้แล้วผู้ใช้กดบันทึกโดยไม่แก้" กับ "ผู้ใช้กรอกเอง"
+     * เชื่อถือได้ไม่เท่ากัน และหน้าจอต้องบอกความต่างนั้นให้เห็น
+     */
+    source: text("source", { enum: ["ai", "user"] }).notNull().default("user"),
+    confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(false),
+
+    /**
+     * เจ้าของมื้อ — ไม่ใช่คนที่กดบันทึก
+     *
+     * แคลของสองคนรวมกันไม่มีความหมาย ยอดทุกอย่างในฟีเจอร์นี้จึงต้องกรองด้วย
+     * คอลัมน์นี้เสมอ ไม่ใช่ด้วย family_id อย่างเดียว (บั๊กเดิมคือกรองแค่
+     * family_id แล้วยอดของทุกคนในบ้านบวกกันโดยไม่มีอะไรบอก)
+     *
+     * แยกจาก created_by ไว้ตั้งแต่ตอนนี้ แม้ตอนนี้สองค่าจะเท่ากันเสมอ
+     * เพราะกรอกแทนกันไม่ได้ — ถ้าวันหนึ่งเปิดให้กรอกแทน จะได้ไม่ต้อง migrate อีก
+     */
+    userId: text("user_id").notNull().references(() => user.id),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    index("idx_food_family_user_date").on(t.familyId, t.userId, t.eatenOn),
+    // แถบเลือกคนถามว่า "วันนี้แต่ละคนกินไปเท่าไร" ซึ่งไม่มี user_id ใน where
+    // จึงใช้ index ตัวบนไม่ได้ และเป็นคิวรีที่วิ่งทุกครั้งที่เปิดหน้านับแคล
+    index("idx_food_family_date").on(t.familyId, t.eatenOn),
+  ],
+);
+
+export const PHOTO_TYPES = ["ultrasound", "family", "document", "other", "receipt"] as const;
+
+/** ประเภทที่อัปผ่านอัลบั้มได้ — ใบเสร็จเข้าได้ทางเดียวคือแนบกับนัด */
+export const ALBUM_PHOTO_TYPES = ["ultrasound", "family", "document", "other"] as const;
+
+export type PhotoType = (typeof PHOTO_TYPES)[number];
+export type AlbumPhotoType = (typeof ALBUM_PHOTO_TYPES)[number];
+
+/**
+ * รูปกับวิดีโออยู่ตารางเดียวกัน ไม่แยกตาราง
+ *
+ * ทั้งสองอย่างเป็น "ของที่ถ่ายไว้วันนั้น" เหมือนกันทุกประการในสายตาผู้ใช้
+ * อยู่ในอัลบั้มเดียวกัน จัดกลุ่มตามวันเดียวกัน แนบกับนัดเดียวกัน
+ * แยกตารางแล้วทุก query ที่แสดงอัลบั้มจะกลายเป็น union สองทาง
+ * และ "เรียงตามวันที่" ข้ามสองตารางใน SQLite ก็แพงกว่าที่ควรจะเป็น
+ */
+export const MEDIA_KINDS = ["photo", "video"] as const;
+
+/** Phase 2 — สร้างตารางไว้ตั้งแต่ migration แรก แต่ยังไม่มีโค้ดเรียกใช้จนกว่าจะทำอัลบั้ม */
+export const photos = sqliteTable(
+  "photos",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    /** ถ้าแนบมากับบันทึกสุขภาพ · ลบบันทึกแล้วรูปยังอยู่ในอัลบั้ม */
+    logId: text("log_id").references(() => weeklyLogs.id, { onDelete: "set null" }),
+    week: integer("week"),
+    /** วันที่ "ถ่าย" ไม่ใช่วันที่อัปโหลด — คนอัปโหลดทีหลังเสมอ
+     *  ถ้าใช้ createdAt จัดกลุ่ม รูปจะไปโผล่ผิดสัปดาห์ */
+    takenAt: text("taken_at").notNull(),
+    /** รูปหน้าปกของสัปดาห์นั้น — พอมีหลายสิบรูปกริดจะดูไม่ออกว่าอันไหนสำคัญ */
+    pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+    type: text("type", { enum: PHOTO_TYPES }).notNull().default("other"),
+    r2Key: text("r2_key").notNull(),
+    /** เก็บ thumb แยก ไม่ให้กริดอัลบั้มโหลดรูปเต็มทุกใบ
+     *  สำหรับวิดีโอนี่คือ "เฟรมหน้าปก" ที่ดึงมาในเบราว์เซอร์ตอนเลือกไฟล์
+     *  ไม่มีทางสร้างฝั่ง server ได้ Worker ไม่มี ffmpeg */
+    thumbKey: text("thumb_key"),
+
+    mediaKind: text("media_kind", { enum: MEDIA_KINDS }).notNull().default("photo"),
+    /** ความยาวคลิป มีเฉพาะวิดีโอ — เก็บไว้เพื่อโชว์ป้ายเวลาโดยไม่ต้องโหลดไฟล์ */
+    durationMs: integer("duration_ms"),
+    /** แนบกับนัดหมาย · ลบนัดแล้วไฟล์ยังอยู่ในอัลบั้ม เหมือน logId */
+    appointmentId: text("appointment_id").references(() => appointments.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * รูปของลูกคนไหน — null = เป็นรูปของครรภ์ (ใช้ `week` แทน)
+     *
+     * ใช้ตารางเดียวกับรูปครรภ์ ไม่แยกคลัง เพราะได้โควตา R2 / thumbnail /
+     * วิดีโอ / caption / pinned / การลบ มาทั้งชุด ถ้าแยกตารางต้องทำ
+     * upload pipeline ซ้ำทั้งเส้นแล้วสองเส้นนั้นจะค่อยๆ เพี้ยนจากกัน
+     *
+     * ⚠️ ไม่มีคอลัมน์ "เดือนที่เท่าไร" โดยตั้งใจ — ช่องอายุคำนวณสดจาก
+     *    takenAt กับวันเกิดเสมอ ดูเหตุผลใน src/lib/child-age.ts
+     */
+    childId: text("child_id").references(() => children.id, { onDelete: "set null" }),
+    caption: text("caption"),
+    /**
+     * ยอดรวมที่ AI อ่านได้จากใบเสร็จ (สตางค์) — มีเฉพาะ type = receipt
+     *
+     * เป็นแค่ "ค่าที่อ่านได้" ไม่ใช่ค่าใช้จ่ายจริง ค่าใช้จ่ายจริงอยู่ที่
+     * appointments.cost_satang ซึ่งผู้ใช้เป็นคนยืนยัน เก็บแยกไว้เพื่อ
+     * - นัดที่มีหลายใบเสร็จ (ค่าตรวจ + ค่ายา) รวมยอดเสนอให้ได้โดยไม่ต้องอ่านซ้ำ
+     * - ไม่เรียก AI ซ้ำทุกครั้งที่เปิดหน้า ซึ่งกินโควตาฟรีรายวัน
+     *
+     * เก็บแค่ตัวเลข ไม่เก็บข้อความที่โมเดลตอบ — ดู src/lib/receipt.ts
+     */
+    receiptTotalSatang: integer("receipt_total_satang"),
+    uploadedBy: text("uploaded_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    index("idx_photos_family").on(t.familyId, t.takenAt),
+    index("idx_photos_appt").on(t.appointmentId),
+    /** หน้า timeline ของลูกกรองด้วย childId แล้วเรียงตามวันถ่าย */
+    index("idx_photos_child").on(t.childId, t.takenAt),
+  ],
+);
+
+export const STORAGE_KINDS = ["avatar", "photo", "video", "asset"] as const;
+
+/**
+ * บัญชีไฟล์ทุกชิ้นที่เขียนลง R2
+ *
+ * ทำไมต้องมีตารางนี้: R2 ไม่มี API ให้ถามยอดใช้งานแบบเร็วๆ ต่อ request
+ * การรวม SUM(size_bytes) จาก D1 เร็วกว่ามากและใช้บังคับโควตาแบบ realtime ได้
+ *
+ * ⚠️ ทุกครั้งที่ put ลง R2 ต้อง insert แถวนี้ และทุกครั้งที่ delete ต้องลบแถวด้วย
+ *    ไม่งั้นยอดจะเพี้ยน — ใช้ผ่าน src/lib/storage.ts เท่านั้น อย่าเรียก R2 ตรง
+ */
+export const storageObjects = sqliteTable(
+  "storage_objects",
+  {
+    id: text("id").primaryKey(),
+    bucket: text("bucket", { enum: ["assets", "photos"] }).notNull(),
+    key: text("key").notNull().unique(),
+    sizeBytes: integer("size_bytes").notNull(),
+    kind: text("kind", { enum: STORAGE_KINDS }).notNull(),
+    /** null ได้สำหรับไฟล์ระบบที่ไม่ผูกกับครอบครัวไหน */
+    familyId: text("family_id").references(() => families.id, { onDelete: "cascade" }),
+    uploadedBy: text("uploaded_by").references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_storage_family").on(t.familyId)],
+);
+
+/**
+ * ประเภทของรอบจับเวลา
+ *
+ * ตอนนี้ใช้แค่ kick แต่ใส่คอลัมน์ไว้ตั้งแต่แรกเพราะการจับเวลาการบีบตัวของมดลูก
+ * (อยู่ใน backlog) ใช้โครงเดียวกันทั้งหมด ต่างแค่แต่ละครั้งมีเวลาเริ่มและเวลาจบ
+ * แทนที่จะเป็นจุดเวลาเดียว — ซึ่ง events เก็บเป็น JSON อยู่แล้วจึงรองรับได้เลย
+ * ถ้าไม่ใส่ตอนนี้ วันหลังต้อง migrate ทั้งตาราง
+ */
+export const TRACKING_KINDS = ["kick", "contraction"] as const;
+export type TrackingKind = (typeof TRACKING_KINDS)[number];
+
+/**
+ * รอบนับลูกดิ้น
+ *
+ * ⚠️ รอบหนึ่งกินเวลา 20 นาทีถึง 2 ชั่วโมง ผู้ใช้จะปิดจอ สลับแอป หรือรับสายแน่นอน
+ *    รอบที่กำลังนับจึงต้องอยู่ที่นี่ ไม่ใช่ใน state ของหน้า
+ *    endedAt เป็น null = ยังนับอยู่ ต่อได้จากอุปกรณ์ไหนก็ได้
+ *
+ * events เก็บเป็น JSON ของเวลาที่แตะแต่ละครั้ง ไม่แยกตาราง
+ * เพราะไม่เคยต้อง query รายครั้ง อ่านทีก็อ่านทั้งรอบอยู่แล้ว
+ * และช่วงห่างระหว่างครั้งคือข้อมูลที่หมอถามจริง จึงต้องเก็บ ไม่ใช่เก็บแค่จำนวน
+ */
+export const trackingSessions = sqliteTable(
+  "tracking_sessions",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    kind: text("kind", { enum: TRACKING_KINDS }).notNull().default("kick"),
+    startedAt: text("started_at").notNull(),
+    /** null = ยังนับอยู่ */
+    endedAt: text("ended_at"),
+    targetCount: integer("target_count").notNull().default(10),
+    /** JSON: [{ "at": "2026-08-28T20:14:00" }] — เวลาท้องถิ่นแบบไม่มี timezone */
+    events: text("events").notNull().default("[]"),
+    note: text("note"),
+    /**
+     * ความแรงของการดิ้นในรอบนั้น 1-5 (1 = แผ่วๆ, 5 = แรงมาก)
+     *
+     * มีเฉพาะการนับลูกดิ้น และบันทึกตอนจบรอบ ตามวิธีของ Count the Kicks
+     * ซึ่งบอกให้ติดต่อแพทย์เมื่อ **ความแรงเปลี่ยน** ไม่ใช่แค่เวลาที่ใช้เปลี่ยน
+     * เวลาที่ใช้จับได้จากตัวเลข แต่ความแรงมีแต่แม่เท่านั้นที่รู้
+     */
+    strength: integer("strength"),
+  },
+  (t) => [
+    index("idx_tracking_family").on(t.familyId, t.kind, t.startedAt),
+    /** หารอบที่ยังไม่จบได้เร็ว — ทุกครั้งที่เปิดหน้าต้องเช็คว่ามีรอบค้างอยู่ไหม */
+    index("idx_tracking_open").on(t.familyId, t.endedAt),
+  ],
+);
+
+/**
+ * คำถามที่อยากถามหมอ
+ *
+ * ผูกกับ "ครอบครัว" ไม่ใช่ "นัดหมาย" — เพราะคำถามเกิดตอนไหนก็ได้
+ * ส่วนใหญ่เกิดตอนอยู่บ้านแล้วนึกได้ ซึ่งเป็นคนละเวลากับตอนมีนัดอยู่ตรงหน้า
+ * ถ้าบังคับให้เลือกนัดก่อนถึงจะจดได้ คนจะไม่จด แล้วก็ลืมถามเหมือนเดิม
+ *
+ * ถามแล้ว = ใส่ askedAt ไม่ใช่ลบทิ้ง จะได้ย้อนดูได้ว่าเคยถามอะไรไปแล้ว
+ * (คำถามที่ถามไปแล้วมักถูกถามซ้ำในนัดถัดไปเพราะจำคำตอบไม่ได้)
+ */
+export const visitQuestions = sqliteTable(
+  "visit_questions",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => families.id, { onDelete: "cascade" }),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    text: text("text").notNull(),
+    /** null = ยังไม่ได้ถาม */
+    askedAt: text("asked_at"),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_visit_q_family").on(t.familyId, t.askedAt)],
+);
+
+export const CONSENT_KINDS = ["terms", "health_data", "marketing"] as const;
+
+/**
+ * บันทึกความยินยอม
+ *
+ * ⚠️ **ไม่มี foreign key ไปที่ user โดยตั้งใจ**
+ *
+ * แถวนี้ต้องอยู่ต่อแม้ผู้ใช้ลบบัญชีไปแล้ว เพื่อพิสูจน์ได้ว่าเคยขอความยินยอม
+ * ตอนไหน กับนโยบายเวอร์ชันไหน ถ้าใส่ FK แบบ cascade แถวจะหายไปพร้อมบัญชี
+ * แล้วหลักฐานก็หายไปด้วย
+ *
+ * ที่เก็บได้แค่ userId ซึ่งเป็น UUID สุ่ม — หลังลบบัญชีแล้วมันชี้ไปที่ไม่มีอะไร
+ * จึงพิสูจน์ได้ว่า "มีความยินยอมเกิดขึ้น" โดยไม่ได้ระบุตัวบุคคลอีกต่อไป
+ *
+ * ⚠️ ห้ามเก็บข้อมูลสุขภาพหรือข้อมูลส่วนตัวใดๆ ในตารางนี้เด็ดขาด
+ *    เพราะเป็นตารางเดียวที่รอดจากการลบบัญชี
+ */
+export const consents = sqliteTable(
+  "consents",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: CONSENT_KINDS }).notNull(),
+    /** เวอร์ชันของนโยบายที่ยินยอมด้วย — ไม่มีอันนี้ก็พิสูจน์ย้อนหลังไม่ได้ */
+    version: text("version").notNull(),
+    grantedAt: text("granted_at").notNull().default(nowIso),
+    /** ถอนเมื่อไหร่ — null = ยังยินยอมอยู่ */
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("idx_consents_user").on(t.userId, t.kind)],
+);
+
+/**
+ * ที่อยู่สำหรับส่ง push ของแต่ละเครื่อง
+ *
+ * หนึ่งคนมีได้หลายแถว (มือถือ + แท็บเล็ต + คอม) endpoint เป็นตัวระบุเครื่อง
+ * จึงต้อง unique — เบราว์เซอร์เดิมที่ subscribe ซ้ำจะได้ endpoint เดิม
+ *
+ * ⚠️ endpoint เป็นตัวระบุเครื่องของผู้ใช้ ต้องหายไปพร้อมบัญชี
+ *    FK cascade ทำให้ลบบัญชีแล้วแถวนี้หายตาม (ดู deleteAccount ใน actions/consent.ts)
+ */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    /**
+     * กุญแจสำหรับเข้ารหัสเนื้อหา — **ตอนนี้ยังไม่ได้ใช้**
+     *
+     * เราส่ง push แบบไม่มีเนื้อหาโดยตั้งใจ (ดู src/lib/push.ts)
+     * แต่เก็บไว้เพราะมันมากับ subscription อยู่แล้ว ถ้าวันหนึ่งเปลี่ยนใจ
+     * จะได้ไม่ต้องให้ผู้ใช้ทุกคนกดอนุญาตใหม่
+     */
+    p256dh: text("p256dh"),
+    auth: text("auth"),
+    createdAt: text("created_at").notNull().default(nowIso),
+    lastSuccessAt: text("last_success_at"),
+  },
+  (t) => [index("idx_push_user").on(t.userId)],
+);
+
+/**
+ * ลูก
+ *
+ * แยกตารางออกจาก pregnancy_profiles (ซึ่งเป็น 1 แถวต่อครอบครัว) เพราะ
+ * - ครรภ์แฝดคือลูกหลายคน วันเกิดเดียวกัน แต่คนละ timeline
+ * - ท้องที่สองต้องไม่ทับข้อมูลลูกคนแรก
+ *
+ * ⚠️ ห้ามสร้างแถวนี้อัตโนมัติเมื่อถึงกำหนดคลอด ต้องมีคนกดเพิ่มเองเท่านั้น
+ *    การตั้งครรภ์ไม่ได้จบด้วยลูกเสมอไป และแอปที่เด้ง "ลูกน้อยอายุ 1 เดือนแล้ว!"
+ *    ให้คนที่เพิ่งสูญเสียคือความเสียหายที่แก้คืนไม่ได้
+ */
+export const children = sqliteTable(
+  "children",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** วันเกิด — ต้นทางของทุกช่องอายุ ดู src/lib/child-age.ts */
+    birthDate: text("birth_date").notNull(),
+    /**
+     * ไม่มีคอลัมน์รูปหน้าปกโดยตั้งใจ
+     *
+     * ถ้ามี children.coverPhotoId → photos.id ขณะที่ photos.childId → children.id
+     * สองตารางจะอ้างกันเป็นวง ซึ่ง TypeScript อนุมานชนิดไม่ออกทั้งคู่
+     * และยังได้บั๊ก "หน้าปกชี้ไปยังรูปที่ถูกลบแล้ว" มาด้วยฟรีๆ
+     *
+     * หน้าปกใช้รูปที่ปักหมุด (photos.pinned) ซึ่งเป็นกลไกที่มีอยู่แล้ว
+     * และเป็นตัวเดียวกับที่เลือกหน้าปกของแต่ละช่องอายุ
+     */
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_children_family").on(t.familyId, t.birthDate)],
+);
+
+/**
+ * น้ำหนัก/ส่วนสูง/รอบศีรษะ ณ วันหนึ่ง
+ *
+ * แยกจากตารางรูป ไม่ยัดเป็นคอลัมน์ของ photos เพราะ
+ * - ลบรูปทิ้งแล้วน้ำหนักต้องไม่หายไปด้วย มันคือข้อมูลสุขภาพ ไม่ใช่ metadata ของไฟล์
+ * - ชั่งน้ำหนักตอนไปฉีดวัคซีนโดยไม่ได้ถ่ายรูปเป็นเรื่องปกติ
+ *
+ * ทั้งสามค่าเป็น null ได้ — บางคลินิกวัดแค่น้ำหนัก
+ */
+export const childMeasurements = sqliteTable(
+  "child_measurements",
+  {
+    id: text("id").primaryKey(),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    measuredOn: text("measured_on").notNull(),
+    weightKg: real("weight_kg"),
+    heightCm: real("height_cm"),
+    headCm: real("head_cm"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_meas").on(t.childId, t.measuredOn)],
+);
+
+/**
+ * หมุดพัฒนาการ — รายการตายตัว ไม่ให้ผู้ใช้เพิ่มเอง
+ *
+ * เป็น enum ไม่ใช่ข้อความอิสระ เพราะวันหนึ่งจะเทียบกับช่วงอายุปกติได้
+ * (เช่น เดินได้ 9–18 เดือนถือว่าปกติ) ซึ่งทำไม่ได้ถ้าเก็บเป็นข้อความที่คนพิมพ์เอง
+ *
+ * ⚠️ ยังไม่มีการเตือนว่า "ช้ากว่าเกณฑ์" ในรอบนี้ — การบอกพ่อแม่ว่าลูกพัฒนาการช้า
+ *    ต้องให้บุคลากรทางการแพทย์ตรวจถ้อยคำก่อน
+ */
+export const MILESTONE_KINDS = [
+  "neck",
+  "roll",
+  "sit",
+  "crawl",
+  "stand",
+  "walk",
+  "tooth",
+  "word",
+] as const;
+export type MilestoneKind = (typeof MILESTONE_KINDS)[number];
+
+export const childMilestones = sqliteTable(
+  "child_milestones",
+  {
+    id: text("id").primaryKey(),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: MILESTONE_KINDS }).notNull(),
+    achievedOn: text("achieved_on").notNull(),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    /** หมุดหนึ่งอันเกิดครั้งเดียวต่อลูกหนึ่งคน — กดซ้ำคือการแก้วัน ไม่ใช่เพิ่มแถว */
+    uniqueIndex("uq_child_milestone").on(t.childId, t.kind),
+  ],
+);
+
+/**
+ * ผลของการสำรองข้อมูลแต่ละรอบ
+ *
+ * มีตารางนี้เพราะ **backup ที่พังเงียบๆ แย่กว่าไม่มี backup** — คนเข้าใจว่า
+ * ตัวเองมีสำเนาอยู่ แล้วไปรู้ตอนที่ต้องใช้ว่ารอบสุดท้ายที่สำเร็จคือสามเดือนก่อน
+ * Cron Trigger ที่ล้มไม่ถูกรันซ้ำให้ และไม่มีใครไปเปิด log ดูทุกวัน
+ * จึงต้องเก็บไว้ในที่ที่ถามได้ว่า "สำเร็จครั้งสุดท้ายเมื่อไหร่"
+ */
+export const backupRuns = sqliteTable(
+  "backup_runs",
+  {
+    id: text("id").primaryKey(),
+    ranAt: text("ran_at").notNull().default(nowIso),
+    /** ok = สำเร็จ · not_configured = ยังไม่ได้ตั้งค่า · failed = พัง */
+    status: text("status", { enum: ["ok", "not_configured", "failed"] }).notNull(),
+    objectKey: text("object_key"),
+    bytes: integer("bytes"),
+    /** จำนวนไฟล์เก่าที่ลบทิ้งตามอายุในรอบนี้ */
+    removed: integer("removed").notNull().default(0),
+    /** ข้อความผิดพลาดแบบย่อ — ห้ามใส่ข้อมูลผู้ใช้หรือ token ลงไป */
+    error: text("error"),
+  },
+  (t) => [index("idx_backup_runs_ran_at").on(t.ranAt)],
+);
+
+/**
+ * บันทึกประจำวันของลูกแรกเกิด — กิน ผ้าอ้อม นอน ปั๊มนม อาบน้ำ
+ *
+ * ตารางเดียวทุกประเภท ไม่แยกตารางละอย่าง เพราะหน้าที่ใช้บ่อยที่สุดคือ
+ * "วันนี้เกิดอะไรขึ้นบ้าง" กับ "ผ่านไปนานแค่ไหนแล้วตั้งแต่ครั้งล่าสุด"
+ * ซึ่งต้องอ่านทุกประเภทพร้อมกันตามลำดับเวลา แยกตารางเมื่อไหร่ต้อง union ทุกครั้ง
+ * คอลัมน์ที่ใช้เฉพาะบางประเภทจึงเป็น null ได้
+ *
+ * เวลาทุกช่องเป็นเวลาท้องถิ่นแบบไม่มี timezone และมาจาก client เสมอ
+ * (เหตุผลเดียวกับ tracking_sessions — worker รันใน UTC)
+ *
+ * ⚠️ ไม่มีเกณฑ์ "ผ้าอ้อมเปียกน้อยไป" หรือ "กินน้อยไป" ในตารางหรือโค้ดรอบนี้
+ *    ตัวเลขพวกนั้นต้องให้บุคลากรทางการแพทย์ตรวจถ้อยคำก่อน
+ */
+export const BABY_LOG_KINDS = ["breast", "bottle", "diaper", "sleep", "pump", "bath"] as const;
+export type BabyLogKind = (typeof BABY_LOG_KINDS)[number];
+/** ประเภทที่จับเวลาได้ — มีรอบค้าง (endedAt = null) ได้ */
+export const TIMED_BABY_KINDS = ["breast", "sleep"] as const;
+export const BREAST_SIDES = ["left", "right"] as const;
+export const MILK_KINDS = ["breast", "formula", "mixed"] as const;
+export const DIAPER_KINDS = ["wet", "dirty", "both"] as const;
+
+export const babyLogs = sqliteTable(
+  "baby_logs",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    /**
+     * null ได้เฉพาะปั๊มนม — ปั๊มเป็นข้อมูลของแม่ ไม่ใช่ของลูกคนไหน
+     * (ลูกแฝดกินนมจากขวดเดียวกันได้ ถ้าบังคับเลือกลูก แม่ต้องเดา)
+     */
+    childId: text("child_id").references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: BABY_LOG_KINDS }).notNull(),
+    startedAt: text("started_at").notNull(),
+    /**
+     * null = กำลังจับเวลาอยู่ (เฉพาะเต้ากับนอน)
+     * ของที่เกิดทีเดียว (ขวด ผ้าอ้อม อาบน้ำ) ใส่เท่ากับ startedAt
+     */
+    endedAt: text("ended_at"),
+    /** เต้า: วินาทีที่สะสมของแต่ละข้าง ไม่รวมช่วงที่กำลังจับอยู่ */
+    leftSec: integer("left_sec"),
+    rightSec: integer("right_sec"),
+    /** เต้า: ข้างล่าสุดที่ให้ — ใช้บอก "ต่อไป: อีกข้าง" */
+    side: text("side", { enum: BREAST_SIDES }),
+    /** เต้า: เวลาที่ข้างปัจจุบันเริ่ม · null = หยุดพักอยู่ หรือจบแล้ว */
+    sideStartedAt: text("side_started_at"),
+    /** ขวด: ปริมาณ · ปั๊ม: ไม่ใช้ (ดู leftMl/rightMl) */
+    ml: integer("ml"),
+    milk: text("milk", { enum: MILK_KINDS }),
+    leftMl: integer("left_ml"),
+    rightMl: integer("right_ml"),
+    diaper: text("diaper", { enum: DIAPER_KINDS }),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    /** หน้าวันนี้ + ครั้งล่าสุดของแต่ละประเภท */
+    index("idx_baby_logs_child").on(t.familyId, t.childId, t.startedAt),
+    /** หารอบที่จับเวลาค้าง — เปิดหน้าทีไรต้องเช็ค */
+    index("idx_baby_logs_open").on(t.familyId, t.endedAt),
+  ],
+);
+
+/**
+ * การแจ้งเตือนของบันทึกประจำวันลูก — "ผ่านไป X ชม. นับจากครั้งล่าสุด"
+ *
+ * ⚠️ เป็นของ **คนตั้ง** ไม่ใช่ของครอบครัว และยิงเข้าเครื่องของคนตั้งเท่านั้น
+ *    ตีสามจะได้ไม่ปลุกทั้งบ้าน — ทุกทางเข้ากรองด้วย user_id คู่กับ family_id
+ *
+ * ไม่มีเวลาตายตัว: เวลาเตือนคิดใหม่ทุกครั้งจากบันทึกล่าสุดของประเภทนั้น
+ * (ดู src/lib/baby-reminder.ts) บันทึกใหม่เมื่อไหร่ เวลาเตือนเลื่อนตามเอง
+ */
+export const babyReminders = sqliteTable(
+  "baby_reminders",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** null เฉพาะปั๊มนม — ปั๊มเป็นของแม่ ไม่ผูกลูก (ตรงกับ baby_logs) */
+    childId: text("child_id").references(() => children.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: BABY_LOG_KINDS }).notNull(),
+    everyMin: integer("every_min").notNull(),
+    /** HH:MM เวลาไทย · ทั้งคู่ null = เตือนตลอด · ข้ามเที่ยงคืนได้ (23:00–07:00) */
+    quietFrom: text("quiet_from"),
+    quietTo: text("quiet_to"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    /**
+     * เวลาตั้งต้น (anchor) ของบันทึกที่จัดการไปแล้ว — กันเตือนซ้ำจากบันทึกเดิม
+     * บันทึกใหม่ = anchor ใหม่ = นับรอบใหม่เอง
+     */
+    lastAnchor: text("last_anchor"),
+    /** ยิง push ล่าสุดเมื่อไหร่ (UTC) — /api/push/next ใช้หาว่า push ใบนี้เรื่องอะไร */
+    lastSentAt: text("last_sent_at"),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [
+    index("idx_baby_reminders_user").on(t.userId, t.familyId),
+    index("idx_baby_reminders_active").on(t.active),
+  ],
+);
+
+/**
+ * ยาของลูก — ของครอบครัว ทุกคนในบ้านเห็น
+ *
+ * ต่างจาก medications (ยาของผู้ใหญ่ เห็นเฉพาะเจ้าของ) โดยตั้งใจ: ยาลูกต้องรู้กันทั้งบ้าน
+ * ไม่งั้นพ่อกับแม่ให้ยาลดไข้ซ้ำกันห่างกันไม่กี่นาทีโดยไม่มีใครรู้
+ *
+ * ⚠️ แอปไม่ตัดสินว่า "ให้ได้/ไม่ได้" — ขนาดยาเด็กเป็นเรื่องของแพทย์
+ *    ช่วงห่าง (min_gap_min) เป็นค่าที่ผู้ใช้ตั้งเองตามที่แพทย์/ฉลากบอก
+ *    แอปแค่บอกข้อเท็จจริงว่าใครให้ไปเมื่อไหร่ ห่างกี่นาที
+ */
+export const CHILD_MED_MODES = ["prn", "daily"] as const;
+export const childMeds = sqliteTable(
+  "child_meds",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** "1.2 มล." — ข้อความอิสระ หน่วยยาเด็กไม่เป็นมาตรฐาน */
+    dose: text("dose"),
+    /** prn = ให้ตามอาการ · daily = ให้ทุกวันตามเวลา */
+    mode: text("mode", { enum: CHILD_MED_MODES }).notNull(),
+    /** prn: ช่วงห่างที่ผู้ใช้ตั้งไว้ (นาที) — ใช้แค่บอก ไม่ได้ห้าม */
+    minGapMin: integer("min_gap_min"),
+    /** daily: เวลา HH:MM คั่นด้วยจุลภาค "09:00,21:00" */
+    times: text("times"),
+    note: text("note"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_meds_child").on(t.familyId, t.childId)],
+);
+
+/** หนึ่งครั้งที่ให้ยา — ใครให้ เมื่อไหร่ (เวลาท้องถิ่นจาก client) */
+export const childMedDoses = sqliteTable(
+  "child_med_doses",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    medId: text("med_id")
+      .notNull()
+      .references(() => childMeds.id, { onDelete: "cascade" }),
+    givenAt: text("given_at").notNull(),
+    givenBy: text("given_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_med_doses_med").on(t.medId, t.givenAt)],
+);
+
+/**
+ * วัดไข้ลูก
+ *
+ * ⚠️ ไม่มีเกณฑ์ "มีไข้" เป็นตัวเลขในตารางหรือโค้ด — รอแพทย์ตรวจถ้อยคำ
+ *    หน้าจอพาไปหน้าอาการที่มีอยู่แล้ว (src/data/danger-signs.ts) แทนการตัดสินเอง
+ */
+export const TEMP_SITES = ["armpit", "ear", "forehead", "rectal"] as const;
+export const childTemps = sqliteTable(
+  "child_temps",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    childId: text("child_id")
+      .notNull()
+      .references(() => children.id, { onDelete: "cascade" }),
+    measuredAt: text("measured_at").notNull(),
+    /** ทศนิยมหนึ่งตำแหน่งเก็บเป็นจำนวนเต็ม 382 = 38.2 °C — ไม่ใช้ REAL */
+    tempTenths: integer("temp_tenths").notNull(),
+    site: text("site", { enum: TEMP_SITES }).notNull(),
+    /** JSON array ของอาการที่เลือก */
+    symptoms: text("symptoms"),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => user.id),
+    createdAt: text("created_at").notNull().default(nowIso),
+  },
+  (t) => [index("idx_child_temps_child").on(t.familyId, t.childId, t.measuredAt)],
+);
+
+/**
+ * ยาประจำของลูกที่ cron เตือนไปแล้ว — หนึ่งแถวต่อยา ต่อวัน ต่อเวลา
+ *
+ * เตือนทั้งบ้าน (คนที่บันทึกได้) เพราะยาลูกใครก็ให้ได้ แต่ถ้ามีคนบันทึกว่าให้แล้ว
+ * ในช่วงนั้นจะไม่เตือนเลย · แถวนี้กันเตือนซ้ำทุก 5 นาที
+ */
+export const childMedSent = sqliteTable(
+  "child_med_sent",
+  {
+    id: text("id").primaryKey(),
+    medId: text("med_id")
+      .notNull()
+      .references(() => childMeds.id, { onDelete: "cascade" }),
+    dueOn: text("due_on").notNull(),
+    at: text("at").notNull(),
+    /** UTC — /api/push/next ใช้หาว่า push ใบนี้เรื่องอะไร */
+    sentAt: text("sent_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_child_med_sent").on(t.medId, t.dueOn, t.at),
+    index("idx_child_med_sent_at").on(t.sentAt),
+  ],
+);

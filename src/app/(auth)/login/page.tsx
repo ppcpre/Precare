@@ -1,0 +1,62 @@
+import Link from "next/link";
+import { Logo } from "@/components/logo";
+import { GoogleButton } from "@/components/auth/google-button";
+import { OrDivider } from "@/components/auth/divider";
+import { LoginForm } from "./login-form";
+
+export const metadata = { title: "เข้าสู่ระบบ · Health Care" };
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; stale?: string; reset?: string }>;
+}) {
+  const { next, stale, reset } = await searchParams;
+
+  return (
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-col items-center gap-2.5 text-center">
+        <Logo size={52} />
+        <h1 className="text-[28px] font-semibold text-ink-900">Health Care</h1>
+        <p className="text-sm text-ink-600">ดูแลสุขภาพของทั้งครอบครัว ไว้ในที่เดียว</p>
+      </div>
+
+      {/* มาจาก /signed-out — บอกว่าทำไมอยู่ๆ ก็หลุด ไม่ใช่ปล่อยให้งงว่าแอปพัง
+          เหตุผลที่พบบ่อยที่สุดคือเพิ่งเปลี่ยนรหัสผ่านจากอีกเครื่อง */}
+      {/* เพิ่งตั้งรหัสใหม่เสร็จ — บอกให้รู้ว่าต้องเข้าด้วยรหัสใหม่ ไม่ใช่รหัสเดิม */}
+      {reset === "1" && (
+        <p className="rounded-sm bg-sage-100 px-3.5 py-3 text-xs leading-relaxed text-ink-900">
+          ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว เข้าสู่ระบบด้วยรหัสใหม่ได้เลย
+        </p>
+      )}
+
+      {stale === "1" && (
+        <p className="rounded-sm bg-cream-100 px-3.5 py-3 text-xs leading-relaxed text-ink-600">
+          เครื่องนี้ถูกออกจากระบบแล้ว — เกิดขึ้นได้เมื่อมีการเปลี่ยนรหัสผ่าน
+          หรือเข้าใช้งานครั้งล่าสุดนานเกินไป เข้าสู่ระบบใหม่ได้เลย
+        </p>
+      )}
+
+      <GoogleButton label="เข้าสู่ระบบด้วย Google" next={next} />
+      <OrDivider />
+      <LoginForm next={next} />
+
+      {/*
+        Phase 1 ยังไม่มี email service จึงรีเซ็ตรหัสผ่านไม่ได้
+        เขียนให้เป็น "ทางออก" ไม่ใช่คำขอโทษ — account linking ทำให้กด Google แล้วเข้าบัญชีเดิมได้
+      */}
+      <p className="text-center text-sm">
+        <Link href="/forgot" className="font-medium text-brown-700 hover:text-brown-900">
+          ลืมรหัสผ่าน?
+        </Link>
+      </p>
+
+      <p className="text-center text-sm text-ink-600">
+        ยังไม่มีบัญชี?{" "}
+        <Link href="/signup" className="font-medium text-brown-700 hover:text-brown-900">
+          สมัครสมาชิก
+        </Link>
+      </p>
+    </div>
+  );
+}

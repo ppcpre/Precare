@@ -1,0 +1,194 @@
+name: Deploy (dev)
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+# deploy ทีละครั้ง ห้ามซ้อน — กัน migration ชนกัน
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  D1_DATABASE_NAME: precare-dev-db
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: probe
+        run: |
+          if [ -f package.json ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ยังไม่มี package.json — ยังไม่มีอะไรให้ deploy"
+            exit 0
+          fi
+          # ยังไม่ได้ตั้ง vitest (T6.x) — ข้าม step test ไปก่อน อย่าให้ pipeline แดงเพราะ script หาย
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            echo "test=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "test=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::package.json ยังไม่มี script \"test\" — ข้ามขั้นเทสต์"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.probe.outputs.app == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - if: steps.probe.outputs.app == 'true'
+        run: npm ci
+
+      - name: Lint + typecheck
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          npm run lint
+          npx tsc --noEmit
+
+      - name: Test
+        if: steps.probe.outputs.test == 'true'
+        run: npm test -- --run
+
+      - name: Build
+        if: steps.probe.outputs.app == 'true'
+        run: npx opennextjs-cloudflare build
+
+      # กั้นก่อน deploy — บั๊กอัปโหลดรูปเคยผ่าน lint/typecheck/unit test
+      # ครบทุกด่านแล้วขึ้น dev ไปทั้งที่กดใช้จริงไม่ได้เลย
+      # webkit ด้วย — คนใช้จริงอยู่บน iPhone และเอนจินนี้ต่างจาก Chromium จริง
+      # (Safari เข้ารหัส webp ไม่ได้ ซึ่งทำให้อัปรูปจาก iPhone พังมาแล้ว)
+      - name: Install Playwright browsers
+        if: steps.probe.outputs.app == 'true'
+        run: npx playwright install --with-deps chromium webkit
+
+      # ลองใหม่หนึ่งรอบด้วย "เซิร์ฟเวอร์ใหม่" ก่อนตัดสินว่าแดง
+      #
+      # playwright retry ระดับเทสต์ (retries: 1) ช่วยไม่ได้ตอน wrangler dev
+      # ป่วยทั้งตัว เพราะ retry ใช้เซิร์ฟเวอร์เดิมที่กำลังพัง — เห็นมาแล้วใน run 64
+      # ที่เทสต์แดงทั้งรอบแรกและ retry พร้อม log ครบชุดของอาการใน §3.10
+      # (Unable to enqueue / Network connection lost / code had hung)
+      # ส่วนรอบใหม่ทั้งรอบจะปิดเซิร์ฟเวอร์เดิมแล้วเปิดใหม่ทั้งหมด
+      #
+      # ของที่พังจริงจะแดงทั้งสองรอบ จึงไม่ได้กลบบั๊ก — แต่ขึ้น warning ไว้ทุกครั้ง
+      # ที่รอบแรกล้ม เพื่อให้เห็นว่าอาการนี้ถี่แค่ไหน ไม่ใช่เงียบหายไป
+      - name: E2E
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          for attempt in 1 2; do
+            if npx playwright test; then
+              if [ "$attempt" = 2 ]; then
+                echo "::warning title=E2E ผ่านในรอบที่สอง::รอบแรกล้ม แล้วผ่านตอนเปิดเซิร์ฟเวอร์ใหม่ — อาการไม่เสถียรของ wrangler dev (docs/tech-notes.md §3.10)"
+              fi
+              exit 0
+            fi
+            echo "::warning title=E2E รอบที่ $attempt ล้ม::กำลังลองใหม่ด้วยเซิร์ฟเวอร์ใหม่"
+          done
+          exit 1
+
+      # wrangler เขียน log ของตัวเองไว้อีกที่ ซึ่งมีรายละเอียดที่ stdout ไม่มี
+      # ตอน worker ตาย stdout พ่นแค่ ✘ [ERROR] เปล่าๆ ไล่สาเหตุไม่ได้เลย
+      # log ของ job อ่านผ่าน API ไม่ได้ถ้าไม่มี token แต่ annotation อ่านได้
+      # จึงยิงบรรทัดที่มีร่องรอย crash ออกมาเป็น annotation ด้วย
+      # ไม่งั้นเวลา worker ตายบน CI จะเห็นแต่ ERR_CONNECTION_REFUSED ยี่สิบอัน
+      # โดยไม่รู้ว่ามันตายเพราะอะไร แล้วต้องไปเดา — เคยเดาผิดมาสามรอบแล้ว
+      - name: log ของ wrangler ตอน E2E ล้ม
+        if: failure() && steps.probe.outputs.app == 'true'
+        run: |
+          mkdir -p wrangler-logs
+          cp ~/.config/.wrangler/logs/*.log wrangler-logs/ 2>/dev/null || true
+          for f in wrangler-logs/*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            tail -200 "$f"
+            grep -hoE '(Error|error).{0,200}' "$f" | sort -u | head -6 | while read -r line; do
+              echo "::error title=wrangler::$line"
+            done
+          done
+          free -m || true
+          dmesg 2>/dev/null | grep -i -m5 "killed process\|out of memory" || true
+
+      - name: เก็บ report ตอน E2E ล้ม
+        if: failure() && steps.probe.outputs.app == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-dev
+          path: |
+            playwright-report/
+            test-results/
+            wrangler-logs/
+          retention-days: 7
+
+      # ตรวจ secret ก่อน ไม่งั้น wrangler-action จะพังด้วย error ที่อ่านไม่รู้เรื่อง
+      - name: ตรวจ secret ของ Cloudflare
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          MISSING=""
+          [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || MISSING="$MISSING CLOUDFLARE_API_TOKEN"
+          [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ] || MISSING="$MISSING CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$MISSING" ]; then
+            echo "::error::ยังไม่ได้ตั้ง secret:$MISSING — ไปที่ Settings > Secrets and variables > Actions"
+            echo "  CLOUDFLARE_API_TOKEN ต้องมีสิทธิ์ Workers Scripts: Edit + D1: Edit + Workers R2 Storage: Edit"
+            echo "  CLOUDFLARE_ACCOUNT_ID = 6fd3e33f13978c4a3d21ff1cc2924510"
+            exit 1
+          fi
+          echo "secret ครบ"
+      # migration ต้องรันก่อน deploy โค้ดใหม่เสมอ — D1 ไม่มี rollback อัตโนมัติ
+      # ยิงลง precare-dev-db เท่านั้น ไม่แตะ D1 ของ production
+      - name: Apply D1 migrations (dev)
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply ${{ env.D1_DATABASE_NAME }} --remote --env dev
+
+      # worker เสิร์ฟไฟล์ต้องขึ้นก่อนแอปเสมอ
+      #
+      # แอปเป็นคนออกลิงก์ที่ชี้ไปหามัน ถ้าแอปขึ้นก่อนแล้วตัวนี้ยังไม่ขึ้น
+      # จะมีช่วงที่รูปทุกใบ 404 ส่วนลำดับกลับกันไม่มีใครเดือดร้อน
+      # เพราะไม่มีใครส่งลิงก์ไปหามันจนกว่าแอปจะขึ้น
+      - name: Deploy worker เสิร์ฟไฟล์ (dev)
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/media/wrangler.jsonc --env dev
+
+      # ตัวจับเวลาเตือนนัด — deploy แยกเพราะ OpenNext คุม entry point ของ worker หลัก
+      # จะแทรก handler scheduled เข้าไปในนั้นไม่ได้
+      - name: Deploy worker จับเวลา (dev)
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/cron/wrangler.jsonc --env dev
+
+      - name: Deploy
+        if: steps.probe.outputs.app == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env dev
+
+      - name: Smoke check
+        if: steps.probe.outputs.app == 'true'
+        run: |
+          [ -n "${{ vars.DEV_URL }}" ] || { echo "::warning::ยังไม่ได้ตั้ง variable DEV_URL — ข้าม smoke check"; exit 0; }
+          for i in 1 2 3; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${{ vars.DEV_URL }}" || echo 000)
+            echo "attempt $i: HTTP $CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::error::dev ไม่ตอบ 200 หลัง deploy"; exit 1

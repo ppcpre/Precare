@@ -1,0 +1,1 @@
+CREATE INDEX `idx_appts_pending_reminder` ON `appointments` (`appt_datetime`) WHERE reminder_enabled = 1 AND reminder_sent_at IS NULL;
